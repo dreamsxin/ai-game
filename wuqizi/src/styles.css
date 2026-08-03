@@ -52,8 +52,8 @@ aside>div { padding: 20px 21px; border-bottom: 1px solid #dedad2; } aside>div:la
 }
 @media (max-width: 540px) {
   header { height: 58px; }.title-row { align-items: flex-start; }.title-row h1 { font-size: 24px; }.title-row p { display: none; }.turn-indicator { min-width: auto; padding-top: 13px; }.turn-indicator small { display: none; }
-  main { width: 100%; padding: 19px 10px 30px; }.game-layout { gap: 13px; }.board-panel { border-radius: 4px; }
+  main { width: 100%; padding: 19px 10px 30px; }.game-layout { gap: 13px; }.board-panel { border-radius: 4px; padding-left: 8px; padding-right: 8px; overflow: hidden; }
   .opponents { margin-bottom: 12px; padding-bottom: 12px; }.avatar { width: 32px; height: 32px; }.opponent strong { font-size: 11px; }
-  .board-wrap { --board-size: calc(100vw - 45px); padding-left: 17px; padding-top: 17px; width: calc(var(--board-size) + 17px); }.coords-top { left: 17px; }.coords-left { top: 17px; height: var(--board-size); width: 13px; }.coords { font-size: 7px; }
+  .board-wrap { --board-size: min(82vw, calc(100% - 17px)); padding-left: 17px; padding-top: 17px; width: 100%; max-width: 100%; }.coords-top { left: 17px; }.coords-left { top: 17px; height: var(--board-size); width: 13px; }.coords { font-size: 7px; }
   aside { grid-template-columns: 1fr; }.score-section { border-top: 1px solid #dedad2; }.rank-head { grid-template-columns: 40px 1fr auto; }.rank-icon { width: 40px; height: 40px; }
 }
