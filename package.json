@@ -1,0 +1,13 @@
+{
+  "name": "ai-game-collection",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "wuqizi"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace wuqizi",
+    "build": "npm run build --workspace wuqizi",
+    "start": "npm run start --workspace wuqizi"
+  }
+}
