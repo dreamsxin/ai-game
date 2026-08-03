@@ -15,8 +15,8 @@ function createGameServer() {
       difficulty: z.number().int().min(0).max(3).default(0),
       reasoningDepth: z.number().int().min(1).max(4).default(1),
     },
-  }, async input => {
-    const move = await requestDeepSeekMove(input);
+  }, async (input, extra) => {
+    const move = await requestDeepSeekMove(input, { signal: extra.signal });
     return {
       content: [{ type: 'text', text: JSON.stringify(move) }],
       structuredContent: move,

@@ -23,12 +23,22 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.post('/api/mcp/gomoku/move', async (req, res) => {
+  const controller = new AbortController();
+  const abortRequest = () => controller.abort();
+  const abortIfDisconnected = () => { if (!res.writableEnded) controller.abort(); };
+  req.once('aborted', abortRequest);
+  res.once('close', abortIfDisconnected);
+
   try {
-    const move = await requestDeepSeekMove(req.body);
-    res.json(move);
+    const move = await requestDeepSeekMove(req.body, { signal: controller.signal });
+    if (!controller.signal.aborted) res.json(move);
   } catch (error) {
+    if (controller.signal.aborted || error.code === 'cancelled') return;
     console.error('AI move failed:', error.message);
-    res.status(502).json({ error: 'AI provider unavailable' });
+    res.status(error.status || 502).json({ error: 'AI provider unavailable' });
+  } finally {
+    req.off('aborted', abortRequest);
+    res.off('close', abortIfDisconnected);
   }
 });
 

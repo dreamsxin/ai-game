@@ -21,6 +21,7 @@ export default function App() {
   const [thinking, setThinking] = useState(false);
   const [aiSource, setAiSource] = useState('LOCAL');
   const gameId = useRef(0);
+  const aiRequest = useRef(null);
 
   const levelIndex = useMemo(() => {
     let result = 0;
@@ -43,21 +44,49 @@ export default function App() {
   useEffect(() => {
     if (turn !== AI || status !== 'playing') return;
     const currentId = gameId.current;
+    const copy = board.map(row => [...row]);
+    const controller = new AbortController();
+    let active = true;
+    let delayTimer;
+    let finishDelay;
+    aiRequest.current?.abort();
+    aiRequest.current = controller;
     setThinking(true);
-    const timer = setTimeout(async () => {
-      const copy = board.map(row => [...row]);
-      const move = await requestAiMove(copy, level);
-      if (currentId !== gameId.current || !move) return;
-      copy[move.row][move.col] = AI;
-      setBoard(copy); setLastMove({ ...move, player: AI });
-      setHistory(h => [...h, { ...move, player: AI }]);
-      if (checkWin(copy, move.row, move.col, AI)) finish('lost');
-      else if (copy.every(row => row.every(Boolean))) finish('draw');
-      else setTurn(HUMAN);
-      setThinking(false);
-    }, 520);
-    return () => clearTimeout(timer);
-  }, [turn, status]);
+
+    const minimumDelay = new Promise(resolve => {
+      finishDelay = resolve;
+      delayTimer = setTimeout(resolve, 300);
+    });
+    const moveRequest = Promise.resolve().then(() => {
+      controller.signal.throwIfAborted();
+      return requestAiMove(copy, level, { signal: controller.signal });
+    });
+
+    Promise.all([moveRequest, minimumDelay])
+      .then(([move]) => {
+        if (!active || controller.signal.aborted || currentId !== gameId.current || !move) return;
+        copy[move.row][move.col] = AI;
+        setBoard(copy); setLastMove({ ...move, player: AI });
+        setHistory(h => [...h, { ...move, player: AI }]);
+        if (checkWin(copy, move.row, move.col, AI)) finish('lost');
+        else if (copy.every(row => row.every(Boolean))) finish('draw');
+        else setTurn(HUMAN);
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) console.error('AI turn failed:', error);
+      })
+      .finally(() => {
+        if (active && currentId === gameId.current) setThinking(false);
+      });
+
+    return () => {
+      active = false;
+      clearTimeout(delayTimer);
+      finishDelay?.();
+      controller.abort();
+      if (aiRequest.current === controller) aiRequest.current = null;
+    };
+  }, [turn, status, board, level]);
 
   function finish(result) {
     setStatus(result);
@@ -80,6 +109,8 @@ export default function App() {
   }
 
   function restart() {
+    aiRequest.current?.abort();
+    aiRequest.current = null;
     gameId.current++; setBoard(createBoard()); setTurn(HUMAN); setStatus('playing');
     setLastMove(null); setHistory([]); setThinking(false);
   }

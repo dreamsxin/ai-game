@@ -7,7 +7,8 @@
     "dev": "node --env-file-if-exists=.env.local server.js",
     "build": "vite build",
     "start": "node --env-file-if-exists=.env.local server.js --production",
-    "preview": "npm run start"
+    "preview": "npm run start",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
