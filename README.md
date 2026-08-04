@@ -21,6 +21,7 @@ npm run dev
 `wuqizi/.env.local` 中的 `DEEPSEEK_API_KEY` 用于调用 DeepSeek Function
 Calling 落子。`DEEPSEEK_TIMEOUT_MS` 控制上游响应时间，默认 5000 毫秒；
 远程服务超时、返回非法坐标或未配置时，前端会使用本地五子棋引擎快速兜底。
+五子棋右侧的对局交流支持询问棋路和刚才的落子，聊天失败时不会影响棋局。
 
 ## 验证
 

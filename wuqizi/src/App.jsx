@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, ChevronRight, CircleHelp, Flag, RotateCcw, Sparkles, Swords, Trophy } from 'lucide-react';
+import { Bot, ChevronRight, CircleHelp, Flag, RotateCcw, Send, Sparkles, Swords, Trophy } from 'lucide-react';
 import { AI, EMPTY, HUMAN, LEVELS, SIZE, checkWin, createBoard } from './game';
-import { requestAiMove } from './aiService';
+import { requestAiMove, requestChatMessage } from './aiService';
 
 const labels = 'ABCDEFGHJKLMNOP'.split('');
 const initialProfile = { score: 70, wins: 3, losses: 1, streak: 2 };
+const initialMessages = [{ id: 'opening', role: 'assistant', content: '执黑先行。放松下，我会认真回应你的每一步。' }];
 
 function readProfile() {
   try { return { ...initialProfile, ...JSON.parse(localStorage.getItem('gomoku-profile')) }; }
@@ -20,8 +21,15 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [thinking, setThinking] = useState(false);
   const [aiSource, setAiSource] = useState('LOCAL');
+  const [messages, setMessages] = useState(initialMessages);
+  const [draft, setDraft] = useState('');
+  const [chatStatus, setChatStatus] = useState('idle');
+  const [chatError, setChatError] = useState('');
   const gameId = useRef(0);
+  const messageId = useRef(0);
   const aiRequest = useRef(null);
+  const chatRequest = useRef(null);
+  const chatList = useRef(null);
 
   const levelIndex = useMemo(() => {
     let result = 0;
@@ -33,6 +41,14 @@ export default function App() {
   const progress = next ? ((profile.score - level.threshold) / (next.threshold - level.threshold)) * 100 : 100;
 
   useEffect(() => { localStorage.setItem('gomoku-profile', JSON.stringify(profile)); }, [profile]);
+
+  useEffect(() => {
+    return () => chatRequest.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    if (chatList.current) chatList.current.scrollTop = chatList.current.scrollHeight;
+  }, [messages, chatStatus]);
 
   useEffect(() => {
     fetch('/api/health')
@@ -68,6 +84,11 @@ export default function App() {
         copy[move.row][move.col] = AI;
         setBoard(copy); setLastMove({ ...move, player: AI });
         setHistory(h => [...h, { ...move, player: AI }]);
+        setMessages(items => [...items, {
+          id: `move-${currentId}-${messageId.current++}`,
+          role: 'assistant',
+          content: move.comment || '这一手先落下，看看你接下来怎么应对。',
+        }]);
         if (checkWin(copy, move.row, move.col, AI)) finish('lost');
         else if (copy.every(row => row.every(Boolean))) finish('draw');
         else setTurn(HUMAN);
@@ -110,9 +131,12 @@ export default function App() {
 
   function restart() {
     aiRequest.current?.abort();
+    chatRequest.current?.abort();
     aiRequest.current = null;
+    chatRequest.current = null;
     gameId.current++; setBoard(createBoard()); setTurn(HUMAN); setStatus('playing');
     setLastMove(null); setHistory([]); setThinking(false);
+    setMessages(initialMessages); setDraft(''); setChatStatus('idle'); setChatError('');
   }
 
   function undo() {
@@ -121,6 +145,44 @@ export default function App() {
     removed.forEach(m => { copy[m.row][m.col] = EMPTY; });
     const nextHistory = history.slice(0, -2);
     setBoard(copy); setHistory(nextHistory); setLastMove(nextHistory.at(-1) || null);
+  }
+
+  async function sendChat(event) {
+    event.preventDefault();
+    const content = draft.trim();
+    if (!content || chatStatus === 'sending') return;
+    const currentId = gameId.current;
+    const controller = new AbortController();
+    const conversation = messages.slice(-10).map(item => ({ role: item.role, content: item.content }));
+    chatRequest.current?.abort();
+    chatRequest.current = controller;
+    setMessages(items => [...items, { id: `user-${messageId.current++}`, role: 'user', content }]);
+    setDraft(''); setChatError(''); setChatStatus('sending');
+
+    try {
+      const result = await requestChatMessage({
+        message: content,
+        history: conversation,
+        board,
+        lastMove,
+        difficulty: level.id,
+        reasoningDepth: level.depth,
+      }, { signal: controller.signal });
+      if (controller.signal.aborted || currentId !== gameId.current) return;
+      setMessages(items => [...items, { id: `chat-${messageId.current++}`, role: 'assistant', content: result.message }]);
+    } catch (error) {
+      if (!controller.signal.aborted && currentId === gameId.current) setChatError('这句话没能送达，再试一次。');
+    } finally {
+      if (chatRequest.current === controller) chatRequest.current = null;
+      if (!controller.signal.aborted && currentId === gameId.current) setChatStatus('idle');
+    }
+  }
+
+  function handleChatKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
   }
 
   const statusText = status === 'won' ? '你赢了' : status === 'lost' ? 'AI 获胜' : status === 'draw' ? '平局' : thinking ? 'AI 正在推演' : '轮到你落子';
@@ -179,6 +241,29 @@ export default function App() {
             <div className="section-label"><span>本赛季战绩</span><small>第 4 赛季</small></div>
             <div className="stats"><div><strong>{profile.wins + profile.losses}</strong><span>总对局</span></div><div><strong>{profile.wins}</strong><span>胜场</span></div><div><strong>{profile.streak}</strong><span>连胜</span></div></div>
             <div className="reward"><div><Swords size={17}/><span>击败本级 AI</span></div><strong>+{level.win} 分</strong></div>
+          </div>
+
+          <div className="chat-section">
+            <div className="section-label"><span>对局交流</span><small>{chatStatus === 'sending' ? '对方正在输入' : '在线'}</small></div>
+            <div className="chat-messages" ref={chatList} aria-live="polite">
+              {messages.map(item => <div className={`chat-message ${item.role}`} key={item.id}>
+                <span>{item.role === 'assistant' ? '对手' : '你'}</span>
+                <p>{item.content}</p>
+              </div>)}
+              {chatStatus === 'sending' && <div className="chat-typing" aria-label="对方正在输入"><i></i><i></i><i></i></div>}
+            </div>
+            {chatError && <p className="chat-error" role="alert">{chatError}</p>}
+            <form className="chat-form" onSubmit={sendChat}>
+              <textarea
+                value={draft}
+                onChange={event => setDraft(event.target.value.slice(0, 240))}
+                onKeyDown={handleChatKeyDown}
+                placeholder="聊聊刚才这一步"
+                aria-label="对局消息"
+                rows="2"
+              />
+              <button type="submit" disabled={!draft.trim() || chatStatus === 'sending'} title="发送消息" aria-label="发送消息"><Send size={16}/></button>
+            </form>
           </div>
 
           <div className="rules-section"><div className="section-label"><span>升阶规则</span></div><p>积分达到下一等级门槛后自动升阶，AI 会增加推演深度，攻防判断也将更精准。</p><button disabled>查看完整规则 <ChevronRight size={15}/></button></div>

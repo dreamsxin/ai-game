@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
-import { requestDeepSeekMove } from './server/aiProvider.js';
+import { requestDeepSeekChat, requestDeepSeekMove } from './server/aiProvider.js';
 import { handleMcpRequest } from './server/mcpServer.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +36,26 @@ app.post('/api/mcp/gomoku/move', async (req, res) => {
     if (controller.signal.aborted || error.code === 'cancelled') return;
     console.error('AI move failed:', error.message);
     res.status(error.status || 502).json({ error: 'AI provider unavailable' });
+  } finally {
+    req.off('aborted', abortRequest);
+    res.off('close', abortIfDisconnected);
+  }
+});
+
+app.post('/api/chat', async (req, res) => {
+  const controller = new AbortController();
+  const abortRequest = () => controller.abort();
+  const abortIfDisconnected = () => { if (!res.writableEnded) controller.abort(); };
+  req.once('aborted', abortRequest);
+  res.once('close', abortIfDisconnected);
+
+  try {
+    const result = await requestDeepSeekChat(req.body, { signal: controller.signal });
+    if (!controller.signal.aborted) res.json(result);
+  } catch (error) {
+    if (controller.signal.aborted || error.code === 'cancelled') return;
+    console.error('Chat request failed:', error.message);
+    if (!res.headersSent) res.status(error.status || 502).json({ error: 'Chat provider unavailable', code: error.code || 'provider_error' });
   } finally {
     req.off('aborted', abortRequest);
     res.off('close', abortIfDisconnected);

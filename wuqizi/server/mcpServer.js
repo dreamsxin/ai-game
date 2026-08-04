@@ -16,7 +16,8 @@ function createGameServer() {
       reasoningDepth: z.number().int().min(1).max(4).default(1),
     },
   }, async (input, extra) => {
-    const move = await requestDeepSeekMove(input, { signal: extra.signal });
+    const { row, col, provider, model } = await requestDeepSeekMove(input, { signal: extra.signal });
+    const move = { row, col, provider, model };
     return {
       content: [{ type: 'text', text: JSON.stringify(move) }],
       structuredContent: move,

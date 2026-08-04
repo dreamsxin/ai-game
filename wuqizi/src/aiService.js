@@ -25,5 +25,24 @@ export async function requestAiMove(board, level, { signal } = {}) {
   }
 
   signal?.throwIfAborted();
-  return getAiMove(board, level.depth);
+  const move = await getAiMove(board, level.depth);
+  return { ...move, provider: 'local', comment: '我先稳住局面，继续看你的下一手。' };
+}
+
+export async function requestChatMessage(input, { signal } = {}) {
+  signal?.throwIfAborted();
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    const error = new Error(`Chat request failed: ${response.status}`);
+    error.code = (await response.json().catch(() => null))?.code;
+    throw error;
+  }
+  const result = await response.json();
+  if (typeof result.message !== 'string' || !result.message.trim()) throw new Error('Chat response was empty.');
+  return result;
 }
