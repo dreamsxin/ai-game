@@ -1,6 +1,6 @@
-import { getAiMove } from './game.js';
+import { analyzeMoveSituation, getAiMove } from './game.js';
 
-export async function requestAiMove(board, level, { signal } = {}) {
+export async function requestAiMove(board, level, { signal, recentComments = [] } = {}) {
   try {
     signal?.throwIfAborted();
     const response = await fetch('/api/mcp/gomoku/move', {
@@ -11,6 +11,7 @@ export async function requestAiMove(board, level, { signal } = {}) {
         board,
         difficulty: level.id,
         reasoningDepth: level.depth,
+        recentComments,
       }),
     });
     if (!response.ok) throw new Error(`MCP gateway failed: ${response.status}`);
@@ -26,7 +27,8 @@ export async function requestAiMove(board, level, { signal } = {}) {
 
   signal?.throwIfAborted();
   const move = await getAiMove(board, level.depth);
-  return { ...move, provider: 'local', comment: '我先稳住局面，继续看你的下一手。' };
+  const situation = analyzeMoveSituation(board, move);
+  return { ...move, provider: 'local', situation, comment: '' };
 }
 
 export async function requestChatMessage(input, { signal } = {}) {

@@ -40,18 +40,16 @@ test('parseAiMove rejects pseudo JSON instead of reading reasoning content', () 
   );
 });
 
-test('requestDeepSeekMove sends tools and accepts a legal tool call', async t => {
+test('requestDeepSeekMove stays quiet for a routine move', async t => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = 'test-key';
   let requestBody;
   globalThis.fetch = async (_url, options) => {
     requestBody = JSON.parse(options.body);
-    return jsonResponse({
-      choices: [{ message: {
-        tool_calls: [{ function: { name: 'place_gomoku_stone', arguments: '{"row":7,"col":7}' } }],
-      } }],
-    });
+    return jsonResponse({ choices: [{ message: {
+      tool_calls: [{ function: { name: 'place_gomoku_stone', arguments: '{"row":7,"col":7,"comment":"我先占据中心。"}' } }],
+    } }] });
   };
   t.after(() => {
     globalThis.fetch = originalFetch;
@@ -59,8 +57,9 @@ test('requestDeepSeekMove sends tools and accepts a legal tool call', async t =>
   });
 
   const move = await requestDeepSeekMove({ board: createBoard(), difficulty: 2, reasoningDepth: 3 });
-  assert.deepEqual(move, { row: 7, col: 7, comment: '我先把棋落在中腹，给后面的攻防多留几条路。', provider: 'deepseek', model: 'deepseek-v4-flash' });
+  assert.deepEqual(move, { row: 7, col: 7, comment: '', situation: null, provider: 'deepseek', model: 'deepseek-v4-flash' });
   assert.equal(requestBody.tools[0].function.name, 'place_gomoku_stone');
+  assert.deepEqual(requestBody.tools[0].function.parameters.required, ['row', 'col']);
   assert.equal(requestBody.tool_choice, undefined);
   assert.equal(requestBody.response_format, undefined);
   assert.equal(requestBody.max_tokens, 512);
@@ -70,11 +69,9 @@ test('requestDeepSeekMove rejects an occupied position', async t => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = 'test-key';
-  globalThis.fetch = async () => jsonResponse({
-    choices: [{ message: {
-      tool_calls: [{ function: { name: 'place_gomoku_stone', arguments: '{"row":7,"col":7}' } }],
-    } }],
-  });
+  globalThis.fetch = async () => jsonResponse({ choices: [{ message: {
+    tool_calls: [{ function: { name: 'place_gomoku_stone', arguments: '{"row":7,"col":7}' } }],
+  } }] });
   t.after(() => {
     globalThis.fetch = originalFetch;
     restoreEnv('DEEPSEEK_API_KEY', originalKey);
@@ -127,23 +124,35 @@ test('requestDeepSeekMove reports its configured timeout', async t => {
   );
 });
 
-test('requestDeepSeekMove preserves a concise model comment', async t => {
+test('requestDeepSeekMove comments on a key situation and includes recent comments', async t => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.DEEPSEEK_API_KEY;
   process.env.DEEPSEEK_API_KEY = 'test-key';
-  globalThis.fetch = async () => jsonResponse({
-    choices: [{ message: {
-      content: '我先占据中心，观察你的攻势。',
-      tool_calls: [{ function: { name: 'place_gomoku_stone', arguments: '{"row":7,"col":7,"comment":"我先占据中心，观察你的攻势。"}' } }],
-    } }],
-  });
+  let requestBody;
+  globalThis.fetch = async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return jsonResponse({ choices: [{ message: {
+      tool_calls: [{ function: { name: 'place_gomoku_stone', arguments: '{"row":7,"col":8,"comment":"四子连线，轮到你防守了。"}' } }],
+    } }] });
+  };
   t.after(() => {
     globalThis.fetch = originalFetch;
     restoreEnv('DEEPSEEK_API_KEY', originalKey);
   });
 
-  const move = await requestDeepSeekMove({ board: createBoard() });
-  assert.equal(move.comment, '我先占据中心，观察你的攻势。');
+  const board = createBoard();
+  [5, 6, 7].forEach(col => { board[7][col] = 2; });
+  const move = await requestDeepSeekMove({ board, recentComments: ['刚才这边已经形成活三。'] });
+  assert.equal(move.situation, 'attack-four');
+  assert.equal(move.comment, '四子连线，轮到你防守了。');
+  assert.match(requestBody.messages.at(-1).content, /近期点评（不要重复）：刚才这边已经形成活三。/);
+});
+
+test('requestDeepSeekMove rejects invalid recent comments', async () => {
+  await assert.rejects(
+    requestDeepSeekMove({ board: createBoard(), recentComments: Array(5).fill('重复') }),
+    error => error instanceof AiProviderError && error.code === 'invalid_input',
+  );
 });
 
 test('validateChatInput accepts a null last move at the start of a game', () => {

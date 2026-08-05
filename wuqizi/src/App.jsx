@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, ChevronRight, CircleHelp, Flag, RotateCcw, Send, Sparkles, Swords, Trophy } from 'lucide-react';
 import { AI, EMPTY, HUMAN, LEVELS, SIZE, checkWin, createBoard } from './game';
 import { requestAiMove, requestChatMessage } from './aiService';
+import { QUICK_CHAT_MESSAGES, recentAutoComments, shouldAppendAutoComment } from './chat';
 
 const labels = 'ABCDEFGHJKLMNOP'.split('');
 const initialProfile = { score: 70, wins: 3, losses: 1, streak: 2 };
-const initialMessages = [{ id: 'opening', role: 'assistant', content: '执黑先行。放松下，我会认真回应你的每一步。' }];
+const initialMessages = [{ id: 'opening', role: 'assistant', kind: 'opening', content: '执黑先行。放松下，我会认真回应你的每一步。' }];
 
 function readProfile() {
   try { return { ...initialProfile, ...JSON.parse(localStorage.getItem('gomoku-profile')) }; }
@@ -75,7 +76,10 @@ export default function App() {
     });
     const moveRequest = Promise.resolve().then(() => {
       controller.signal.throwIfAborted();
-      return requestAiMove(copy, level, { signal: controller.signal });
+      return requestAiMove(copy, level, {
+        signal: controller.signal,
+        recentComments: recentAutoComments(messages),
+      });
     });
 
     Promise.all([moveRequest, minimumDelay])
@@ -84,11 +88,12 @@ export default function App() {
         copy[move.row][move.col] = AI;
         setBoard(copy); setLastMove({ ...move, player: AI });
         setHistory(h => [...h, { ...move, player: AI }]);
-        setMessages(items => [...items, {
+        if (move.comment) setMessages(items => shouldAppendAutoComment(items, move.comment) ? [...items, {
           id: `move-${currentId}-${messageId.current++}`,
           role: 'assistant',
-          content: move.comment || '这一手先落下，看看你接下来怎么应对。',
-        }]);
+          kind: 'move-comment',
+          content: move.comment,
+        }] : items);
         if (checkWin(copy, move.row, move.col, AI)) finish('lost');
         else if (copy.every(row => row.every(Boolean))) finish('draw');
         else setTurn(HUMAN);
@@ -147,21 +152,20 @@ export default function App() {
     setBoard(copy); setHistory(nextHistory); setLastMove(nextHistory.at(-1) || null);
   }
 
-  async function sendChat(event) {
-    event.preventDefault();
-    const content = draft.trim();
-    if (!content || chatStatus === 'sending') return;
+  async function submitChat(content) {
+    const message = content.trim();
+    if (!message || chatStatus === 'sending') return;
     const currentId = gameId.current;
     const controller = new AbortController();
     const conversation = messages.slice(-10).map(item => ({ role: item.role, content: item.content }));
     chatRequest.current?.abort();
     chatRequest.current = controller;
-    setMessages(items => [...items, { id: `user-${messageId.current++}`, role: 'user', content }]);
+    setMessages(items => [...items, { id: `user-${messageId.current++}`, role: 'user', kind: 'chat', content: message }]);
     setDraft(''); setChatError(''); setChatStatus('sending');
 
     try {
       const result = await requestChatMessage({
-        message: content,
+        message,
         history: conversation,
         board,
         lastMove,
@@ -169,13 +173,18 @@ export default function App() {
         reasoningDepth: level.depth,
       }, { signal: controller.signal });
       if (controller.signal.aborted || currentId !== gameId.current) return;
-      setMessages(items => [...items, { id: `chat-${messageId.current++}`, role: 'assistant', content: result.message }]);
+      setMessages(items => [...items, { id: `chat-${messageId.current++}`, role: 'assistant', kind: 'chat', content: result.message }]);
     } catch (error) {
       if (!controller.signal.aborted && currentId === gameId.current) setChatError('这句话没能送达，再试一次。');
     } finally {
       if (chatRequest.current === controller) chatRequest.current = null;
       if (!controller.signal.aborted && currentId === gameId.current) setChatStatus('idle');
     }
+  }
+
+  function sendChat(event) {
+    event.preventDefault();
+    void submitChat(draft);
   }
 
   function handleChatKeyDown(event) {
@@ -264,6 +273,14 @@ export default function App() {
               />
               <button type="submit" disabled={!draft.trim() || chatStatus === 'sending'} title="发送消息" aria-label="发送消息"><Send size={16}/></button>
             </form>
+            <div className="chat-quick-actions" aria-label="快捷对局语句">
+              {QUICK_CHAT_MESSAGES.map(message => <button
+                type="button"
+                key={message}
+                disabled={chatStatus === 'sending'}
+                onClick={() => void submitChat(message)}
+              >{message}</button>)}
+            </div>
           </div>
 
           <div className="rules-section"><div className="section-label"><span>升阶规则</span></div><p>积分达到下一等级门槛后自动升阶，AI 会增加推演深度，攻防判断也将更精准。</p><button disabled>查看完整规则 <ChevronRight size={15}/></button></div>

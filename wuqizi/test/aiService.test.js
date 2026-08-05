@@ -19,6 +19,19 @@ test('requestAiMove returns a legal local move after an HTTP failure', async t =
   assert.equal(move.provider, 'local');
 });
 
+test('requestAiMove sends recent automatic comments', async t => {
+  const originalFetch = globalThis.fetch;
+  let requestBody;
+  globalThis.fetch = async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return new Response(JSON.stringify({ row: 7, col: 7, comment: '' }), { status: 200 });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  await requestAiMove(createBoard(), level, { recentComments: ['这条三连开始有威胁了。'] });
+  assert.deepEqual(requestBody.recentComments, ['这条三连开始有威胁了。']);
+});
+
 test('requestAiMove does not run the local engine after cancellation', async t => {
   const originalFetch = globalThis.fetch;
   let fetchCalled = false;

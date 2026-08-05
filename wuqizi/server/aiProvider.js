@@ -1,3 +1,6 @@
+import { normalizeChatText } from '../src/chat.js';
+import { analyzeMoveSituation } from '../src/game.js';
+
 const SIZE = 15;
 const DEFAULT_TIMEOUT_MS = 5_000;
 const MOVE_TOOL_NAME = 'place_gomoku_stone';
@@ -18,7 +21,7 @@ const moveTool = {
         col: { type: 'integer', minimum: 0, maximum: SIZE - 1, description: '落子的列坐标。' },
         comment: { type: 'string', maxLength: 60, description: '用不超过60个汉字简短说明这步意图。' },
       },
-      required: ['row', 'col', 'comment'],
+      required: ['row', 'col'],
       additionalProperties: false,
     },
   },
@@ -144,9 +147,27 @@ function normalizeComment(value) {
   return value.replace(/\s+/g, ' ').trim().slice(0, MAX_COMMENT_LENGTH);
 }
 
-function fallbackMoveComment(move) {
-  const central = move.row >= 5 && move.row <= 9 && move.col >= 5 && move.col <= 9;
-  return central ? '我先把棋落在中腹，给后面的攻防多留几条路。' : '这一手先牵制你的布局，看看你会从哪边展开。';
+const situationComments = {
+  win: ['这条线已经连成了，承让。', '这一步落下，五子正好连成。'],
+  'block-win': ['你这边差一点就成五，我得先挡住。', '这处再不守就来不及了。'],
+  'attack-four': ['这一手把攻势推到四连，你得认真应对了。', '四子已经连起来，压力交给你。'],
+  'block-four': ['你的四连威胁太直接，这里必须封住。', '先拆掉这条线，不能让你继续连。'],
+  'attack-three': ['这里形成活三，我准备从两边继续施压。', '这条三连开始有威胁了。'],
+  'block-three': ['你这条活三不能放着，我先压住。', '先限制这边，免得你的三连展开。'],
+};
+
+function fallbackMoveComment(situation, recentComments) {
+  const options = situationComments[situation] || [];
+  const recent = new Set(recentComments.map(normalizeChatText));
+  return options.find(item => !recent.has(normalizeChatText(item))) || '';
+}
+
+function normalizeRecentComments(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 4 || value.some(item => typeof item !== 'string' || !item.trim() || item.length > MAX_COMMENT_LENGTH)) {
+    throw new AiProviderError('Recent comments are invalid.', { code: 'invalid_input', status: 400 });
+  }
+  return value.map(normalizeComment);
 }
 
 function validateMoveInput(input) {
@@ -158,6 +179,7 @@ function validateMoveInput(input) {
 
 export async function requestDeepSeekMove(input, { signal: callerSignal } = {}) {
   const { board, difficulty = 0, reasoningDepth = 1 } = validateMoveInput(input);
+  const recentComments = normalizeRecentComments(input.recentComments);
   const { choice, model } = await requestDeepSeek({
     signal: callerSignal,
     maxTokens: 512,
@@ -166,20 +188,24 @@ export async function requestDeepSeekMove(input, { signal: callerSignal } = {}) 
     messages: [
       {
         role: 'system',
-        content: `你是五子棋引擎。棋盘为15x15，X是玩家黑棋，O是你的白棋，.为空位。你必须调用 ${MOVE_TOOL_NAME} 选择一个空位，并在工具参数 comment 中用不超过60个汉字简短说明这步意图。优先取胜，其次阻止玩家立即取胜。`,
+        content: `你是五子棋引擎。棋盘为15x15，X是玩家黑棋，O是你的白棋，.为空位。你必须调用 ${MOVE_TOOL_NAME} 选择一个空位。comment 是可选的：只有在成五、封杀对手成五、形成或阻断四连、形成或阻断活三等关键情势时才写不超过60个汉字的点评，普通布局请留空。避免重复近期说过的话。`,
       },
       {
         role: 'user',
-        content: `难度等级：${difficulty + 1}；目标推演深度：${reasoningDepth}层。请给出白棋下一步。\n${serializeBoard(board)}`,
+        content: `难度等级：${difficulty + 1}；目标推演深度：${reasoningDepth}层。请给出白棋下一步。${recentComments.length ? `\n近期点评（不要重复）：${recentComments.join('；')}` : ''}\n${serializeBoard(board)}`,
       },
     ],
   });
 
   const move = parseAiMove(choice.message);
   if (!isLegalMove(board, move)) throw new AiProviderError('DeepSeek returned an illegal move.');
+  const situation = analyzeMoveSituation(board, move);
+  const modelComment = normalizeComment(choice.message?.content) || move.comment;
+  const repeated = recentComments.some(item => normalizeChatText(item) === normalizeChatText(modelComment));
   return {
     ...move,
-    comment: normalizeComment(choice.message?.content) || move.comment || fallbackMoveComment(move),
+    comment: situation ? (!repeated && modelComment || fallbackMoveComment(situation, recentComments)) : '',
+    situation,
     provider: 'deepseek',
     model,
   };

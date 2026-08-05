@@ -29,6 +29,61 @@ export function checkWin(board, row, col, player) {
   });
 }
 
+export function analyzeMoveSituation(board, move, player = AI, opponent = player === AI ? HUMAN : AI) {
+  if (!Array.isArray(board) || !isOnBoard(move?.row, move?.col) || board[move.row][move.col] !== EMPTY) return null;
+  const copy = board.map(row => [...row]);
+  copy[move.row][move.col] = player;
+
+  if (checkWin(copy, move.row, move.col, player)) return 'win';
+  const opponentWinning = threatMoves(board, opponent, 5);
+  if (opponentWinning.includes(`${move.row},${move.col}`)) return 'block-win';
+
+  const ownThreat = lineThreatLevel(copy, move.row, move.col, player);
+  if (ownThreat >= 4) return 'attack-four';
+  const opponentFour = threatMoves(board, opponent, 4);
+  if (opponentFour.includes(`${move.row},${move.col}`)) return 'block-four';
+  if (ownThreat >= 3) return 'attack-three';
+  const opponentThree = threatMoves(board, opponent, 3);
+  if (opponentThree.includes(`${move.row},${move.col}`)) return 'block-three';
+  return null;
+}
+
+function isOnBoard(row, col) {
+  return Number.isInteger(row) && row >= 0 && row < SIZE && Number.isInteger(col) && col >= 0 && col < SIZE;
+}
+
+function lineThreatLevel(board, row, col, player) {
+  let best = 0;
+  for (const [dr, dc] of directions) {
+    let count = 1;
+    let open = 0;
+    for (const sign of [-1, 1]) {
+      let r = row + dr * sign;
+      let c = col + dc * sign;
+      while (isOnBoard(r, c) && board[r][c] === player) {
+        count++; r += dr * sign; c += dc * sign;
+      }
+      if (isOnBoard(r, c) && board[r][c] === EMPTY) open++;
+    }
+    if (count >= 5) best = Math.max(best, 5);
+    else if (count === 4) best = Math.max(best, 4);
+    else if (count === 3 && open === 2) best = Math.max(best, 3);
+  }
+  return best;
+}
+
+function threatMoves(board, player, minimumLevel) {
+  const result = [];
+  for (let row = 0; row < SIZE; row++) for (let col = 0; col < SIZE; col++) {
+    if (board[row][col] !== EMPTY) continue;
+    const copy = board.map(line => [...line]);
+    copy[row][col] = player;
+    const level = checkWin(copy, row, col, player) ? 5 : lineThreatLevel(copy, row, col, player);
+    if (level >= minimumLevel) result.push(`${row},${col}`);
+  }
+  return result;
+}
+
 function lineScore(count, open) {
   if (count >= 5) return 1_000_000;
   if (count === 4 && open === 2) return 100_000;
