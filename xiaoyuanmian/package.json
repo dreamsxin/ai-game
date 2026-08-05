@@ -1,0 +1,22 @@
+{
+  "name": "xiaoyuanmian",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env.local server.js",
+    "build": "vite build",
+    "start": "node --env-file-if-exists=.env.local server.js --production",
+    "preview": "npm run start",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest",
+    "zod": "^4.4.3"
+  }
+}

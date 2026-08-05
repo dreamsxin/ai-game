@@ -1,0 +1,187 @@
+{
+  "generatedAt": "2026-08-05",
+  "licenseNote": "Project-original generated bitmap illustrations. No external source images were used. Redistribution follows the repository owner's project license and permissions.",
+  "generator": "xiaoyuanmian/scripts/generate_assets.py using Pillow",
+  "assets": [
+    {
+      "file": "character-chen-mo.jpg",
+      "purpose": "character portrait",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "character-he-yu.jpg",
+      "purpose": "character portrait",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "character-lin-xia.jpg",
+      "purpose": "character portrait",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "character-su-wan.jpg",
+      "purpose": "character portrait",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-access.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-duty.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-frame.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-original.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-print-dots.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-print-log.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-proof.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-record.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-signature.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "evidence-sketch.jpg",
+      "purpose": "evidence close-up",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "location-corridor.jpg",
+      "purpose": "location scene",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "location-gallery.jpg",
+      "purpose": "location scene",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "location-print-room.jpg",
+      "purpose": "location scene",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    },
+    {
+      "file": "location-storage.jpg",
+      "purpose": "location scene",
+      "creator": "AI Game project",
+      "source": "Original procedural illustration",
+      "sourceUrl": null,
+      "license": "Project original",
+      "date": "2026-08-05",
+      "modifications": "Deterministically rendered and compressed as a local JPEG asset."
+    }
+  ]
+}
