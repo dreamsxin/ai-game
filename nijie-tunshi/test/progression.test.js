@@ -96,23 +96,26 @@ test('planetary rings rotate independently and carry directional energy flow', (
   assert.notEqual(later[0].flowPhase, later[2].flowPhase);
 });
 
-test('satellites use deterministic intertwined orbits and unlock with their rings', () => {
+test('satellites orbit at radius driven by ring charge and unlock with their rings', () => {
   const early = satelliteOrbitState(0, 3.5);
   const repeated = satelliteOrbitState(0, 3.5);
   const mid = satelliteOrbitState(12, 3.5);
   const advanced = satelliteOrbitState(32, 3.5);
+  const full = satelliteOrbitState(90, 3.5);
   assert.equal(ORBITAL_SATELLITES.length, 3);
   assert.equal(early.length, 1);
   assert.equal(mid.length, 2);
   assert.equal(advanced.length, 3);
   assert.deepEqual(early, repeated);
-  assert.deepEqual(early.map((satellite) => satellite.direction), [1]);
   assert.deepEqual(advanced.map((satellite) => satellite.direction), [1, -1, 1]);
   assert.notEqual(advanced[0].tiltX, advanced[1].tiltX);
   assert.notEqual(advanced[0].tiltZ, advanced[1].tiltZ);
   for (const satellite of advanced) {
     assert.ok(satellite.size <= 0.075, `${satellite.id} size ${satellite.size} too large`);
   }
+  assert.ok(early[0].radius < full[0].radius, 'lumen should expand with charge');
+  assert.ok(full[0].radius > 1.3, 'lumen should reach ring at full charge');
+  assert.ok(full[2].radius > 1.7, 'violet should reach ring at full charge');
 });
 
 test('satellite orbits spread further during ascension', () => {
