@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { LEVEL } from '../game/level.js';
 import { ambientOffset, burstDirection, profileFor, seedFor } from '../game/effects.js';
-import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, stageChargeProgress } from '../game/progression.js';
+import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitState, stageChargeProgress } from '../game/progression.js';
 
 const geometryFor = (object) => {
   const size = object.size;
@@ -117,6 +117,79 @@ const createLabel = (text, color) => {
 
 const labelColor = (available) => available ? '#a2ffe8' : '#5a8580';
 
+const orbitalPoint = (orbit, angle, target = new THREE.Vector3()) => {
+  const x = Math.cos(angle) * orbit.radius;
+  const z = Math.sin(angle) * orbit.radius;
+  target.set(x, 0, z);
+  target.applyAxisAngle(new THREE.Vector3(1, 0, 0), orbit.tiltX);
+  target.applyAxisAngle(new THREE.Vector3(0, 0, 1), orbit.tiltZ);
+  return target;
+};
+
+function createSatelliteVisual(definition) {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(definition.size, 2),
+    glowMaterial(definition.color),
+  );
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(definition.size * 3.2, 16, 12),
+    new THREE.MeshBasicMaterial({ color: definition.color, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  group.add(core, halo);
+  const trail = createPointCloud(42, definition.size * 0.72, definition.color, 0.72);
+  trail.material.dispose();
+  trail.material = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: cssColor(definition.color) }, uSize: { value: definition.size * 16 } },
+    vertexShader: `
+      attribute float alpha;
+      varying float vAlpha;
+      uniform float uSize;
+      void main() {
+        vAlpha = alpha;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = uSize * (220.0 / max(1.0, -mvPosition.z));
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      varying float vAlpha;
+      void main() {
+        float soft = 1.0 - smoothstep(0.15, 0.5, distance(gl_PointCoord, vec2(0.5)));
+        gl_FragColor = vec4(uColor, soft * vAlpha * 0.82);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const alpha = new Float32Array(42);
+  for (let index = 0; index < alpha.length; index += 1) alpha[index] = (index / (alpha.length - 1)) ** 1.7;
+  trail.geometry.setAttribute('alpha', new THREE.BufferAttribute(alpha, 1));
+  return { group, core, halo, trail };
+}
+
+function updateSatelliteVisual(visual, orbit, time) {
+  orbitalPoint(orbit, orbit.angle, visual.group.position);
+  visual.core.rotation.x = time * orbit.speed * 1.4;
+  visual.core.rotation.y = time * orbit.speed * orbit.direction;
+  visual.halo.scale.setScalar(1 + Math.sin(time * 4 + orbit.phase) * 0.16);
+  const positions = visual.trail.geometry.attributes.position.array;
+  const count = positions.length / 3;
+  for (let index = 0; index < count; index += 1) {
+    const amount = index / Math.max(1, count - 1);
+    const angle = orbit.angle - orbit.direction * orbit.trailArc * (1 - amount);
+    const point = orbitalPoint(orbit, angle);
+    positions[index * 3] = point.x;
+    positions[index * 3 + 1] = point.y;
+    positions[index * 3 + 2] = point.z;
+  }
+  visual.trail.geometry.attributes.position.needsUpdate = true;
+}
+
 function createPointCloud(count, size, color, opacity, blending = THREE.AdditiveBlending) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
@@ -215,7 +288,7 @@ function updatePlayerTrail(points, count, time, stage, radius, velocity) {
   for (let index = 0; index < 58; index += 1) {
     const active = index < count;
     const distance = 0.25 + (index / Math.max(1, count)) * (2.5 + radius * 0.85);
-    const angle = stage.stageIndex * 0.8 + time * stage.spin * 0.8 + index * 0.53;
+    const angle = stage.stageIndex * 0.8 + time * (0.8 + stage.energy * 1.4) + index * 0.53;
     const jitter = Math.sin(time * 2.2 + index * 1.7) * 0.12;
     positions[index * 3] = active ? -direction.x * distance + Math.cos(angle) * (0.12 + distance * 0.09) : 999;
     positions[index * 3 + 1] = active ? Math.sin(angle * 1.3) * (0.15 + distance * 0.12) : 999;
@@ -298,40 +371,38 @@ export function createScene(host) {
   grid.material.opacity = 0.34;
   scene.add(grid);
 
-  const puzzleGroup = new THREE.Group();
-  const puzzleModules = new Map();
-  const puzzleColors = { white: 0xdffdf6, cyan: 0x73fbd3, coral: 0xff8f78, gold: 0xffca70 };
-  const moduleSize = LEVEL.puzzle.moduleSize;
-  for (const [id, module] of Object.entries(LEVEL.puzzle.modules)) {
-    const group = new THREE.Group();
-    const tileColor = id === LEVEL.puzzle.entry ? 0x297c6f : id === LEVEL.puzzle.checkpoint ? 0x793b72 : module.contents?.length ? 0x694334 : 0x173c3d;
-    const tile = new THREE.Mesh(
-      new THREE.BoxGeometry(moduleSize - 0.55, 0.22, moduleSize - 0.55),
-      new THREE.MeshStandardMaterial({ color: tileColor, emissive: tileColor, emissiveIntensity: 0.42, roughness: 0.6, transparent: true, opacity: 0.86 }),
-    );
-    tile.position.y = 0.08;
-    group.add(tile);
-    const moduleLabel = createLabel(module.label, '#dffdf6');
-    moduleLabel.position.y = 0.55;
-    moduleLabel.scale.set(3.4, 1.7, 1);
-    group.add(moduleLabel);
-    for (const [direction, port] of Object.entries(module.ports ?? {})) {
-      const marker = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.12, 0.8), glowMaterial(puzzleColors[port.color] ?? puzzleColors.white));
-      const offset = moduleSize * 0.43;
-      marker.position.set(direction === 'east' ? offset : direction === 'west' ? -offset : 0, 0.28, direction === 'south' ? offset : direction === 'north' ? -offset : 0);
-      group.add(marker);
-    }
-    puzzleGroup.add(group);
-    puzzleModules.set(id, group);
+  const structureMeshes = new Map();
+  for (const structure of LEVEL.structures) {
+    const material = glowMaterial(structure.color, structure.kind === 'phaseable' ? 0.38 : 0.78);
+    material.side = THREE.DoubleSide;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(structure.width, structure.height, structure.depth), material);
+    mesh.position.set(structure.x, structure.height / 2, structure.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    structureMeshes.set(structure.id, mesh);
+    const label = createLabel(structure.kind === 'phaseable' ? 'SHIFT' : 'DASH', structure.kind === 'phaseable' ? '#e9b6ff' : '#a2ffe8');
+    label.position.set(structure.x, structure.height + 0.8, structure.z);
+    scene.add(label);
+    structureMeshes.set(`${structure.id}-label`, label);
   }
-  const plannedPath = new THREE.Line(
-    new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({ color: 0xffca70, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthTest: false }),
-  );
-  plannedPath.renderOrder = 20;
-  plannedPath.visible = false;
-  puzzleGroup.add(plannedPath);
-  scene.add(puzzleGroup);
+
+  const anchorMeshes = new Map();
+  for (const anchor of LEVEL.anchors) {
+    const group = new THREE.Group();
+    const shell = new THREE.Mesh(new THREE.OctahedronGeometry(anchor.radius, 1), glowMaterial(anchor.color));
+    const cage = new THREE.Mesh(new THREE.TorusGeometry(anchor.radius * 1.35, 0.06, 8, 40), glowMaterial(anchor.color, 0.62));
+    cage.rotation.x = Math.PI / 2;
+    group.add(shell, cage);
+    group.position.set(anchor.x, anchor.radius + 0.25, anchor.z);
+    scene.add(group);
+    anchorMeshes.set(anchor.id, group);
+    const label = createLabel(anchor.ability === 'dash' ? 'DASH' : 'PULL', anchor.ability === 'dash' ? '#ffaf73' : '#73fbd3');
+    label.position.set(anchor.x, anchor.radius * 2 + 1.2, anchor.z);
+    label.scale.set(2.2, 1.1, 1);
+    scene.add(label);
+    anchorMeshes.set(`${anchor.id}-label`, label);
+  }
 
   const objectMeshes = new Map();
   const ambientSwarms = new Map();
@@ -401,9 +472,26 @@ export function createScene(host) {
     ringMeshes.push(ring);
   }
   player.add(ringGroup);
+  const satelliteLayer = new THREE.Group();
+  const satelliteVisuals = new Map();
+  for (const definition of satelliteOrbitState(90, 0)) {
+    const visual = createSatelliteVisual(definition);
+    visual.group.visible = false;
+    visual.trail.visible = false;
+    satelliteLayer.add(visual.group, visual.trail);
+    satelliteVisuals.set(definition.id, visual);
+  }
+  player.add(satelliteLayer);
   const trail = createPointCloud(58, 0.12, 0x9dffe9, 0.72);
   trail.userData.phase = Array.from({ length: 58 }, (_, index) => index * 0.83);
   player.add(trail);
+  const gravityField = new THREE.Mesh(
+    new THREE.RingGeometry(6.7, 7.2, 72),
+    new THREE.MeshBasicMaterial({ color: 0x73fbd3, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  gravityField.rotation.x = Math.PI / 2;
+  gravityField.position.y = -1.05;
+  player.add(gravityField);
   scene.add(player);
 
   const stageShockwave = new THREE.Mesh(
@@ -439,9 +527,29 @@ export function createScene(host) {
   scene.add(particles);
 
   const activeBursts = [];
+  const seenCollectionEvents = new Set();
+  const seenActionEvents = new Set();
+  const seenStageEvents = new Set();
   const spawnCollectionBursts = (events, now) => {
     for (const event of events ?? []) {
+      if (seenCollectionEvents.has(event.id)) continue;
+      seenCollectionEvents.add(event.id);
       const burst = createBurst(event);
+      burst.bornAt = now;
+      activeBursts.push(burst);
+      scene.add(burst.group);
+    }
+  };
+  const spawnActionBursts = (events, now) => {
+    for (const event of events ?? []) {
+      if (seenActionEvents.has(event.id)) continue;
+      seenActionEvents.add(event.id);
+      const burst = createBurst({
+        ...event,
+        objectId: event.structureId ?? event.anchorId,
+        type: event.type === 'anchorBreak' ? 'crystal' : 'cube',
+        size: event.type === 'anchorBreak' ? 1.5 : 1.1,
+      });
       burst.bornAt = now;
       activeBursts.push(burst);
       scene.add(burst.group);
@@ -464,27 +572,7 @@ export function createScene(host) {
   return {
     render(state, time) {
       spawnCollectionBursts(state.collectionEvents, time);
-      const planning = state.status === 'planning';
-      const boardPositions = new Map();
-      state.puzzle?.board.forEach((id, index) => {
-        const row = Math.floor(index / LEVEL.puzzle.columns);
-        const column = index % LEVEL.puzzle.columns;
-        const x = LEVEL.puzzle.origin.x + column * moduleSize;
-        const z = LEVEL.puzzle.origin.z + row * moduleSize;
-        const module = puzzleModules.get(id);
-        if (module) {
-          module.position.set(x, 0, z);
-          module.visible = planning || Boolean(state.puzzle?.committed);
-        }
-        boardPositions.set(id, new THREE.Vector3(x, 0.36, z));
-      });
-      if (state.puzzle?.committed && state.puzzle.analysis?.route) {
-        plannedPath.geometry.setFromPoints(state.puzzle.analysis.route.map((routeStep) => boardPositions.get(routeStep.moduleId)));
-        plannedPath.visible = true;
-        plannedPath.material.opacity = 0.55 + Math.sin(time * 4) * 0.2;
-      } else {
-        plannedPath.visible = false;
-      }
+      spawnActionBursts(state.actionEvents, time);
       const { player: playerState } = state;
       const stage = playerVisualForMass(playerState.mass);
       const charge = stageChargeProgress(playerState.mass);
@@ -500,8 +588,15 @@ export function createScene(host) {
       bodyMaterial.emissive.copy(coreColor);
       bodyMaterial.emissiveIntensity = stage.glow * chargeGlow + ascensionProgress * 3;
       shellMaterial.color.copy(shellColor);
-      shellMaterial.opacity = stage.shellOpacity + ascensionProgress * 0.2;
-      updatePlayerTrail(trail, stage.trailCount, time, stage, playerState.radius, playerState);
+      const phaseActive = playerState.abilities?.phase.activeFor > 0;
+      const dashActive = playerState.abilities?.dash.activeFor > 0;
+      shellMaterial.opacity = phaseActive ? 0.08 : stage.shellOpacity + ascensionProgress * 0.2;
+      bodyMaterial.opacity = phaseActive ? 0.42 : 1;
+      bodyMaterial.transparent = phaseActive;
+      gravityField.material.opacity += (((playerState.abilities?.gravity.active ? 0.55 : 0)) - gravityField.material.opacity) * 0.18;
+      gravityField.rotation.z += playerState.abilities?.gravity.active ? 0.04 : 0.006;
+      const trailCount = Math.min(58, stage.trailCount + (dashActive ? 16 : 0));
+      updatePlayerTrail(trail, trailCount, time, stage, playerState.radius, playerState);
       ringGroup.rotation.set(0, 0, 0);
       const ringMotion = ringMotionState(state.status, ascensionProgress, time);
       ringMeshes.forEach((ring, index) => {
@@ -522,15 +617,31 @@ export function createScene(host) {
         mat.uniforms.uComplete.value = ringData.status === 'complete' ? 1 : 0;
         ring.rotation.set(motion.tiltX, motion.tiltY, motion.spin);
       });
+      const satelliteState = satelliteOrbitState(playerState.mass, time, state.status, ascensionProgress);
+      const activeSatelliteIds = new Set(satelliteState.map((orbit) => orbit.id));
+      satelliteVisuals.forEach((visual, id) => {
+        const visible = activeSatelliteIds.has(id);
+        visual.group.visible = visible;
+        visual.trail.visible = visible;
+      });
+      for (const orbit of satelliteState) {
+        const visual = satelliteVisuals.get(orbit.id);
+        if (visual) updateSatelliteVisual(visual, orbit, time);
+      }
       if (state.stageUpEvents && state.stageUpEvents.length > 0) {
-        const event = state.stageUpEvents[0];
-        stageShockwave.visible = true;
-        stageShockwaveAge = 0;
-        stageShockwave.position.set(event.x, 0.1, event.z);
-        stageShockwave.material.color.copy(cssColor(stage.shellColor));
+        const event = state.stageUpEvents.find((item) => !seenStageEvents.has(item.id));
+        if (event) {
+          seenStageEvents.add(event.id);
+          stageShockwave.visible = true;
+          stageShockwaveAge = 0;
+          stageShockwave.position.set(event.x, 0.1, event.z);
+          stageShockwave.material.color.copy(cssColor(stage.shellColor));
+        }
       }
       if (stageShockwave.visible) {
-        stageShockwaveAge += 0.016;
+        const renderDelta = Math.max(0, Math.min(0.05, time - (stageShockwave.userData.lastTime ?? time)));
+        stageShockwave.userData.lastTime = time;
+        stageShockwaveAge += renderDelta;
         const swProgress = clamp01(stageShockwaveAge / 0.9);
         const swRadius = 0.5 + swProgress * (playerState.radius * 6 + 4);
         stageShockwave.scale.setScalar(swRadius);
@@ -550,6 +661,10 @@ export function createScene(host) {
         mesh.visible = object.active;
         swarm.visible = object.active;
         if (object.active) {
+          mesh.position.x = object.x;
+          mesh.position.z = object.z;
+          swarm.position.x = object.x;
+          swarm.position.z = object.z;
           mesh.rotation.y += 0.003 + object.mass * 0.00005;
           mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12;
           swarm.position.y = mesh.position.y;
@@ -563,18 +678,61 @@ export function createScene(host) {
             const currentColor = label.material.map === labelTexture(String(Math.round(object.mass)), targetColor) ? targetColor : null;
             if (currentColor !== targetColor) label.material.map = labelTexture(String(Math.round(object.mass)), targetColor);
             label.material.needsUpdate = true;
+            label.position.x = object.x;
+            label.position.z = object.z;
             label.position.y = mesh.userData.baseY + object.size * 0.85 + 0.9 + Math.sin(time * 1.7 + object.mass) * 0.12;
+            const labelDistance = Math.hypot(playerState.x - object.x, playerState.z - object.z);
+            label.visible = labelDistance < 18;
           }
+        } else {
+          const label = labels.get(object.id);
+          if (label) label.visible = false;
         }
       }
-      const exitOpen = playerState.mass >= 90;
+      for (const structure of state.structures ?? []) {
+        const mesh = structureMeshes.get(structure.id);
+        const label = structureMeshes.get(`${structure.id}-label`);
+        if (mesh) {
+          mesh.visible = structure.active;
+          if (structure.kind === 'phaseable') mesh.material.opacity = phaseActive ? 0.08 : 0.38 + Math.sin(time * 3) * 0.08;
+        }
+        if (label) label.visible = structure.active && Math.hypot(playerState.x - structure.x, playerState.z - structure.z) < 20;
+      }
+      for (const anchor of state.anchors ?? []) {
+        const group = anchorMeshes.get(anchor.id);
+        if (!group) continue;
+        group.visible = anchor.active;
+        if (!anchor.active) continue;
+        const beingHit = (anchor.ability === 'dash' && dashActive) || (anchor.ability === 'gravity' && playerState.abilities?.gravity.active);
+        const dist = Math.hypot(playerState.x - anchor.x, playerState.z - anchor.z);
+        const inRange = dist < 6;
+        group.rotation.y += anchor.ability === 'dash' ? 0.025 : -0.018;
+        const baseScale = 1 + Math.sin(time * 4 + anchor.x) * 0.08;
+        const hitScale = beingHit && inRange ? 1.3 + Math.sin(time * 20) * 0.15 : 1;
+        group.scale.setScalar(baseScale * hitScale);
+        const shell = group.children[0];
+        if (shell && shell.material) {
+          shell.material.emissiveIntensity = beingHit && inRange ? 4 + Math.sin(time * 20) : 1.4;
+        }
+      }
+      const coreMesh = objectMeshes.get('core');
+      if (coreMesh && coreMesh.visible) {
+        if (!state.encounter.coreUnlocked) {
+          coreMesh.material.emissiveIntensity = 0.25 + Math.sin(time * 2) * 0.08;
+          coreMesh.rotation.y += 0.004;
+        } else {
+          coreMesh.material.emissiveIntensity = 2.8 + Math.sin(time * 6) * 0.6;
+          coreMesh.rotation.y += 0.02;
+        }
+      }
+      const exitOpen = playerState.mass >= 90 && !state.objects.find((object) => object.id === 'core')?.active;
       exitRing.material.color.setHex(exitOpen ? 0x7dffe4 : 0xff735c);
       exitRing.material.emissive.setHex(exitOpen ? 0x7dffe4 : 0xff735c);
       exit.rotation.y += exitOpen ? 0.018 : 0.004;
       const tunnelOpacity = ascending ? Math.sin(Math.PI * ascensionProgress) * 0.78 : 0;
       dimensionTunnel.visible = tunnelOpacity > 0.01;
       dimensionTunnel.position.set(playerState.x, playerState.radius * 0.55, playerState.z);
-      dimensionTunnel.rotation.z += 0.012 + stage.spin * 0.01;
+      dimensionTunnel.rotation.z += 0.012 + stage.energy * 0.01;
       tunnelRings.forEach((ring, index) => {
         ring.material.opacity = tunnelOpacity * (1 - index / (tunnelRings.length + 2));
         ring.material.color.copy(cssColor(stage.ringColors[index % stage.ringColors.length]));
@@ -590,17 +748,12 @@ export function createScene(host) {
       }
       const sizeFactor = Math.pow(playerState.radius / 1.15, 0.62);
       const distance = ascending ? 10 - ascensionProgress * 4 + playerState.radius * 1.2 : 14 + playerState.radius * 1.8 * sizeFactor;
-      if (planning) {
-        const centerX = LEVEL.puzzle.origin.x + moduleSize;
-        const centerZ = LEVEL.puzzle.origin.z + moduleSize;
-        cameraTarget.set(centerX, 31, centerZ + 0.01);
-        camera.position.lerp(cameraTarget, 0.1);
-        camera.lookAt(centerX, 0, centerZ);
-      } else {
-        cameraTarget.set(playerState.x + 9, distance, playerState.z + 11 + playerState.radius * 0.6);
-        camera.position.lerp(cameraTarget, ascending ? 0.085 : 0.045);
-        camera.lookAt(playerState.x, ascending ? playerState.radius + ascensionProgress * 3.2 : 0.5 + playerState.radius * 0.25, playerState.z);
-      }
+      const dashAmount = dashActive ? 1 : 0;
+      camera.fov += ((52 + dashAmount * 7) - camera.fov) * 0.12;
+      camera.updateProjectionMatrix();
+      cameraTarget.set(playerState.x + 9, distance, playerState.z + 11 + playerState.radius * 0.6);
+      camera.position.lerp(cameraTarget, ascending ? 0.085 : dashActive ? 0.08 : 0.045);
+      camera.lookAt(playerState.x, ascending ? playerState.radius + ascensionProgress * 3.2 : 0.5 + playerState.radius * 0.25, playerState.z);
       renderer.render(scene, camera);
     },
     dispose() {

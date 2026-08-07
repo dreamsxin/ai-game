@@ -4,94 +4,6 @@ export const LEVEL = {
   seed: LEVEL_SEED,
   bounds: { minX: -26, maxX: 26, minZ: -18, maxZ: 22 },
   start: { x: -19, z: 13 },
-  firstStageRoute: ['orb-1', 'orb-2', 'orb-4', 'cylinder-1'],
-  puzzle: {
-    rows: 3,
-    columns: 3,
-    moduleSize: 7.2,
-    origin: { x: -19, z: 13 },
-    entry: 'start',
-    checkpoint: 'checkpoint',
-    rating: { three: { moduleMoves: 4, travelSteps: 6 }, two: { moduleMoves: 6, travelSteps: 8 } },
-    initialBoard: [
-      'start', 'middle-a', 'gate-height',
-      'mass-c', 'bypass', 'gate-narrow',
-      'mass-a', 'mass-b', 'checkpoint',
-    ],
-    solutionMoves: [
-      { axis: 'row', index: 1, delta: -1 },
-      { axis: 'column', index: 1, delta: -1 },
-      { axis: 'column', index: 0, delta: -1 },
-      { axis: 'column', index: 1, delta: -1 },
-    ],
-    modules: {
-      start: {
-        label: '起点', fixed: true,
-        ports: { north: { color: 'white' } },
-        contents: [],
-      },
-      'mass-a': {
-        label: '冰青光室',
-        ports: { south: { color: 'white' }, east: { color: 'cyan' } },
-        contents: [{ objectId: 'orb-1' }],
-      },
-      'middle-a': {
-        label: '青纹回廊',
-        ports: { west: { color: 'cyan' }, north: { color: 'coral' } },
-        contents: [{ objectId: 'orb-2' }],
-      },
-      'mass-b': {
-        label: '珊瑚光室',
-        ports: { south: { color: 'coral' }, east: { color: 'gold' } },
-        contents: [{ objectId: 'orb-4' }],
-      },
-      'gate-height': {
-        label: 'H 1.9 矮墙',
-        ports: {
-          west: { color: 'gold', gate: { heightMin: 1.9 } },
-          south: { color: 'white', gate: { heightMin: 1.9 } },
-        },
-        contents: [],
-      },
-      'gate-narrow': {
-        label: '12–14 窄门',
-        ports: {
-          west: { color: 'white', gate: { massMin: 12, massMax: 14 } },
-          east: { color: 'white', gate: { massMin: 12, massMax: 14 } },
-          north: { color: 'white', gate: { massMin: 12, massMax: 14 } },
-        },
-        contents: [],
-      },
-      'mass-c': {
-        label: '圆柱储能舱',
-        ports: { north: { color: 'white' }, south: { color: 'white' } },
-        contents: [{ objectId: 'cylinder-1' }],
-      },
-      bypass: {
-        label: '未校准房间',
-        ports: { east: { color: 'white' }, north: { color: 'white' } },
-        contents: [],
-      },
-      checkpoint: {
-        label: '虹彩检查点', fixed: true,
-        ports: { north: { color: 'white' } },
-        contents: [],
-      },
-    },
-  },
-  autoplayRoute: [
-    { kind: 'object', id: 'orb-1' },
-    { kind: 'object', id: 'orb-2' },
-    { kind: 'object', id: 'orb-4' },
-    { kind: 'object', id: 'cylinder-1' },
-    { kind: 'object', id: 'cube-1' },
-    { kind: 'object', id: 'prism-1' },
-    { kind: 'point', x: 22, z: 14 },
-    { kind: 'point', x: 22, z: -13 },
-    { kind: 'object', id: 'prism-3' },
-    { kind: 'object', id: 'crystal-2' },
-    { kind: 'exit' },
-  ],
   exit: { x: 20, z: -13, radius: 2.4 },
   obstacles: [
     { id: 'wall-a', x: -6, z: 3, width: 3, depth: 8, height: 1.2 },
@@ -99,8 +11,17 @@ export const LEVEL = {
     { id: 'wall-c', x: -3, z: -9, width: 11, depth: 3, height: 1.2 },
     { id: 'wall-d', x: 16, z: -3, width: 3, depth: 8, height: 1.2 },
   ],
+  structures: [
+    { id: 'crystal-panel', kind: 'breakable', x: -16.4, z: 13, width: 0.55, depth: 5.2, height: 2.8, integrity: 1, color: 0x73fbd3 },
+    { id: 'risk-panel', kind: 'breakable', x: 1, z: 10, width: 0.7, depth: 5.5, height: 3.3, integrity: 1, color: 0xffaf73 },
+    { id: 'phase-gate', kind: 'phaseable', x: 4, z: -4, width: 6.2, depth: 0.55, height: 4.2, integrity: 1, color: 0xd66cff },
+  ],
+  anchors: [
+    { id: 'north', x: 10.5, z: -9.5, radius: 1.15, ability: 'dash', color: 0xffaf73 },
+    { id: 'south', x: 16.8, z: -9.8, radius: 1.15, ability: 'gravity', color: 0x73fbd3 },
+  ],
   objects: [
-    { id: 'orb-1', type: 'orb', x: -14, z: 12, size: 0.65, mass: 1.2, color: 0x73fbd3 },
+    { id: 'orb-1', type: 'orb', x: -17, z: 13, size: 0.65, mass: 1.2, color: 0x73fbd3 },
     { id: 'orb-2', type: 'orb', x: -11, z: 15, size: 0.8, mass: 2, color: 0x73fbd3 },
     { id: 'orb-3', type: 'orb', x: -15, z: 7, size: 0.95, mass: 3, color: 0x8bf8ff },
     { id: 'orb-4', type: 'orb', x: -7, z: 14, size: 1.05, mass: 4, color: 0xffaf73 },
@@ -115,7 +36,10 @@ export const LEVEL = {
     { id: 'cube-3', type: 'cube', x: -14, z: -11, size: 1.7, mass: 20, color: 0xb2ff78 },
     { id: 'crystal-2', type: 'crystal', x: -8, z: -13, size: 2.1, mass: 29, color: 0xffca70 },
     { id: 'prism-3', type: 'prism', x: 3, z: -14, size: 2.25, mass: 38, color: 0xff8ac6 },
-    { id: 'core', type: 'core', x: 13, z: -12, size: 2.5, mass: 52, color: 0xffffff },
+    { id: 'core', type: 'core', x: 13, z: -12, size: 2.5, mass: 52, color: 0xffffff, protected: true },
+    { id: 'shard-a', type: 'orb', x: -5, z: 11, size: 0.3, mass: 1, color: 0xa2ffe8, gravity: true },
+    { id: 'shard-b', type: 'orb', x: -3.5, z: 10, size: 0.3, mass: 1, color: 0xa2ffe8, gravity: true },
+    { id: 'shard-c', type: 'orb', x: -5.5, z: 8.8, size: 0.3, mass: 1, color: 0xa2ffe8, gravity: true },
   ],
 };
 

@@ -26,6 +26,12 @@ export const PLAYER_STAGES = [
   },
 ];
 
+export const ORBITAL_SATELLITES = [
+  { id: 'lumen', unlockMass: 0, radius: 1.98, speed: 1.18, direction: 1, tiltX: 0.28, tiltZ: 0.62, phase: 0.3, size: 0.16, color: '#c8fff2' },
+  { id: 'ember', unlockMass: 0, radius: 2.2, speed: 0.82, direction: -1, tiltX: 1.02, tiltZ: -0.42, phase: 2.1, size: 0.19, color: '#ffbd89' },
+  { id: 'violet', unlockMass: 32, radius: 2.46, speed: 0.58, direction: 1, tiltX: 0.72, tiltZ: 1.08, phase: 4.35, size: 0.17, color: '#e7b1ff' },
+];
+
 export const PLANETARY_RINGS = [
   {
     id: 'inner', name: '第一共鸣环', radius: 1.32, unlockMass: 0, completeMass: 12,
@@ -106,6 +112,20 @@ export function ringMotionState(status, progress = 0, time = 0) {
     flowPhase: ring.flowSpeed * time,
     direction: ring.direction,
   }));
+}
+
+export function satelliteOrbitState(mass, time = 0, status = 'playing', ascensionProgress = 0) {
+  const ascending = status === 'ascending' || status === 'won';
+  const spread = ascending ? easeInOut(clamp01(ascensionProgress * 1.7)) : 0;
+  return ORBITAL_SATELLITES
+    .filter((satellite) => mass >= satellite.unlockMass)
+    .map((satellite, index) => ({
+      ...satellite,
+      angle: satellite.phase + time * satellite.speed * satellite.direction,
+      tiltX: satellite.tiltX + spread * (index - 1) * 0.38,
+      tiltZ: satellite.tiltZ + spread * (1 - index) * 0.25,
+      trailArc: Math.PI * (1.25 + index * 0.12),
+    }));
 }
 
 export function playerVisualForMass(mass) {

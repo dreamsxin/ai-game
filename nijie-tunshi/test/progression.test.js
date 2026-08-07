@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   armillaryState,
+  ORBITAL_SATELLITES,
   PLANETARY_RINGS,
   PLAYER_STAGES,
   planetaryRingState,
   playerVisualForMass,
   ringMotionState,
+  satelliteOrbitState,
   stageChargeProgress,
 } from '../src/game/progression.js';
 import { ascensionProgress, canEnterExit, createGame, startGame, step } from '../src/game/simulation.js';
@@ -94,6 +96,27 @@ test('planetary rings rotate independently and carry directional energy flow', (
   assert.notEqual(later[0].flowPhase, later[2].flowPhase);
 });
 
+test('satellites use deterministic intertwined orbits and unlock the third at mass 32', () => {
+  const early = satelliteOrbitState(0, 3.5);
+  const repeated = satelliteOrbitState(0, 3.5);
+  const advanced = satelliteOrbitState(32, 3.5);
+  assert.equal(ORBITAL_SATELLITES.length, 3);
+  assert.equal(early.length, 2);
+  assert.equal(advanced.length, 3);
+  assert.deepEqual(early, repeated);
+  assert.deepEqual(early.map((satellite) => satellite.direction), [1, -1]);
+  assert.notEqual(early[0].tiltX, early[1].tiltX);
+  assert.notEqual(early[0].tiltZ, early[1].tiltZ);
+});
+
+test('satellite orbits spread further during ascension', () => {
+  const stable = satelliteOrbitState(90, 2, 'playing', 0);
+  const ascending = satelliteOrbitState(90, 2, 'ascending', 0.8);
+  assert.equal(stable.length, 3);
+  assert.notEqual(stable[0].tiltX, ascending[0].tiltX);
+  assert.notEqual(stable[2].tiltZ, ascending[2].tiltZ);
+});
+
 test('armillary stays coplanar outside ascension', () => {
   for (const status of ['ready', 'playing', 'paused']) {
     const rings = armillaryState(status, 0.5);
@@ -113,9 +136,10 @@ test('armillary uses deterministic different axes and opposite rotations while a
   assert.ok(first[2].spin > 0);
 });
 
-test('reaching the exit starts a higher-dimension ascension', () => {
+test('reaching the exit after consuming the core starts ascension', () => {
   let state = startGame(createGame());
   state.player.mass = 90;
+  state.objects.find((object) => object.id === 'core').active = false;
   state.player.x = LEVEL.exit.x;
   state.player.z = LEVEL.exit.z;
   state = step(state, {});
@@ -127,6 +151,7 @@ test('reaching the exit starts a higher-dimension ascension', () => {
 test('ascension completes after its cinematic duration', () => {
   let state = startGame(createGame());
   state.player.mass = 90;
+  state.objects.find((object) => object.id === 'core').active = false;
   state.player.x = LEVEL.exit.x;
   state.player.z = LEVEL.exit.z;
   state = step(state, {});
