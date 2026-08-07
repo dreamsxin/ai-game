@@ -117,14 +117,15 @@ test('satellites ride on ring radius with short meteor tails that grow with char
   assert.ok(early[0].trailArc < full[0].trailArc, 'tail grows with charge');
   assert.ok(full[0].trailArc <= 1.2, 'tail stays short');
   assert.ok(early[0].trailArc >= 0.4, 'tail has minimum length');
+  assert.ok(Math.abs(early[0].tiltX - Math.PI / 2) < 0.01, 'lumen coplanar with inner ring');
 });
 
 test('satellite orbits spread further during ascension', () => {
   const stable = satelliteOrbitState(90, 2, 'playing', 0);
   const ascending = satelliteOrbitState(90, 2, 'ascending', 0.8);
   assert.equal(stable.length, 3);
-  assert.notEqual(stable[0].tiltX, ascending[0].tiltX);
-  assert.notEqual(stable[2].tiltZ, ascending[2].tiltZ);
+  assert.notEqual(stable[1].tiltX, ascending[1].tiltX, 'ember ring tilts');
+  assert.notEqual(stable[2].tiltY, ascending[2].tiltY, 'violet ring tilts');
 });
 
 test('armillary stays coplanar outside ascension', () => {

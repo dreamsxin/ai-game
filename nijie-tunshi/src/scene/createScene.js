@@ -117,12 +117,15 @@ const createLabel = (text, color) => {
 
 const labelColor = (available) => available ? '#a2ffe8' : '#5a8580';
 
+const ringEuler = new THREE.Euler();
+const ringQuaternion = new THREE.Quaternion();
 const orbitalPoint = (orbit, angle, target = new THREE.Vector3()) => {
   const x = Math.cos(angle) * orbit.radius;
-  const z = Math.sin(angle) * orbit.radius;
-  target.set(x, 0, z);
-  target.applyAxisAngle(new THREE.Vector3(1, 0, 0), orbit.tiltX);
-  target.applyAxisAngle(new THREE.Vector3(0, 0, 1), orbit.tiltZ);
+  const y = Math.sin(angle) * orbit.radius;
+  target.set(x, y, 0);
+  ringEuler.set(orbit.tiltX ?? Math.PI / 2, orbit.tiltY ?? 0, 0, 'XYZ');
+  ringQuaternion.setFromEuler(ringEuler);
+  target.applyQuaternion(ringQuaternion);
   return target;
 };
 
@@ -157,10 +160,9 @@ function createSatelliteVisual(definition) {
       uniform vec3 uColor;
       varying float vProgress;
       void main() {
-        float head = pow(vProgress, 0.4);
-        float fade = smoothstep(0.0, 0.15, vProgress) * head;
-        vec3 col = mix(uColor * 0.3, uColor * 1.8, head);
-        gl_FragColor = vec4(col, fade * 0.88);
+        float fade = vProgress * vProgress;
+        vec3 col = mix(uColor * 0.1, uColor * 2.4, vProgress);
+        gl_FragColor = vec4(col, fade);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
