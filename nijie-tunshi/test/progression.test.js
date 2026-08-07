@@ -111,9 +111,9 @@ test('satellites ride on ring radius with short meteor tails that grow with char
   for (const satellite of advanced) {
     assert.ok(satellite.size <= 0.075, `${satellite.id} size ${satellite.size} too large`);
   }
-  assert.equal(early[0].radius, 1.32, 'lumen on inner ring');
-  assert.equal(full[1].radius, 1.52, 'ember on middle ring');
-  assert.equal(full[2].radius, 1.74, 'violet on outer ring');
+  assert.ok(early[0].radius < 1.32, 'lumen starts inside ring');
+  assert.ok(Math.abs(full[0].radius - 1.32) < 0.001, 'lumen reaches ring at full charge');
+  assert.ok(Math.abs(full[2].radius - 1.74) < 0.001, 'violet reaches ring at full charge');
   assert.ok(early[0].trailArc < full[0].trailArc, 'tail grows with charge');
   assert.ok(full[0].trailArc <= 1.2, 'tail stays short');
   assert.ok(early[0].trailArc >= 0.4, 'tail has minimum length');

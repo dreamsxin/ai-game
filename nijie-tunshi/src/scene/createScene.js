@@ -618,7 +618,7 @@ export function createScene(host) {
           ? Math.max(0, chargePulse)
           : 0;
         mat.uniforms.uProgress.value = ringData.status === 'complete' ? 1 : ringData.progress;
-        mat.uniforms.uOpacity.value = Math.min(1, 0.62 + ringData.progress * 0.28 + pulse);
+        mat.uniforms.uOpacity.value = Math.min(0.42, 0.18 + ringData.progress * 0.16 + pulse * 0.3);
         mat.uniforms.uOffset.value = motion.spin / (Math.PI * 2);
         mat.uniforms.uPulse.value = pulse + ascensionProgress * 0.35;
         mat.uniforms.uFlowPhase.value = motion.flowPhase + ascensionProgress * 1.8;

@@ -119,13 +119,16 @@ export function satelliteOrbitState(mass, time = 0, status = 'playing', ascensio
   const ringMotion = ringMotionState(status, ascensionProgress, time);
   return ORBITAL_SATELLITES
     .filter((satellite) => safeMass >= satellite.unlockMass)
-    .map((satellite, index) => {
-      const ring = PLANETARY_RINGS.findIndex((item) => item.id === satellite.ringId);
-      const motion = ringMotion[ring] ?? ringMotion[0];
-      const ringDef = PLANETARY_RINGS[ring] ?? PLANETARY_RINGS[0];
+    .map((satellite) => {
+      const ringIndex = PLANETARY_RINGS.findIndex((item) => item.id === satellite.ringId);
+      const motion = ringMotion[ringIndex] ?? ringMotion[0];
+      const ringDef = PLANETARY_RINGS[ringIndex] ?? PLANETARY_RINGS[0];
       const ringProgress = clamp01((safeMass - ringDef.unlockMass) / (ringDef.completeMass - ringDef.unlockMass));
+      const innerStart = 0.4;
+      const orbitRadius = lerp(innerStart, satellite.radius, ringProgress);
       return {
         ...satellite,
+        radius: orbitRadius,
         tiltX: motion.tiltX,
         tiltY: motion.tiltY,
         angle: satellite.phase + time * satellite.speed * satellite.direction,
