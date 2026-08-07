@@ -32,8 +32,6 @@ export const ORBITAL_SATELLITES = [
   { id: 'violet', ringId: 'outer', unlockMass: 32, radius: 1.74, speed: 0.58, direction: 1, tiltX: 0.72, tiltZ: 1.08, phase: 4.35, size: 0.07, color: '#e7b1ff' },
 ];
 
-const SATELLITE_INNER = 0.88;
-
 export const PLANETARY_RINGS = [
   {
     id: 'inner', name: '第一共鸣环', radius: 1.32, unlockMass: 0, completeMass: 12,
@@ -127,14 +125,13 @@ export function satelliteOrbitState(mass, time = 0, status = 'playing', ascensio
       const ringProgress = ring
         ? clamp01((safeMass - ring.unlockMass) / (ring.completeMass - ring.unlockMass))
         : 1;
-      const orbitRadius = lerp(SATELLITE_INNER, satellite.radius, ringProgress);
       return {
         ...satellite,
-        radius: orbitRadius,
+        radius: satellite.radius,
         angle: satellite.phase + time * satellite.speed * satellite.direction,
         tiltX: satellite.tiltX + spread * (index - 1) * 0.38,
         tiltZ: satellite.tiltZ + spread * (1 - index) * 0.25,
-        trailArc: Math.PI * (1.25 + index * 0.12),
+        trailArc: lerp(0.45, 1.1, ringProgress),
       };
     });
 }

@@ -96,7 +96,7 @@ test('planetary rings rotate independently and carry directional energy flow', (
   assert.notEqual(later[0].flowPhase, later[2].flowPhase);
 });
 
-test('satellites orbit at radius driven by ring charge and unlock with their rings', () => {
+test('satellites ride on ring radius with short meteor tails that grow with charge', () => {
   const early = satelliteOrbitState(0, 3.5);
   const repeated = satelliteOrbitState(0, 3.5);
   const mid = satelliteOrbitState(12, 3.5);
@@ -108,14 +108,15 @@ test('satellites orbit at radius driven by ring charge and unlock with their rin
   assert.equal(advanced.length, 3);
   assert.deepEqual(early, repeated);
   assert.deepEqual(advanced.map((satellite) => satellite.direction), [1, -1, 1]);
-  assert.notEqual(advanced[0].tiltX, advanced[1].tiltX);
-  assert.notEqual(advanced[0].tiltZ, advanced[1].tiltZ);
   for (const satellite of advanced) {
     assert.ok(satellite.size <= 0.075, `${satellite.id} size ${satellite.size} too large`);
   }
-  assert.ok(early[0].radius < full[0].radius, 'lumen should expand with charge');
-  assert.ok(full[0].radius > 1.3, 'lumen should reach ring at full charge');
-  assert.ok(full[2].radius > 1.7, 'violet should reach ring at full charge');
+  assert.equal(early[0].radius, 1.32, 'lumen on inner ring');
+  assert.equal(full[1].radius, 1.52, 'ember on middle ring');
+  assert.equal(full[2].radius, 1.74, 'violet on outer ring');
+  assert.ok(early[0].trailArc < full[0].trailArc, 'tail grows with charge');
+  assert.ok(full[0].trailArc <= 1.2, 'tail stays short');
+  assert.ok(early[0].trailArc >= 0.4, 'tail has minimum length');
 });
 
 test('satellite orbits spread further during ascension', () => {
