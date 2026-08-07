@@ -124,7 +124,7 @@ export function satelliteOrbitState(mass, time = 0, status = 'playing', ascensio
       const motion = ringMotion[ringIndex] ?? ringMotion[0];
       const ringDef = PLANETARY_RINGS[ringIndex] ?? PLANETARY_RINGS[0];
       const ringProgress = clamp01((safeMass - ringDef.unlockMass) / (ringDef.completeMass - ringDef.unlockMass));
-      const innerStart = 0.4;
+      const innerStart = 0.95;
       const orbitRadius = lerp(innerStart, satellite.radius, ringProgress);
       return {
         ...satellite,

@@ -608,6 +608,9 @@ export function createScene(host) {
       updatePlayerTrail(trail, trailCount, time, stage, playerState.radius, playerState);
       ringGroup.rotation.set(0, 0, 0);
       const ringMotion = ringMotionState(state.status, ascensionProgress, time);
+      const satelliteState = satelliteOrbitState(playerState.mass, time, state.status, ascensionProgress);
+      const satelliteByRing = new Map();
+      for (const orbit of satelliteState) satelliteByRing.set(orbit.ringId, orbit);
       ringMeshes.forEach((ring, index) => {
         const ringData = stage.rings.find((item) => item.id === PLANETARY_RINGS[index].id);
         const motion = ringMotion[index];
@@ -617,16 +620,18 @@ export function createScene(host) {
         const pulse = ringData.status === 'charging' && ringData.progress >= 0.7
           ? Math.max(0, chargePulse)
           : 0;
+        const satellite = satelliteByRing.get(PLANETARY_RINGS[index].id);
         mat.uniforms.uProgress.value = ringData.status === 'complete' ? 1 : ringData.progress;
-        mat.uniforms.uOpacity.value = Math.min(0.42, 0.18 + ringData.progress * 0.16 + pulse * 0.3);
-        mat.uniforms.uOffset.value = motion.spin / (Math.PI * 2);
+        mat.uniforms.uOpacity.value = Math.min(0.85, 0.45 + ringData.progress * 0.3 + pulse * 0.4);
+        const spinOffset = motion.spin / (Math.PI * 2);
+        const satelliteOffset = satellite ? satellite.angle / (Math.PI * 2) : 0;
+        mat.uniforms.uOffset.value = spinOffset + satelliteOffset;
         mat.uniforms.uPulse.value = pulse + ascensionProgress * 0.35;
         mat.uniforms.uFlowPhase.value = motion.flowPhase + ascensionProgress * 1.8;
         mat.uniforms.uFlowDirection.value = motion.direction;
         mat.uniforms.uComplete.value = ringData.status === 'complete' ? 1 : 0;
         ring.rotation.set(motion.tiltX, motion.tiltY, motion.spin);
       });
-      const satelliteState = satelliteOrbitState(playerState.mass, time, state.status, ascensionProgress);
       const activeSatelliteIds = new Set(satelliteState.map((orbit) => orbit.id));
       satelliteVisuals.forEach((visual, id) => {
         const visible = activeSatelliteIds.has(id);
