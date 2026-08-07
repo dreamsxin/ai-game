@@ -96,17 +96,23 @@ test('planetary rings rotate independently and carry directional energy flow', (
   assert.notEqual(later[0].flowPhase, later[2].flowPhase);
 });
 
-test('satellites use deterministic intertwined orbits and unlock the third at mass 32', () => {
+test('satellites use deterministic intertwined orbits and unlock with their rings', () => {
   const early = satelliteOrbitState(0, 3.5);
   const repeated = satelliteOrbitState(0, 3.5);
+  const mid = satelliteOrbitState(12, 3.5);
   const advanced = satelliteOrbitState(32, 3.5);
   assert.equal(ORBITAL_SATELLITES.length, 3);
-  assert.equal(early.length, 2);
+  assert.equal(early.length, 1);
+  assert.equal(mid.length, 2);
   assert.equal(advanced.length, 3);
   assert.deepEqual(early, repeated);
-  assert.deepEqual(early.map((satellite) => satellite.direction), [1, -1]);
-  assert.notEqual(early[0].tiltX, early[1].tiltX);
-  assert.notEqual(early[0].tiltZ, early[1].tiltZ);
+  assert.deepEqual(early.map((satellite) => satellite.direction), [1]);
+  assert.deepEqual(advanced.map((satellite) => satellite.direction), [1, -1, 1]);
+  assert.notEqual(advanced[0].tiltX, advanced[1].tiltX);
+  assert.notEqual(advanced[0].tiltZ, advanced[1].tiltZ);
+  for (const satellite of advanced) {
+    assert.ok(satellite.size <= 0.075, `${satellite.id} size ${satellite.size} too large`);
+  }
 });
 
 test('satellite orbits spread further during ascension', () => {

@@ -14,6 +14,9 @@ button { font: inherit; }
 .brand strong { font: 700 18px/1 'Chakra Petch', 'Noto Sans SC', sans-serif; }
 .brand span { padding-left: 11px; border-left: 1px solid #28544d; color: #78aaa1; font-size: 11px; }
 .timer { min-width: 45px; color: #9ed9cd; font: 600 14px/1 'Chakra Petch', monospace; }
+.route-button { height: 30px; padding: 0 11px; border: 1px solid rgba(142, 255, 229, .25); border-radius: 5px; color: #b7fff0; background: rgba(13, 43, 42, .7); font-size: 11px; cursor: pointer; }
+.route-button:hover { border-color: #73fbd3; color: #fff; background: #174c47; }
+.route-button.is-active { border-color: #ffca70; color: #061113; background: #ffca70; box-shadow: 0 0 14px rgba(255, 202, 112, .4); }
 .icon-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid rgba(142, 255, 229, .2); border-radius: 6px; color: #dffdf6; background: rgba(13, 43, 42, .65); cursor: pointer; }
 .icon-button:hover { border-color: #73fbd3; background: #174c47; }
 .mission-panel { position: absolute; z-index: 3; left: 26px; top: 88px; width: 210px; padding: 15px 17px; border-left: 2px solid #73fbd3; background: rgba(4, 20, 21, .73); backdrop-filter: blur(10px); }

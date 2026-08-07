@@ -133,31 +133,34 @@ function createSatelliteVisual(definition) {
     glowMaterial(definition.color),
   );
   const halo = new THREE.Mesh(
-    new THREE.SphereGeometry(definition.size * 3.2, 16, 12),
-    new THREE.MeshBasicMaterial({ color: definition.color, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.SphereGeometry(definition.size * 2.1, 12, 8),
+    new THREE.MeshBasicMaterial({ color: definition.color, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   group.add(core, halo);
-  const trail = createPointCloud(42, definition.size * 0.72, definition.color, 0.72);
-  trail.material.dispose();
-  trail.material = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: cssColor(definition.color) }, uSize: { value: definition.size * 16 } },
+  const trailCount = 64;
+  const trailGeometry = new THREE.BufferGeometry();
+  trailGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(trailCount * 3), 3));
+  const progress = new Float32Array(trailCount);
+  for (let index = 0; index < trailCount; index += 1) progress[index] = index / (trailCount - 1);
+  trailGeometry.setAttribute('aProgress', new THREE.BufferAttribute(progress, 1));
+  const trailMaterial = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: cssColor(definition.color) } },
     vertexShader: `
-      attribute float alpha;
-      varying float vAlpha;
-      uniform float uSize;
+      attribute float aProgress;
+      varying float vProgress;
       void main() {
-        vAlpha = alpha;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = uSize * (220.0 / max(1.0, -mvPosition.z));
-        gl_Position = projectionMatrix * mvPosition;
+        vProgress = aProgress;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
       uniform vec3 uColor;
-      varying float vAlpha;
+      varying float vProgress;
       void main() {
-        float soft = 1.0 - smoothstep(0.15, 0.5, distance(gl_PointCoord, vec2(0.5)));
-        gl_FragColor = vec4(uColor, soft * vAlpha * 0.82);
+        float head = pow(vProgress, 0.4);
+        float fade = smoothstep(0.0, 0.15, vProgress) * head;
+        vec3 col = mix(uColor * 0.3, uColor * 1.8, head);
+        gl_FragColor = vec4(col, fade * 0.88);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
@@ -166,11 +169,11 @@ function createSatelliteVisual(definition) {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
-  const alpha = new Float32Array(42);
-  for (let index = 0; index < alpha.length; index += 1) alpha[index] = (index / (alpha.length - 1)) ** 1.7;
-  trail.geometry.setAttribute('alpha', new THREE.BufferAttribute(alpha, 1));
-  return { group, core, halo, trail };
+  const trail = new THREE.Line(trailGeometry, trailMaterial);
+  return { group, core, halo, trail, trailCount };
 }
+
+const trailOffset = new THREE.Vector3();
 
 function updateSatelliteVisual(visual, orbit, time) {
   orbitalPoint(orbit, orbit.angle, visual.group.position);
@@ -178,14 +181,18 @@ function updateSatelliteVisual(visual, orbit, time) {
   visual.core.rotation.y = time * orbit.speed * orbit.direction;
   visual.halo.scale.setScalar(1 + Math.sin(time * 4 + orbit.phase) * 0.16);
   const positions = visual.trail.geometry.attributes.position.array;
-  const count = positions.length / 3;
+  const count = visual.trailCount;
   for (let index = 0; index < count; index += 1) {
     const amount = index / Math.max(1, count - 1);
     const angle = orbit.angle - orbit.direction * orbit.trailArc * (1 - amount);
     const point = orbitalPoint(orbit, angle);
-    positions[index * 3] = point.x;
-    positions[index * 3 + 1] = point.y;
-    positions[index * 3 + 2] = point.z;
+    const wobble = Math.sin(time * 6 + index * 0.7 + orbit.phase) * 0.035 * (1 - amount);
+    trailOffset.set(point.x, point.y, point.z);
+    trailOffset.x += Math.cos(time * 3 + index) * wobble;
+    trailOffset.y += Math.sin(time * 4 + index * 1.3) * wobble;
+    positions[index * 3] = trailOffset.x;
+    positions[index * 3 + 1] = trailOffset.y;
+    positions[index * 3 + 2] = trailOffset.z;
   }
   visual.trail.geometry.attributes.position.needsUpdate = true;
 }

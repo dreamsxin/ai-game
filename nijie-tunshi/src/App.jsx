@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Atom, CirclePause, Gauge, Magnet, Play, RotateCcw, Sparkles, Zap } from 'lucide-react';
 import { ABILITIES, abilityUnlocked } from './game/abilities.js';
 import { createInput } from './game/input.js';
+import { createReplayAgent } from './game/replayAgent.js';
 import { stageChargeProgress } from './game/progression.js';
 import { ascensionProgress, createGame, resetGame, step, STEP, togglePause } from './game/simulation.js';
 import { ASCENSION_MASS } from './game/rules.js';
@@ -61,6 +62,7 @@ export default function App() {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
   const inputRef = useRef(null);
+  const replayRef = useRef(createReplayAgent());
   const gameRef = useRef(createGame());
   const [view, setView] = useState(gameRef.current);
 
@@ -88,7 +90,11 @@ export default function App() {
       last = now;
       accumulator += frameDelta;
       while (accumulator >= STEP) {
-        gameRef.current = step(gameRef.current, input.snapshot(), STEP);
+        const manualInput = input.snapshot();
+        const replayInput = replayRef.current.isActive() ? replayRef.current.snapshot(gameRef.current) : {};
+        const merged = replayRef.current.isActive() ? replayInput : manualInput;
+        gameRef.current = step(gameRef.current, merged, STEP);
+        if (gameRef.current.status === 'ascending' && replayRef.current.isActive()) replayRef.current.stop();
         accumulator -= STEP;
       }
       scene.render(gameRef.current, now / 1000);
@@ -112,8 +118,18 @@ export default function App() {
   }, []);
 
   const restart = () => {
+    replayRef.current?.stop();
     inputRef.current?.clear();
     commit(resetGame());
+  };
+  const toggleReplay = () => {
+    if (replayRef.current?.isActive()) {
+      replayRef.current.stop();
+    } else {
+      if (gameRef.current.status !== 'playing') commit(resetGame());
+      replayRef.current?.start();
+    }
+    setView(gameRef.current);
   };
   const charge = stageChargeProgress(view.player.mass);
   const progress = Math.min(100, (view.player.mass / ASCENSION_MASS) * 100);
@@ -128,6 +144,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand"><Sparkles size={18} /><strong>霓界吞噬</strong><span>01 · 荧光庭院</span></div>
         <div className="top-actions">
+          <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} title="自动演示完整通关流程">{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
           <span className="timer">{formatTime(view.elapsed)}</span>
           <button className="icon-button" onClick={() => commit(togglePause(gameRef.current))} title={view.status === 'paused' ? '继续' : '暂停'}>
             {view.status === 'paused' ? <Play size={19} /> : <CirclePause size={19} />}

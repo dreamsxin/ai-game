@@ -117,6 +117,7 @@ test('combo persists across steps and expires', () => {
 test('scripted replay breaks both anchors, consumes the core, and reaches ascension', () => {
   let state = createGame();
   const agent = createReplayAgent();
+  agent.start();
   for (let index = 0; index < 40000 && state.status === 'playing'; index += 1) {
     state = step(state, agent.snapshot(state), 1 / 60);
   }

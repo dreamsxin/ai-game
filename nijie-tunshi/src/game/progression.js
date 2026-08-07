@@ -27,9 +27,9 @@ export const PLAYER_STAGES = [
 ];
 
 export const ORBITAL_SATELLITES = [
-  { id: 'lumen', unlockMass: 0, radius: 1.98, speed: 1.18, direction: 1, tiltX: 0.28, tiltZ: 0.62, phase: 0.3, size: 0.16, color: '#c8fff2' },
-  { id: 'ember', unlockMass: 0, radius: 2.2, speed: 0.82, direction: -1, tiltX: 1.02, tiltZ: -0.42, phase: 2.1, size: 0.19, color: '#ffbd89' },
-  { id: 'violet', unlockMass: 32, radius: 2.46, speed: 0.58, direction: 1, tiltX: 0.72, tiltZ: 1.08, phase: 4.35, size: 0.17, color: '#e7b1ff' },
+  { id: 'lumen', ringId: 'inner', unlockMass: 0, radius: 1.32, speed: 1.18, direction: 1, tiltX: 0.28, tiltZ: 0.62, phase: 0.3, size: 0.055, color: '#c8fff2' },
+  { id: 'ember', ringId: 'middle', unlockMass: 12, radius: 1.52, speed: 0.82, direction: -1, tiltX: 1.02, tiltZ: -0.42, phase: 2.1, size: 0.062, color: '#ffbd89' },
+  { id: 'violet', ringId: 'outer', unlockMass: 32, radius: 1.74, speed: 0.58, direction: 1, tiltX: 0.72, tiltZ: 1.08, phase: 4.35, size: 0.07, color: '#e7b1ff' },
 ];
 
 export const PLANETARY_RINGS = [
