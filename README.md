@@ -1,11 +1,12 @@
 # AI 小游戏集合
 
-每款游戏使用独立 workspace，并通过 MCP 工具接入 AI。
+每款游戏使用独立 workspace。需要对话或推理能力的游戏通过 MCP 工具接入 AI，实时 3D 游戏使用确定性规则保证操作响应。
 
 ## 游戏
 
 - `wuqizi`：五子棋，支持分级 AI、积分、自动升阶和对局交流。
 - `xiaoyuanmian`：校园谜案《回声画廊：消失的原作》，支持现场调查、角色询问、证据对质和最终指控。
+- `nijie-tunshi`：3D 滚动吞噬游戏《霓界吞噬》，在荧光几何世界中成长并开启共鸣出口。
 
 ## 本地运行
 
@@ -28,7 +29,13 @@ npm run dev
 npm run dev:xiaoyuanmian
 ```
 
-两款游戏的 MCP Streamable HTTP 端点都是各自服务下的 `/mcp`。
+霓界吞噬默认运行在 `http://localhost:4175`：
+
+```bash
+npm run dev:nijie-tunshi
+```
+
+五子棋和校园谜案的 MCP Streamable HTTP 端点都是各自服务下的 `/mcp`。霓界吞噬当前为无需服务端的固定种子核心原型，完整规划见 `nijie-tunshi/docs/game-design.md`。
 
 ## DeepSeek 配置
 
@@ -53,4 +60,6 @@ npm run build
 ```bash
 npm run test:xiaoyuanmian
 npm run build:xiaoyuanmian
+npm run test:nijie-tunshi
+npm run build:nijie-tunshi
 ```
