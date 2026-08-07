@@ -27,9 +27,9 @@ export const PLAYER_STAGES = [
 ];
 
 export const ORBITAL_SATELLITES = [
-  { id: 'lumen', ringId: 'inner', unlockMass: 0, radius: 1.32, speed: 1.18, direction: 1, phase: 0.3, size: 0.055, color: '#c8fff2' },
-  { id: 'ember', ringId: 'middle', unlockMass: 12, radius: 1.52, speed: 0.82, direction: -1, phase: 2.1, size: 0.062, color: '#ffbd89' },
-  { id: 'violet', ringId: 'outer', unlockMass: 32, radius: 1.74, speed: 0.58, direction: 1, phase: 4.35, size: 0.07, color: '#e7b1ff' },
+  { id: 'lumen', ringId: 'inner', unlockMass: 0, radius: 1.32, speed: 1.18, direction: 1, phase: 0, size: 0.055, color: '#c8fff2' },
+  { id: 'ember', ringId: 'middle', unlockMass: 12, radius: 1.52, speed: 0.82, direction: -1, phase: 0, size: 0.062, color: '#ffbd89' },
+  { id: 'violet', ringId: 'outer', unlockMass: 32, radius: 1.74, speed: 0.58, direction: 1, phase: 0, size: 0.07, color: '#e7b1ff' },
 ];
 
 export const PLANETARY_RINGS = [
@@ -126,12 +126,15 @@ export function satelliteOrbitState(mass, time = 0, status = 'playing', ascensio
       const ringProgress = clamp01((safeMass - ringDef.unlockMass) / (ringDef.completeMass - ringDef.unlockMass));
       const innerStart = 0.95;
       const orbitRadius = lerp(innerStart, satellite.radius, ringProgress);
+      const chargeAngle = ringProgress * Math.PI * 2;
+      const freeAngle = time * satellite.speed * satellite.direction;
+      const orbitAngle = satellite.phase + (ringProgress >= 1 ? freeAngle : chargeAngle);
       return {
         ...satellite,
         radius: orbitRadius,
         tiltX: motion.tiltX,
         tiltY: motion.tiltY,
-        angle: satellite.phase + time * satellite.speed * satellite.direction,
+        angle: orbitAngle,
         trailArc: lerp(0.45, 1.1, ringProgress),
       };
     });

@@ -117,6 +117,11 @@ test('satellites ride on ring radius with short meteor tails that grow with char
   assert.ok(early[0].trailArc < full[0].trailArc, 'tail grows with charge');
   assert.ok(full[0].trailArc <= 1.2, 'tail stays short');
   assert.ok(early[0].trailArc >= 0.4, 'tail has minimum length');
+  assert.equal(early[0].angle, 0, 'satellite at charge start when 0%');
+  const half = satelliteOrbitState(6, 0);
+  assert.ok(Math.abs(half[0].angle - Math.PI) < 0.001, 'satellite halfway at 50% charge');
+  const fullCharge = satelliteOrbitState(12, 0);
+  assert.ok(fullCharge[0].angle < 0.001 || Math.abs(fullCharge[0].angle - Math.PI * 2) < 0.001, 'satellite full circle at 100% charge');
   assert.ok(Math.abs(early[0].tiltX - Math.PI / 2) < 0.01, 'lumen coplanar with inner ring');
 });
 

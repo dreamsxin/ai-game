@@ -623,9 +623,7 @@ export function createScene(host) {
         const satellite = satelliteByRing.get(PLANETARY_RINGS[index].id);
         mat.uniforms.uProgress.value = ringData.status === 'complete' ? 1 : ringData.progress;
         mat.uniforms.uOpacity.value = Math.min(0.85, 0.45 + ringData.progress * 0.3 + pulse * 0.4);
-        const spinOffset = motion.spin / (Math.PI * 2);
-        const satelliteOffset = satellite ? satellite.angle / (Math.PI * 2) : 0;
-        mat.uniforms.uOffset.value = spinOffset + satelliteOffset;
+        mat.uniforms.uOffset.value = ringData.status === 'complete' ? motion.spin / (Math.PI * 2) : 0;
         mat.uniforms.uPulse.value = pulse + ascensionProgress * 0.35;
         mat.uniforms.uFlowPhase.value = motion.flowPhase + ascensionProgress * 1.8;
         mat.uniforms.uFlowDirection.value = motion.direction;
