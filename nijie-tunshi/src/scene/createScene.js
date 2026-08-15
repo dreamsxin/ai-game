@@ -399,7 +399,9 @@ export function createScene(host) {
     group.position.set(anchor.x, anchor.radius + 0.25, anchor.z);
     scene.add(group);
     anchorMeshes.set(anchor.id, group);
-    const label = createLabel(anchor.ability === 'dash' ? 'DASH' : 'PULL', anchor.ability === 'dash' ? '#ffaf73' : '#73fbd3');
+    const abilityLabel = anchor.ability === 'dash' ? 'DASH' : anchor.ability === 'gravity' ? 'PULL' : 'PHASE';
+    const abilityColor = anchor.ability === 'dash' ? '#ffaf73' : anchor.ability === 'gravity' ? '#73fbd3' : '#e7b1ff';
+    const label = createLabel(abilityLabel, abilityColor);
     label.position.set(anchor.x, anchor.radius * 2 + 1.2, anchor.z);
     label.scale.set(2.2, 1.1, 1);
     scene.add(label);
@@ -546,11 +548,13 @@ export function createScene(host) {
     for (const event of events ?? []) {
       if (seenActionEvents.has(event.id)) continue;
       seenActionEvents.add(event.id);
+      const isIgnition = event.type === 'stellarIgnition';
+      const isAnchor = event.type === 'anchorBreak';
       const burst = createBurst({
         ...event,
-        objectId: event.structureId ?? event.anchorId,
-        type: event.type === 'anchorBreak' ? 'crystal' : 'cube',
-        size: event.type === 'anchorBreak' ? 1.5 : 1.1,
+        objectId: event.structureId ?? event.anchorId ?? event.type,
+        type: isIgnition ? 'core' : isAnchor ? 'crystal' : 'cube',
+        size: isIgnition ? 2.4 : isAnchor ? 1.5 : 1.1,
       });
       burst.bornAt = now;
       activeBursts.push(burst);
@@ -576,7 +580,7 @@ export function createScene(host) {
       spawnCollectionBursts(state.collectionEvents, time);
       spawnActionBursts(state.actionEvents, time);
       const { player: playerState } = state;
-      const stage = playerVisualForMass(playerState.mass);
+      const stage = playerVisualForMass(playerState.mass, playerState.ignited);
       const charge = stageChargeProgress(playerState.mass);
       const chargePulse = charge.progress >= 0.7 ? Math.sin(time * 5.5) * stage.chargePulse * ((charge.progress - 0.7) / 0.3) : 0;
       const ascending = state.status === 'ascending';
@@ -588,11 +592,18 @@ export function createScene(host) {
       const chargeGlow = 1 + chargePulse * 0.35;
       bodyMaterial.color.copy(coreColor);
       bodyMaterial.emissive.copy(coreColor);
-      bodyMaterial.emissiveIntensity = stage.glow * chargeGlow + ascensionProgress * 3;
+      bodyMaterial.emissiveIntensity = playerState.ignited
+        ? 7.5 + Math.sin(time * 8) * 1.4
+        : stage.glow * chargeGlow + ascensionProgress * 3;
+      if (playerState.ignited) {
+        bodyMaterial.color.setHex(0xfff7d6);
+        bodyMaterial.emissive.setHex(0xffd86b);
+      }
       shellMaterial.color.copy(shellColor);
       const phaseActive = playerState.abilities?.phase.activeFor > 0;
       const dashActive = playerState.abilities?.dash.activeFor > 0;
-      shellMaterial.opacity = phaseActive ? 0.08 : stage.shellOpacity + ascensionProgress * 0.2;
+      shellMaterial.opacity = playerState.ignited ? 0.92 : phaseActive ? 0.08 : stage.shellOpacity + ascensionProgress * 0.2;
+      if (playerState.ignited) shellMaterial.color.setHex(0xffca70);
       bodyMaterial.opacity = phaseActive ? 0.42 : 1;
       bodyMaterial.transparent = phaseActive;
       gravityField.material.opacity += (((playerState.abilities?.gravity.active ? 0.55 : 0)) - gravityField.material.opacity) * 0.18;
@@ -709,7 +720,9 @@ export function createScene(host) {
         if (!group) continue;
         group.visible = anchor.active;
         if (!anchor.active) continue;
-        const beingHit = (anchor.ability === 'dash' && dashActive) || (anchor.ability === 'gravity' && playerState.abilities?.gravity.active);
+        const beingHit = (anchor.ability === 'dash' && dashActive)
+          || (anchor.ability === 'gravity' && playerState.abilities?.gravity.active)
+          || (anchor.ability === 'phase' && phaseActive);
         const dist = Math.hypot(playerState.x - anchor.x, playerState.z - anchor.z);
         const inRange = dist < 6;
         group.rotation.y += anchor.ability === 'dash' ? 0.025 : -0.018;
@@ -731,7 +744,7 @@ export function createScene(host) {
           coreMesh.rotation.y += 0.02;
         }
       }
-      const exitOpen = playerState.mass >= 90 && !state.objects.find((object) => object.id === 'core')?.active;
+      const exitOpen = Boolean(playerState.ignited);
       exitRing.material.color.setHex(exitOpen ? 0x7dffe4 : 0xff735c);
       exitRing.material.emissive.setHex(exitOpen ? 0x7dffe4 : 0xff735c);
       exit.rotation.y += exitOpen ? 0.018 : 0.004;

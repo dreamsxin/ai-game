@@ -151,6 +151,28 @@ test('stellar ignition requires mass, fuel, stability, three anchors, phase, and
   assert.equal(isAscensionUnlocked(state), true);
 });
 
+test('simulation ignites once and emits the stellar transition events', () => {
+  let state = createGame();
+  state.player.mass = STELLAR_IGNITION_MASS;
+  state.player.fuel = STELLAR_FUEL_TARGET;
+  state.player.stability = 100;
+  state.encounter.anchors = { north: 0, south: 0, phase: 0 };
+  state.encounter.phaseIgnited = true;
+  state.anchors.forEach((anchor) => { anchor.active = false; anchor.integrity = 0; });
+  state.objects.find((object) => object.id === 'core').active = false;
+
+  state = step(state, {});
+  assert.equal(state.player.ignited, true);
+  assert.equal(state.player.ignitionAttempts, 1);
+  assert.equal(state.stageUpEvents.at(-1).stageName, '恒星');
+  assert.equal(state.actionEvents.at(-1).type, 'stellarIgnition');
+
+  state = step(state, {});
+  assert.equal(state.player.ignitionAttempts, 1);
+  assert.equal(state.stageUpEvents.filter((event) => event.stageName === '恒星').length, 1);
+  assert.equal(state.actionEvents.filter((event) => event.type === 'stellarIgnition').length, 1);
+});
+
 test('phase anchor only breaks while phase is active', () => {
   let state = createGame();
   state.player.mass = 32;
@@ -196,6 +218,19 @@ test('scripted replay completes stellar ignition and reaches the universe rift',
   assert.equal(state.player.fuel, STELLAR_FUEL_TARGET);
   assert.equal(state.player.ignited, true);
   assert.ok(state.encounter.brokenStructures.includes('crystal-panel'));
+});
+
+test('scripted replay completes stellar ignition in every defined universe', () => {
+  for (let universe = 1; universe <= 4; universe += 1) {
+    let state = createGame(77, { index: universe });
+    const agent = createReplayAgent();
+    agent.start();
+    for (let index = 0; index < 40000 && state.status === 'playing'; index += 1) {
+      state = step(state, agent.snapshot(state), 1 / 60);
+    }
+    assert.equal(state.status, 'ascending', `universe ${universe}`);
+    assert.equal(state.player.ignited, true, `universe ${universe}`);
+  }
 });
 
 test('pause freezes simulation and toggle resumes it', () => {

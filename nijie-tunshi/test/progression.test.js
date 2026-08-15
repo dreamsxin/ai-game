@@ -33,14 +33,17 @@ const createIgnitedGame = () => {
 test('player visual stages increase energy without exceeding three rings', () => {
   const early = playerVisualForMass(0);
   const middle = playerVisualForMass(45);
-  const final = playerVisualForMass(90);
-  assert.equal(PLAYER_STAGES.length, 5);
+  const protostar = playerVisualForMass(130);
+  const final = playerVisualForMass(130, true);
+  assert.equal(PLAYER_STAGES.length, 6);
   assert.equal(PLANETARY_RINGS.length, 3);
   assert.equal(early.ringCount, 1);
   assert.equal(middle.ringCount, 3);
   assert.equal(final.ringCount, 3);
   assert.ok(early.trailCount < final.trailCount);
-  assert.equal(final.stageName, '高维');
+  assert.equal(protostar.stageName, '原恒星');
+  assert.equal(protostar.shellColor, '#ffaf73');
+  assert.equal(final.stageName, '恒星');
   assert.equal(final.energy, 1);
 });
 
@@ -82,7 +85,7 @@ test('visible ring records contain complete geometry and valid gradients', () =>
 test('stage palette progresses from silver white to vivid purple', () => {
   const early = playerVisualForMass(0);
   const middle = playerVisualForMass(45);
-  const final = playerVisualForMass(90);
+  const final = playerVisualForMass(130, true);
   assert.equal(early.coreColor, '#f1fbff');
   assert.notEqual(early.shellColor, middle.shellColor);
   assert.notEqual(middle.shellColor, final.shellColor);

@@ -4,8 +4,14 @@ import { ABILITIES, abilityUnlocked } from './game/abilities.js';
 import { createInput } from './game/input.js';
 import { createReplayAgent } from './game/replayAgent.js';
 import { stageChargeProgress } from './game/progression.js';
-import { ascensionProgress, createGame, resetGame, step, STEP, togglePause } from './game/simulation.js';
-import { ASCENSION_MASS } from './game/rules.js';
+import {
+  ascensionProgress, createGame, enterNextUniverse, restartCurrentUniverse,
+  step, STEP, togglePause,
+} from './game/simulation.js';
+import {
+  ASCENSION_MASS, RING_COMPLETION_MASS, STELLAR_FUEL_TARGET,
+  STELLAR_STABILITY_TARGET,
+} from './game/rules.js';
 import { createScene } from './scene/createScene.js';
 
 const formatTime = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
@@ -120,19 +126,27 @@ export default function App() {
   const restart = () => {
     replayRef.current?.stop();
     inputRef.current?.clear();
-    commit(resetGame());
+    commit(restartCurrentUniverse(gameRef.current));
+  };
+  const continueUniverse = () => {
+    replayRef.current?.stop();
+    inputRef.current?.clear();
+    commit(enterNextUniverse(gameRef.current));
   };
   const toggleReplay = () => {
     if (replayRef.current?.isActive()) {
       replayRef.current.stop();
     } else {
-      if (gameRef.current.status !== 'playing') commit(resetGame());
+      if (gameRef.current.status !== 'playing') commit(restartCurrentUniverse(gameRef.current));
       replayRef.current?.start();
     }
     setView(gameRef.current);
   };
   const charge = stageChargeProgress(view.player.mass);
   const progress = Math.min(100, (view.player.mass / ASCENSION_MASS) * 100);
+  const fuelProgress = Math.min(100, (view.player.fuel / STELLAR_FUEL_TARGET) * 100);
+  const stabilityProgress = Math.min(100, (view.player.stability / STELLAR_STABILITY_TARGET) * 100);
+  const activeAnchors = view.anchors.filter((anchor) => anchor.active).length;
   const coreActive = view.objects.find((object) => object.id === 'core')?.active;
   const objective = view.encounter.coreUnlocked && coreActive ? '核心窗口已开放' : view.message;
   const dashReady = cooldownPercent(view.player.abilities.dash.cooldown, ABILITIES.dash.cooldown);
@@ -142,7 +156,7 @@ export default function App() {
     <main className={`game-shell is-${view.status}`}>
       <div ref={hostRef} className="scene" aria-label="霓界吞噬三维游戏场景" />
       <header className="topbar">
-        <div className="brand"><Sparkles size={18} /><strong>霓界吞噬</strong><span>01 · 荧光庭院</span></div>
+        <div className="brand"><Sparkles size={18} /><strong>霓界吞噬</strong><span>U{String(view.universe.index).padStart(2, '0')} · {view.universe.name} · {view.universe.rule}</span></div>
         <div className="top-actions">
           <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} title="自动演示完整通关流程">{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
           <span className="timer">{formatTime(view.elapsed)}</span>
@@ -154,14 +168,18 @@ export default function App() {
       </header>
 
       <section className="mission-panel">
-        <p className="eyebrow">共鸣质量</p>
-        <div className="mass-row"><strong>{Math.floor(view.player.mass)}</strong><span>/ {ASCENSION_MASS}</span></div>
+        <p className="eyebrow">{view.player.ignited ? '恒星已点燃' : view.player.mass >= RING_COMPLETION_MASS ? '原恒星点火' : '天体演化'}</p>
+        <div className="mass-row"><strong>{Math.floor(view.player.mass)}</strong><span>/ {ASCENSION_MASS} 质量</span></div>
         <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
-        <div className="charge-row"><span>{charge.ringName}</span><strong>{Math.floor(charge.progress * 100)}%</strong></div>
+        <div className="charge-row"><span>{charge.complete ? '三环充能完成' : charge.ringName}</span><strong>{Math.floor(charge.progress * 100)}%</strong></div>
         <div className="charge-track" role="progressbar" aria-label={charge.ringName} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(charge.progress * 100)}><i style={{ width: `${charge.progress * 100}%` }} /></div>
+        <div className="stellar-row"><span>氢氦燃料</span><strong>{Math.floor(view.player.fuel)}%</strong></div>
+        <div className="stellar-track fuel" role="progressbar" aria-label="恒星燃料" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(fuelProgress)}><i style={{ width: `${fuelProgress}%` }} /></div>
+        <div className="stellar-row"><span>核心稳定</span><strong>{Math.floor(view.player.stability)}%</strong></div>
+        <div className="stellar-track stability" role="progressbar" aria-label="核心稳定度" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(view.player.stability)}><i style={{ width: `${stabilityProgress}%` }} /></div>
         <dl>
-          <div><dt>体积</dt><dd>{view.player.radius.toFixed(1)}</dd></div>
-          <div><dt>共鸣</dt><dd>{Math.floor(view.player.abilities.resonance)}%</dd></div>
+          <div><dt>宇宙层级</dt><dd>U{view.universe.index}</dd></div>
+          <div><dt>点火锚点</dt><dd>{3 - activeAnchors} / 3</dd></div>
         </dl>
       </section>
 
@@ -183,16 +201,21 @@ export default function App() {
         <ActionButton action="dash" label="冲刺" icon={<Zap size={23} />} input={inputRef} className="primary-action" />
       </div>
 
-      <div className="opening-title"><span>SEED {view.seed}</span><strong>荧光庭院</strong></div>
+      <div className="opening-title"><span>UNIVERSE {view.universe.index} · {view.universe.rule}</span><strong>{view.universe.name}</strong></div>
 
       {view.status === 'paused' && (
         <section className="overlay compact"><p className="eyebrow">世界静止</p><h2>能量悬停</h2><button className="primary" onClick={() => commit(togglePause(gameRef.current))}><Play size={18} />继续滚动</button></section>
       )}
       {view.status === 'ascending' && (
-        <section className="ascension-hud"><p className="eyebrow">浑天仪跃迁 · LAYER {view.ascensionLevel + 1}</p><strong>坐标校准 {Math.floor(ascensionProgress(view) * 100)}%</strong><div className="ascension-bar"><i style={{ width: `${ascensionProgress(view) * 100}%` }} /></div></section>
+        <section className="ascension-hud"><p className="eyebrow">恒星压缩 · UNIVERSE {view.universe.index + 1}</p><strong>裂隙校准 {Math.floor(ascensionProgress(view) * 100)}%</strong><div className="ascension-bar"><i style={{ width: `${ascensionProgress(view) * 100}%` }} /></div></section>
       )}
       {view.status === 'won' && (
-        <section className="overlay results"><p className="eyebrow">维度跃迁完成</p><h2>{'★'.repeat(view.result?.stars ?? 1)}</h2><div className="result-grid"><span>用时<strong>{formatTime(view.result?.elapsed ?? 0)}</strong></span><span>最高连击<strong>×{view.result?.highestCombo ?? 0}</strong></span><span>路线<strong>{view.result?.route === 'swift' ? '迅捷' : '稳健'}</strong></span><span>相位捷径<strong>{view.result?.phaseShortcut ? '完成' : '未使用'}</strong></span></div><button className="primary" onClick={restart}><RotateCcw size={18} />再次挑战</button></section>
+        <section className="overlay results">
+          <p className="eyebrow">恒星诞生 · {view.universe.name}</p>
+          <h2>{'★'.repeat(view.result?.stars ?? 1)}</h2>
+          <div className="result-grid"><span>用时<strong>{formatTime(view.result?.elapsed ?? 0)}</strong></span><span>最高连击<strong>×{view.result?.highestCombo ?? 0}</strong></span><span>累计星级<strong>{view.universe.cumulativeStars + (view.result?.stars ?? 0)}</strong></span><span>下一宇宙<strong>{view.universe.index + 1}</strong></span></div>
+          <div className="result-actions"><button className="secondary" onClick={restart}><RotateCcw size={17} />重试本宇宙</button><button className="primary" data-testid="next-universe" onClick={continueUniverse}><Sparkles size={17} />进入下一宇宙</button></div>
+        </section>
       )}
     </main>
   );

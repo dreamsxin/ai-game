@@ -20,9 +20,14 @@ export const PLAYER_STAGES = [
     glow: 4.2, chargePulse: 0.23,
   },
   {
-    name: '高维', minMass: 90, shellOpacity: 0.8, trailCount: 58,
-    coreColor: '#ffffff', shellColor: '#bd8cff',
+    name: '原恒星', minMass: 90, shellOpacity: 0.8, trailCount: 54,
+    coreColor: '#fff8e8', shellColor: '#ffaf73',
     glow: 5.2, chargePulse: 0.3,
+  },
+  {
+    name: '恒星', minMass: 130, shellOpacity: 0.92, trailCount: 58,
+    coreColor: '#ffffff', shellColor: '#ffca70',
+    glow: 7.5, chargePulse: 0.38, requiresIgnition: true,
   },
 ];
 
@@ -139,18 +144,21 @@ export function satelliteOrbitState(mass, time = 0, status = 'playing', ascensio
     });
 }
 
-export function playerVisualForMass(mass) {
+export function playerVisualForMass(mass, ignited = false) {
   const safeMass = Math.max(0, Number(mass) || 0);
   let stageIndex = 0;
   for (let index = 1; index < PLAYER_STAGES.length; index += 1) {
-    if (safeMass >= PLAYER_STAGES[index].minMass) stageIndex = index;
+    const stage = PLAYER_STAGES[index];
+    if (safeMass >= stage.minMass && (!stage.requiresIgnition || ignited)) stageIndex = index;
   }
   const current = PLAYER_STAGES[stageIndex];
   const next = PLAYER_STAGES[Math.min(stageIndex + 1, PLAYER_STAGES.length - 1)];
   const range = Math.max(1, next.minMass - current.minMass);
   const stageProgress = stageIndex === PLAYER_STAGES.length - 1
     ? 1
-    : clamp01((safeMass - current.minMass) / range);
+    : next.requiresIgnition
+      ? 0
+      : clamp01((safeMass - current.minMass) / range);
   const ringState = planetaryRingState(safeMass);
   return {
     stageIndex,
@@ -165,7 +173,7 @@ export function playerVisualForMass(mass) {
     trailCount: Math.round(lerp(current.trailCount, next.trailCount, stageProgress)),
     glow: lerp(current.glow, next.glow, stageProgress),
     chargePulse: lerp(current.chargePulse, next.chargePulse, stageProgress),
-    energy: clamp01(safeMass / PLAYER_STAGES.at(-1).minMass),
+    energy: ignited ? 1 : clamp01(safeMass / PLAYER_STAGES.at(-1).minMass),
   };
 }
 

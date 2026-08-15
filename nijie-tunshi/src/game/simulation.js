@@ -114,9 +114,12 @@ function resolveRect(player, rect) {
   return true;
 }
 
-function stageIndexForMass(mass) {
+function stageIndexForMass(mass, ignited = false) {
   let index = 0;
-  for (let i = 1; i < PLAYER_STAGES.length; i += 1) if (mass >= PLAYER_STAGES[i].minMass) index = i;
+  for (let i = 1; i < PLAYER_STAGES.length; i += 1) {
+    const stage = PLAYER_STAGES[i];
+    if (mass >= stage.minMass && (!stage.requiresIgnition || ignited)) index = i;
+  }
   return index;
 }
 
@@ -305,6 +308,12 @@ export function step(state, input = {}, dt = STEP) {
   if (!next.player.ignited && stellarIgnitionReady(next)) {
     next.player.ignited = true;
     next.player.ignitionAttempts += 1;
+    const stellarStage = PLAYER_STAGES.length - 1;
+    pushEvent(next, 'stageUpEvents', {
+      type: 'stageUp', fromStage: stellarStage - 1, toStage: stellarStage,
+      stageName: PLAYER_STAGES[stellarStage].name,
+      x: next.player.x, z: next.player.z, radius: next.player.radius,
+    });
     pushEvent(next, 'actionEvents', {
       type: 'stellarIgnition', x: next.player.x, z: next.player.z, color: 0xffffff,
     });
