@@ -12,7 +12,23 @@ import {
   stageChargeProgress,
 } from '../src/game/progression.js';
 import { ascensionProgress, canEnterExit, createGame, startGame, step } from '../src/game/simulation.js';
+import { STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS } from '../src/game/rules.js';
 import { LEVEL } from '../src/game/level.js';
+
+const createIgnitedGame = () => {
+  const state = startGame(createGame());
+  state.player.mass = STELLAR_IGNITION_MASS;
+  state.player.fuel = STELLAR_FUEL_TARGET;
+  state.player.stability = 100;
+  state.player.ignited = true;
+  state.encounter.anchors = { north: 0, south: 0, phase: 0 };
+  state.encounter.phaseIgnited = true;
+  state.anchors.forEach((anchor) => { anchor.active = false; anchor.integrity = 0; });
+  state.objects.find((object) => object.id === 'core').active = false;
+  state.player.x = LEVEL.exit.x;
+  state.player.z = LEVEL.exit.z;
+  return state;
+};
 
 test('player visual stages increase energy without exceeding three rings', () => {
   const early = playerVisualForMass(0);
@@ -152,12 +168,8 @@ test('armillary uses deterministic different axes and opposite rotations while a
   assert.ok(first[2].spin > 0);
 });
 
-test('reaching the exit after consuming the core starts ascension', () => {
-  let state = startGame(createGame());
-  state.player.mass = 90;
-  state.objects.find((object) => object.id === 'core').active = false;
-  state.player.x = LEVEL.exit.x;
-  state.player.z = LEVEL.exit.z;
+test('reaching the exit after stellar ignition starts universe ascension', () => {
+  let state = createIgnitedGame();
   state = step(state, {});
   assert.equal(canEnterExit(state), true);
   assert.equal(state.status, 'ascending');
@@ -165,11 +177,7 @@ test('reaching the exit after consuming the core starts ascension', () => {
 });
 
 test('ascension completes after its cinematic duration', () => {
-  let state = startGame(createGame());
-  state.player.mass = 90;
-  state.objects.find((object) => object.id === 'core').active = false;
-  state.player.x = LEVEL.exit.x;
-  state.player.z = LEVEL.exit.z;
+  let state = createIgnitedGame();
   state = step(state, {});
   state = step(state, {}, 2);
   assert.equal(state.status, 'ascending');

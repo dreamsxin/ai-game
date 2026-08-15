@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ABILITIES, abilityUnlocked } from '../src/game/abilities.js';
 import { LEVEL } from '../src/game/level.js';
-import { createGame, radiusForMass, step, togglePause } from '../src/game/simulation.js';
+import { createGame, isAscensionUnlocked, radiusForMass, step, togglePause } from '../src/game/simulation.js';
+import { STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS, stellarIgnitionReady } from '../src/game/rules.js';
 import { createReplayAgent } from './helpers/replayAgent.js';
 
 const advance = (state, input, seconds) => {
@@ -99,6 +100,35 @@ test('core remains protected until both anchors are broken', () => {
   assert.equal(state.objects.find((object) => object.id === 'core').active, false);
 });
 
+test('stellar ignition requires mass, fuel, stability, three anchors, phase, and core', () => {
+  const state = createGame();
+  state.player.mass = STELLAR_IGNITION_MASS;
+  state.player.fuel = STELLAR_FUEL_TARGET;
+  state.player.stability = 100;
+  assert.equal(stellarIgnitionReady(state), false);
+  state.encounter.anchors = { north: 0, south: 0, phase: 0 };
+  state.encounter.phaseIgnited = true;
+  state.objects.find((object) => object.id === 'core').active = false;
+  assert.equal(stellarIgnitionReady(state), true);
+  assert.equal(isAscensionUnlocked(state), false);
+  state.player.ignited = true;
+  assert.equal(isAscensionUnlocked(state), true);
+});
+
+test('phase anchor only breaks while phase is active', () => {
+  let state = createGame();
+  state.player.mass = 32;
+  state.player.radius = radiusForMass(32);
+  const anchor = state.anchors.find((item) => item.id === 'phase');
+  state.player.x = anchor.x;
+  state.player.z = anchor.z;
+  state = step(state, {});
+  assert.equal(state.anchors.find((item) => item.id === 'phase').active, true);
+  state = step(state, { phasePressed: true });
+  assert.equal(state.anchors.find((item) => item.id === 'phase').active, false);
+  assert.equal(state.encounter.phaseIgnited, true);
+});
+
 test('combo persists across steps and expires', () => {
   let state = createGame();
   state.player.x = LEVEL.objects[0].x;
@@ -114,7 +144,7 @@ test('combo persists across steps and expires', () => {
   assert.equal(state.player.highestCombo, 2);
 });
 
-test('scripted replay breaks both anchors, consumes the core, and reaches ascension', () => {
+test('scripted replay completes stellar ignition and reaches the universe rift', () => {
   let state = createGame();
   const agent = createReplayAgent();
   agent.start();
@@ -123,8 +153,12 @@ test('scripted replay breaks both anchors, consumes the core, and reaches ascens
   }
   assert.equal(state.status, 'ascending');
   assert.equal(state.encounter.coreUnlocked, true);
-  assert.deepEqual(state.encounter.anchors, { north: 0, south: 0 });
+  assert.equal(state.encounter.phaseIgnited, true);
+  assert.deepEqual(state.encounter.anchors, { north: 0, south: 0, phase: 0 });
   assert.equal(state.objects.find((object) => object.id === 'core').active, false);
+  assert.ok(state.player.mass >= STELLAR_IGNITION_MASS);
+  assert.equal(state.player.fuel, STELLAR_FUEL_TARGET);
+  assert.equal(state.player.ignited, true);
   assert.ok(state.encounter.brokenStructures.includes('crystal-panel'));
 });
 

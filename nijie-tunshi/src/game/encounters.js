@@ -3,15 +3,17 @@ export const ENCOUNTER_STAGES = [
   { id: 'gravity', minMass: 12, label: '中环已唤醒 · 牵引散落碎片' },
   { id: 'crossroads', minMass: 22, label: '选择路线 · 北侧迅捷，南侧稳妥' },
   { id: 'phase', minMass: 32, label: '外环已唤醒 · 穿越相位门' },
-  { id: 'core', minMass: 60, label: '击破双锚点，解除核心锁定' },
-  { id: 'ascension', minMass: 90, label: '三环共鸣 · 前往飞升锚点' },
+  { id: 'core', minMass: 60, label: '建立行星系统 · 收集恒星燃料' },
+  { id: 'protostar', minMass: 90, label: '原恒星阶段 · 解除三轴点火锚点' },
+  { id: 'ignition', minMass: 130, label: '满足点火条件 · 前往宇宙裂隙' },
 ];
 
 export const createEncounterState = () => ({
   stage: 'awakening',
   route: null,
   phaseShortcut: false,
-  anchors: { north: 2, south: 2 },
+  phaseIgnited: false,
+  anchors: { north: 2, south: 2, phase: 1 },
   coreUnlocked: false,
   brokenStructures: [],
 });
@@ -30,6 +32,6 @@ export function updateEncounter(state) {
   if (!state.encounter.route && state.player.x > -2) {
     state.encounter.route = state.player.z < 5 ? 'swift' : 'steady';
   }
-  state.encounter.coreUnlocked = Object.values(state.encounter.anchors).every((integrity) => integrity <= 0);
+  state.encounter.coreUnlocked = state.encounter.anchors.north <= 0 && state.encounter.anchors.south <= 0;
   return nextStage.label;
 }

@@ -13,6 +13,7 @@ const ROUTE = [
   { kind: 'object', id: 'crystal-2' },
   { kind: 'anchor', id: 'north', action: 'dash' },
   { kind: 'anchor', id: 'south', action: 'gravity' },
+  { kind: 'anchor', id: 'phase', action: 'phase' },
   { kind: 'object', id: 'core' },
   { kind: 'exit' },
 ];
@@ -20,10 +21,11 @@ const ROUTE = [
 export function createReplayAgent() {
   let index = 0;
   let previousDash = false;
+  let previousPhase = false;
   let active = false;
 
   return {
-    start() { index = 0; previousDash = false; active = true; },
+    start() { index = 0; previousDash = false; previousPhase = false; active = true; },
     stop() { active = false; },
     isActive() { return active; },
     snapshot(state) {
@@ -58,11 +60,14 @@ export function createReplayAgent() {
       ));
       const dashPressed = (node.action === 'dash' && distance < 5 && !previousDash)
         || Boolean(nearbyBreakable && state.player.abilities.dash.cooldown === 0);
+      const phasePressed = node.action === 'phase' && distance < 5 && !previousPhase;
       previousDash = node.action === 'dash' && distance < 5;
+      previousPhase = node.action === 'phase' && distance < 5;
       return {
         x: dx,
         z: dz,
         dashPressed,
+        phasePressed,
         gravityHeld: node.action === 'gravity' && distance < 5,
       };
     },

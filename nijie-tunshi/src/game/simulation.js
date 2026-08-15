@@ -2,7 +2,10 @@ import { ABILITIES, createAbilityState, dashActive, phaseActive, updateAbilities
 import { createEncounterState, updateEncounter } from './encounters.js';
 import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
-import { ASCENSION_MASS, canConsume, INITIAL_RADIUS, MAX_NAVIGATION_RADIUS, radiusForMass, resultStars } from './rules.js';
+import {
+  ASCENSION_MASS, canConsume, INITIAL_RADIUS, MAX_NAVIGATION_RADIUS, radiusForMass,
+  RING_COMPLETION_MASS, resultStars, stellarIgnitionReady, STELLAR_FUEL_TARGET,
+} from './rules.js';
 
 export const STEP = 1 / 60;
 const ASCENSION_DURATION = 4;
@@ -27,7 +30,8 @@ export function createGame(seed = LEVEL.seed) {
     ascensionLevel: 1,
     player: {
       x: LEVEL.start.x, z: LEVEL.start.z, vx: 0, vz: -0.8, mass: 0, radius: INITIAL_RADIUS,
-      integrity: 100, abilities: createAbilityState(), combo: 0, comboRemaining: 0, highestCombo: 0,
+      integrity: 100, fuel: 0, stability: 100, ignited: false, ignitionAttempts: 0,
+      abilities: createAbilityState(), combo: 0, comboRemaining: 0, highestCombo: 0,
     },
     objects: cloneLevelObjects(),
     structures: cloneStructures(),
@@ -146,14 +150,20 @@ function updateAnchors(state, dt) {
   for (const anchor of state.anchors) {
     if (!anchor.active) continue;
     const distance = Math.hypot(state.player.x - anchor.x, state.player.z - anchor.z);
-    const correctAbility = anchor.ability === 'dash' ? dashActive(state.player) : state.player.abilities.gravity.active;
-    if (!correctAbility || distance > anchor.radius + navigationRadius(state.player) + (anchor.ability === 'gravity' ? 3 : 0)) continue;
-    anchor.integrity -= anchor.ability === 'dash' ? 2 : dt * 1.8;
+    const correctAbility = anchor.ability === 'dash'
+      ? dashActive(state.player)
+      : anchor.ability === 'gravity'
+        ? state.player.abilities.gravity.active
+        : phaseActive(state.player);
+    const abilityRange = anchor.ability === 'gravity' ? 3 : 0;
+    if (!correctAbility || distance > anchor.radius + navigationRadius(state.player) + abilityRange) continue;
+    anchor.integrity -= anchor.ability === 'gravity' ? dt * 1.8 : 2;
     if (anchor.integrity > 0) continue;
     anchor.active = false;
     state.encounter.anchors[anchor.id] = 0;
+    if (anchor.ability === 'phase') state.encounter.phaseIgnited = true;
     pushEvent(state, 'actionEvents', { type: 'anchorBreak', anchorId: anchor.id, x: anchor.x, z: anchor.z, color: anchor.color });
-    state.message = `核心锚点解除 · ${state.anchors.filter((item) => item.active).length} 个剩余`;
+    state.message = `点火锚点解除 · ${state.anchors.filter((item) => item.active).length} 个剩余`;
   }
 }
 
@@ -168,6 +178,7 @@ function collectObjects(state) {
     if (distance > player.radius + object.size * 0.72) continue;
     object.active = false;
     player.mass += object.mass;
+    player.fuel = Math.min(STELLAR_FUEL_TARGET, player.fuel + (object.fuel ?? 0));
     player.radius = radiusForMass(player.mass);
     player.abilities.resonance = Math.min(100, player.abilities.resonance + 10);
     player.combo = player.comboRemaining > 0 ? player.combo + 1 : 1;
@@ -194,7 +205,7 @@ function collectObjects(state) {
 }
 
 export function isAscensionUnlocked(state) {
-  return state.player.mass >= ASCENSION_MASS && !state.objects.find((object) => object.id === 'core')?.active;
+  return state.player.ignited && stellarIgnitionReady(state);
 }
 
 export function canEnterExit(state) {
@@ -261,13 +272,30 @@ export function step(state, input = {}, dt = STEP) {
   collectObjects(next);
   next.elapsed += dt;
   const objective = updateEncounter(next);
+  if (!next.player.ignited && stellarIgnitionReady(next)) {
+    next.player.ignited = true;
+    next.player.ignitionAttempts += 1;
+    pushEvent(next, 'actionEvents', {
+      type: 'stellarIgnition', x: next.player.x, z: next.player.z, color: 0xffffff,
+    });
+    next.message = '恒星点火完成 · 宇宙裂隙已开放';
+  }
 
   if (canEnterExit(next)) {
     next.status = 'ascending';
     next.ascensionElapsed = 0;
-    next.message = '浑天仪环阵启动 · 正在校准下一维层坐标';
+    next.message = '宇宙裂隙启动 · 正在压缩恒星核心';
   } else if (isAscensionUnlocked(next)) {
-    next.message = '三环已完整 · 前往浑天仪飞升锚点';
+    next.message = '恒星已点燃 · 前往宇宙裂隙';
+  } else if (next.player.mass >= ASCENSION_MASS) {
+    const missing = [];
+    if (next.player.fuel < STELLAR_FUEL_TARGET) missing.push(`燃料 ${Math.floor(next.player.fuel)}%`);
+    if (!next.encounter.phaseIgnited) missing.push('相位节点');
+    if (next.anchors.some((anchor) => anchor.active)) missing.push('点火锚点');
+    if (next.objects.find((object) => object.id === 'core')?.active) missing.push('恒星核心');
+    next.message = `原恒星待点火 · ${missing.join(' / ') || '稳定度校准'}`;
+  } else if (next.player.mass >= RING_COMPLETION_MASS) {
+    next.message = '三环已完整 · 收集燃料并解除点火锚点';
   } else if (!next.message.includes('·') || next.elapsed % 3 < dt) {
     next.message = objective;
   }
