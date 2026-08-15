@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ABILITIES, abilityUnlocked } from '../src/game/abilities.js';
 import { LEVEL } from '../src/game/level.js';
-import { createGame, isAscensionUnlocked, radiusForMass, step, togglePause } from '../src/game/simulation.js';
+import {
+  createGame, enterNextUniverse, isAscensionUnlocked, radiusForMass,
+  restartCurrentUniverse, step, togglePause,
+} from '../src/game/simulation.js';
 import { STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS, stellarIgnitionReady } from '../src/game/rules.js';
 import { createReplayAgent } from './helpers/replayAgent.js';
 
@@ -12,16 +15,49 @@ const advance = (state, input, seconds) => {
   return next;
 };
 
-test('game begins immediately and remains deterministic', () => {
+test('game begins in the first universe and remains deterministic', () => {
   let left = createGame(77);
   let right = createGame(77);
   assert.equal(left.status, 'playing');
+  assert.equal(left.universe.index, 1);
+  assert.equal(left.universe.id, 'genesis');
   for (let index = 0; index < 120; index += 1) {
     const input = { x: index % 3 === 0 ? 1 : 0, z: index % 5 === 0 ? -1 : 0 };
     left = step(left, input);
     right = step(right, input);
   }
   assert.deepEqual(left, right);
+});
+
+test('restarting preserves the universe while resetting the run', () => {
+  const state = createGame(77, { index: 2, cumulativeStars: 3, bestCombo: 6, completedRuns: 1 });
+  state.player.mass = 42;
+  state.player.fuel = 30;
+  state.objects[0].active = false;
+  const restarted = restartCurrentUniverse(state);
+  assert.equal(restarted.universe.index, 2);
+  assert.equal(restarted.universe.cumulativeStars, 3);
+  assert.equal(restarted.player.mass, 0);
+  assert.equal(restarted.player.fuel, 0);
+  assert.equal(restarted.objects[0].active, true);
+  assert.deepEqual(restarted.encounter.anchors, { north: 2, south: 2, phase: 1 });
+});
+
+test('winning advances to the next universe and preserves meta progress', () => {
+  const state = createGame(77);
+  state.status = 'won';
+  state.result = { stars: 2, highestCombo: 7 };
+  const next = enterNextUniverse(state);
+  assert.equal(next.status, 'playing');
+  assert.equal(next.universe.index, 2);
+  assert.equal(next.universe.id, 'antimatter');
+  assert.equal(next.universe.cumulativeStars, 2);
+  assert.equal(next.universe.bestCombo, 7);
+  assert.equal(next.universe.completedRuns, 1);
+  assert.ok(next.universe.discoveredRules.includes('极性质量'));
+  assert.equal(next.player.mass, 0);
+  assert.equal(next.player.fuel, 0);
+  assert.ok(next.objects[0].mass > state.objects[0].mass);
 });
 
 test('dash spends resonance, locks direction, and cools down', () => {

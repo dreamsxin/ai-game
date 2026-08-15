@@ -2,6 +2,7 @@ import { ABILITIES, createAbilityState, dashActive, phaseActive, updateAbilities
 import { createEncounterState, updateEncounter } from './encounters.js';
 import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
+import { createUniverseProgress, universeForIndex } from './universes.js';
 import {
   ASCENSION_MASS, canConsume, INITIAL_RADIUS, MAX_NAVIGATION_RADIUS, radiusForMass,
   RING_COMPLETION_MASS, resultStars, stellarIgnitionReady, STELLAR_FUEL_TARGET,
@@ -14,16 +15,26 @@ const ACCELERATION = 28;
 const DAMPING = 0.86;
 const COMBO_WINDOW = 2.7;
 
-const cloneLevelObjects = () => LEVEL.objects.map((object) => ({ ...object, vx: 0, vz: 0, active: true }));
+const cloneLevelObjects = (massScale = 1) => LEVEL.objects.map((object) => ({
+  ...object,
+  mass: Number((object.mass * massScale).toFixed(2)),
+  vx: 0,
+  vz: 0,
+  active: true,
+}));
 const cloneStructures = () => LEVEL.structures.map((structure) => ({ ...structure, active: true }));
 const cloneAnchors = () => LEVEL.anchors.map((anchor) => ({ ...anchor, integrity: 2, active: true }));
 const navigationRadius = (player) => Math.min(player.radius, MAX_NAVIGATION_RADIUS);
 
 export { radiusForMass };
 
-export function createGame(seed = LEVEL.seed) {
+export function createGame(seed = LEVEL.seed, universeProgress = {}) {
+  const universe = createUniverseProgress(universeProgress);
+  const universeDefinition = universeForIndex(universe.index);
+  const objects = cloneLevelObjects(universeDefinition.massScale);
   return {
     seed,
+    universe,
     status: 'playing',
     elapsed: 0,
     ascensionElapsed: 0,
@@ -33,23 +44,42 @@ export function createGame(seed = LEVEL.seed) {
       integrity: 100, fuel: 0, stability: 100, ignited: false, ignitionAttempts: 0,
       abilities: createAbilityState(), combo: 0, comboRemaining: 0, highestCombo: 0,
     },
-    objects: cloneLevelObjects(),
+    objects,
     structures: cloneStructures(),
     anchors: cloneAnchors(),
     encounter: createEncounterState(),
     collected: 0,
-    totalMass: LEVEL.objects.reduce((sum, object) => sum + object.mass, 0),
+    totalMass: objects.reduce((sum, object) => sum + object.mass, 0),
     collectionEvents: [],
     stageUpEvents: [],
     actionEvents: [],
     eventCursor: 0,
-    message: '滚动已接管 · 冲刺穿透前方晶板',
+    message: `宇宙 ${universe.index} · ${universe.name} · ${universe.rule}`,
     result: null,
   };
 }
 
-export function resetGame(seed = LEVEL.seed) {
-  return createGame(seed);
+export function resetGame(seed = LEVEL.seed, universeProgress) {
+  return createGame(seed, universeProgress);
+}
+
+export function restartCurrentUniverse(state) {
+  return createGame(state.seed, state.universe);
+}
+
+export function enterNextUniverse(state) {
+  if (state.status !== 'won' || !state.result) return state;
+  const stars = state.result.stars ?? 0;
+  const nextIndex = state.universe.index + 1;
+  const nextDefinition = universeForIndex(nextIndex);
+  return createGame(state.seed + nextIndex, {
+    ...state.universe,
+    index: nextIndex,
+    cumulativeStars: state.universe.cumulativeStars + stars,
+    bestCombo: Math.max(state.universe.bestCombo, state.result.highestCombo ?? 0),
+    completedRuns: state.universe.completedRuns + 1,
+    discoveredRules: [...state.universe.discoveredRules, nextDefinition.rule],
+  });
 }
 
 function pushEvent(state, collection, event) {
