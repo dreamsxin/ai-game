@@ -63,55 +63,59 @@ for (const def of satelliteOrbitState(90, 0)) {
   const halo = new THREE.Mesh(new THREE.SphereGeometry(def.size*2.1, 12, 8), new THREE.MeshBasicMaterial({color:def.color,transparent:true,opacity:0.14,blending:THREE.AdditiveBlending,depthWrite:false}));
   const g = new THREE.Group();
   g.add(core, halo);
-  const trailCount = 64;
-  const trailGeo = new THREE.BufferGeometry();
-  trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(trailCount*3), 3));
-  const prog = new Float32Array(trailCount);
-  for (let i=0;i<trailCount;i++) prog[i] = i/(trailCount-1);
-  trailGeo.setAttribute('aProgress', new THREE.BufferAttribute(prog, 1));
-  const trailMat = new THREE.ShaderMaterial({
-    uniforms:{uColor:{value:cssColor(def.color)}},
-    vertexShader:`attribute float aProgress;varying float vProgress;void main(){vProgress=aProgress;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform vec3 uColor;varying float vProgress;void main(){float fade=vProgress*vProgress;vec3 col=mix(uColor*0.1,uColor*2.4,vProgress);gl_FragColor=vec4(col,fade);
-    #include <tonemapping_fragment>
-    #include <colorspace_fragment>
-    }`,
-    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
-  const trail = new THREE.Line(trailGeo, trailMat);
+  const trail = new THREE.Group();
+  const trailParticles = [];
+  const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
+  for (let i=0; i<7; i++) {
+    const phase = i/7;
+    const material = new THREE.MeshBasicMaterial({color:def.color,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+    const particle = new THREE.Mesh(particleGeometry, material);
+    trail.add(particle);
+    trailParticles.push({mesh: particle, phase});
+  }
   g.visible = false;
   trail.visible = false;
   satelliteGroup.add(g, trail);
-  satelliteVisuals.set(def.id, {group:g, core, halo, trail, trailCount});
+  satelliteVisuals.set(def.id, {group:g, core, halo, trail, trailParticles});
 }
 scene.add(satelliteGroup);
 
 const ringEuler = new THREE.Euler();
 const ringQuat = new THREE.Quaternion();
 const tmpVec = new THREE.Vector3();
-function orbitalPoint(orbit, angle) {
-  tmpVec.set(Math.cos(angle)*orbit.radius, Math.sin(angle)*orbit.radius, 0);
+const tangentPoint = new THREE.Vector3();
+const trailTangent = new THREE.Vector3();
+const trailNormal = new THREE.Vector3();
+const trailLift = new THREE.Vector3();
+const trailOffset = new THREE.Vector3();
+function orbitalPoint(orbit, angle, target = new THREE.Vector3()) {
+  target.set(Math.cos(angle)*orbit.radius, Math.sin(angle)*orbit.radius, 0);
   ringEuler.set(orbit.tiltX ?? Math.PI/2, orbit.tiltY ?? 0, 0, 'XYZ');
   ringQuat.setFromEuler(ringEuler);
-  tmpVec.applyQuaternion(ringQuat);
-  return tmpVec;
+  target.applyQuaternion(ringQuat);
+  return target;
 }
 function updateSatellite(vis, orbit, time) {
-  const p = orbitalPoint(orbit, orbit.angle);
-  vis.group.position.copy(p);
+  const p = orbitalPoint(orbit, orbit.angle, vis.group.position);
   vis.core.rotation.x = time * orbit.speed * 1.4;
   vis.core.rotation.y = time * orbit.speed * orbit.direction;
   vis.halo.scale.setScalar(1 + Math.sin(time*4 + orbit.phase) * 0.16);
-  const positions = vis.trail.geometry.attributes.position.array;
-  for (let i=0; i<vis.trailCount; i++) {
-    const amt = i/(vis.trailCount-1);
-    const a = orbit.angle - orbit.direction * orbit.trailArc * (1-amt);
-    const pt = orbitalPoint(orbit, a);
-    const wob = Math.sin(time*6 + i*0.7 + orbit.phase) * 0.035 * (1-amt);
-    positions[i*3] = pt.x + Math.cos(time*3+i)*wob;
-    positions[i*3+1] = pt.y + Math.sin(time*4+i*1.3)*wob;
-    positions[i*3+2] = pt.z;
+  const ahead = orbitalPoint(orbit, orbit.angle + 0.025 * orbit.direction, tangentPoint);
+  trailTangent.subVectors(ahead, p).normalize();
+  trailNormal.copy(p).normalize();
+  trailLift.crossVectors(trailTangent, trailNormal).normalize();
+  for (const {mesh, phase} of vis.trailParticles) {
+    const age = (time*0.72 + phase) % 1;
+    const distance = 0.025 + age*age*orbit.radius*0.34;
+    const lateral = Math.sin(phase*19 + time*2.4)*age*0.045;
+    const lift = Math.cos(phase*13 + time*2.9)*age*0.028;
+    trailOffset.copy(p).addScaledVector(trailTangent,-distance).addScaledVector(trailLift,lateral).addScaledVector(trailNormal,lift);
+    mesh.position.copy(trailOffset);
+    const fade = (1-age)**1.8;
+    mesh.scale.setScalar((0.025 + fade*0.04)*(0.82 + phase*0.28));
+    mesh.material.opacity = fade*0.78;
+    mesh.rotation.set(time*(1.2+phase),time*(0.8+phase*0.6),phase*Math.PI);
   }
-  vis.trail.geometry.attributes.position.needsUpdate = true;
 }
 
 const massSlider = document.getElementById('mass');
@@ -144,7 +148,8 @@ function animate(time) {
     mat.uniforms.uFlowPhase.value = motion.flowPhase;
     mat.uniforms.uFlowDirection.value = motion.direction;
     mat.uniforms.uComplete.value = ringData.progress >= 1 ? 1 : 0;
-    ring.rotation.set(motion.tiltX, motion.tiltY, motion.spin);
+    const ringSpin = ringData.progress >= 1 ? motion.spin : 0;
+    ring.rotation.set(motion.tiltX, motion.tiltY, ringSpin);
   });
   const activeIds = new Set(sats.map(s=>s.id));
   satelliteVisuals.forEach((vis, id) => {

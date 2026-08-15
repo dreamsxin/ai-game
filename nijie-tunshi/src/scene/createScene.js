@@ -140,63 +140,56 @@ function createSatelliteVisual(definition) {
     new THREE.MeshBasicMaterial({ color: definition.color, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   group.add(core, halo);
-  const trailCount = 64;
-  const trailGeometry = new THREE.BufferGeometry();
-  trailGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(trailCount * 3), 3));
-  const progress = new Float32Array(trailCount);
-  for (let index = 0; index < trailCount; index += 1) progress[index] = index / (trailCount - 1);
-  trailGeometry.setAttribute('aProgress', new THREE.BufferAttribute(progress, 1));
-  const trailMaterial = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: cssColor(definition.color) } },
-    vertexShader: `
-      attribute float aProgress;
-      varying float vProgress;
-      void main() {
-        vProgress = aProgress;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 uColor;
-      varying float vProgress;
-      void main() {
-        float fade = vProgress * vProgress;
-        vec3 col = mix(uColor * 0.1, uColor * 2.4, vProgress);
-        gl_FragColor = vec4(col, fade);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }
-    `,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  const trail = new THREE.Line(trailGeometry, trailMaterial);
-  return { group, core, halo, trail, trailCount };
+  const trail = new THREE.Group();
+  const trailParticles = [];
+  const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
+  for (let index = 0; index < 7; index += 1) {
+    const phase = index / 7;
+    const material = new THREE.MeshBasicMaterial({
+      color: definition.color,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const particle = new THREE.Mesh(particleGeometry, material);
+    particle.renderOrder = 8;
+    trail.add(particle);
+    trailParticles.push({ mesh: particle, phase });
+  }
+  return { group, core, halo, trail, trailParticles };
 }
 
 const trailOffset = new THREE.Vector3();
+const tangentPoint = new THREE.Vector3();
+const trailTangent = new THREE.Vector3();
+const trailNormal = new THREE.Vector3();
+const trailLift = new THREE.Vector3();
 
 function updateSatelliteVisual(visual, orbit, time) {
-  orbitalPoint(orbit, orbit.angle, visual.group.position);
+  const satellitePosition = orbitalPoint(orbit, orbit.angle, visual.group.position);
   visual.core.rotation.x = time * orbit.speed * 1.4;
   visual.core.rotation.y = time * orbit.speed * orbit.direction;
   visual.halo.scale.setScalar(1 + Math.sin(time * 4 + orbit.phase) * 0.16);
-  const positions = visual.trail.geometry.attributes.position.array;
-  const count = visual.trailCount;
-  for (let index = 0; index < count; index += 1) {
-    const amount = index / Math.max(1, count - 1);
-    const angle = orbit.angle - orbit.direction * orbit.trailArc * (1 - amount);
-    const point = orbitalPoint(orbit, angle);
-    const wobble = Math.sin(time * 6 + index * 0.7 + orbit.phase) * 0.035 * (1 - amount);
-    trailOffset.set(point.x, point.y, point.z);
-    trailOffset.x += Math.cos(time * 3 + index) * wobble;
-    trailOffset.y += Math.sin(time * 4 + index * 1.3) * wobble;
-    positions[index * 3] = trailOffset.x;
-    positions[index * 3 + 1] = trailOffset.y;
-    positions[index * 3 + 2] = trailOffset.z;
+  const ahead = orbitalPoint(orbit, orbit.angle + 0.025 * orbit.direction, tangentPoint);
+  trailTangent.subVectors(ahead, satellitePosition).normalize();
+  trailNormal.copy(satellitePosition).normalize();
+  trailLift.crossVectors(trailTangent, trailNormal).normalize();
+  for (const { mesh, phase } of visual.trailParticles) {
+    const age = (time * 0.72 + phase) % 1;
+    const distance = 0.025 + age * age * orbit.radius * 0.34;
+    const lateral = Math.sin(phase * 19 + time * 2.4) * age * 0.045;
+    const lift = Math.cos(phase * 13 + time * 2.9) * age * 0.028;
+    trailOffset.copy(satellitePosition)
+      .addScaledVector(trailTangent, -distance)
+      .addScaledVector(trailLift, lateral)
+      .addScaledVector(trailNormal, lift);
+    mesh.position.copy(trailOffset);
+    const fade = (1 - age) ** 1.8;
+    mesh.scale.setScalar((0.025 + fade * 0.04) * (0.82 + phase * 0.28));
+    mesh.material.opacity = fade * 0.78;
+    mesh.rotation.set(time * (1.2 + phase), time * (0.8 + phase * 0.6), phase * Math.PI);
   }
-  visual.trail.geometry.attributes.position.needsUpdate = true;
 }
 
 function createPointCloud(count, size, color, opacity, blending = THREE.AdditiveBlending) {
@@ -628,7 +621,8 @@ export function createScene(host) {
         mat.uniforms.uFlowPhase.value = motion.flowPhase + ascensionProgress * 1.8;
         mat.uniforms.uFlowDirection.value = motion.direction;
         mat.uniforms.uComplete.value = ringData.status === 'complete' ? 1 : 0;
-        ring.rotation.set(motion.tiltX, motion.tiltY, motion.spin);
+        const ringSpin = ringData.status === 'complete' ? motion.spin : 0;
+        ring.rotation.set(motion.tiltX, motion.tiltY, ringSpin);
       });
       const activeSatelliteIds = new Set(satelliteState.map((orbit) => orbit.id));
       satelliteVisuals.forEach((visual, id) => {
