@@ -147,8 +147,12 @@ export default function App() {
   const fuelProgress = Math.min(100, (view.player.fuel / STELLAR_FUEL_TARGET) * 100);
   const stabilityProgress = Math.min(100, (view.player.stability / STELLAR_STABILITY_TARGET) * 100);
   const activeAnchors = view.anchors.filter((anchor) => anchor.active).length;
+  const darkPolarityCount = view.objects.filter((object) => object.active && object.polarity === 'dark').length;
   const coreActive = view.objects.find((object) => object.id === 'core')?.active;
   const objective = view.encounter.coreUnlocked && coreActive ? '核心窗口已开放' : view.message;
+  const objectiveLabel = view.universe.id === 'antimatter'
+    ? `暗极性燃料 ${darkPolarityCount}`
+    : view.encounter.route ? `${view.encounter.route === 'swift' ? '迅捷' : '稳健'}路线` : '当前目标';
   const dashReady = cooldownPercent(view.player.abilities.dash.cooldown, ABILITIES.dash.cooldown);
   const phaseReady = cooldownPercent(view.player.abilities.phase.cooldown, ABILITIES.phase.cooldown);
 
@@ -183,7 +187,7 @@ export default function App() {
         </dl>
       </section>
 
-      <aside className="objective-chip"><span>{view.encounter.route ? `${view.encounter.route === 'swift' ? '迅捷' : '稳健'}路线` : '当前目标'}</span><strong>{objective}</strong></aside>
+      <aside className="objective-chip"><span>{objectiveLabel}</span><strong>{objective}</strong></aside>
 
       <section className="ability-hud" aria-label="共鸣能力">
         <div className="ability-slot is-ready"><Zap size={16} /><span>冲刺</span><i style={{ '--ready': `${dashReady}%` }} /></div>

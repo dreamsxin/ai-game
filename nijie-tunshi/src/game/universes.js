@@ -1,3 +1,5 @@
+export const POLARITY_FLIP_DURATION = 0.65;
+
 export const UNIVERSES = [
   {
     id: 'genesis', name: '初生星海', rule: '稳定引力',
@@ -8,6 +10,7 @@ export const UNIVERSES = [
     id: 'antimatter', name: '反物质潮', rule: '极性质量',
     description: '质量密度提高，燃料天体在明暗极性间切换。',
     massScale: 1.04,
+    darkFuelIds: ['prism-1', 'crystal-2', 'core'],
   },
   {
     id: 'binary', name: '双星摇篮', rule: '双核共振',

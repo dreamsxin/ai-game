@@ -60,6 +60,44 @@ test('winning advances to the next universe and preserves meta progress', () => 
   assert.ok(next.objects[0].mass > state.objects[0].mass);
 });
 
+test('polarity fuel is exclusive to the antimatter universe', () => {
+  const genesis = createGame(77, { index: 1 });
+  const antimatter = createGame(77, { index: 2 });
+  const binary = createGame(77, { index: 3 });
+  assert.ok(genesis.objects.every((object) => object.polarity === 'neutral'));
+  assert.deepEqual(
+    antimatter.objects.filter((object) => object.polarity === 'dark').map((object) => object.id),
+    ['prism-1', 'crystal-2', 'core'],
+  );
+  assert.ok(antimatter.objects.filter((object) => !object.fuel).every((object) => object.polarity === 'neutral'));
+  assert.ok(binary.objects.every((object) => object.polarity === 'neutral'));
+});
+
+test('gravity flips dark fuel once before it can be consumed', () => {
+  let state = createGame(77, { index: 2 });
+  const fuel = state.objects.find((object) => object.id === 'prism-1');
+  state.player.mass = 30;
+  state.player.radius = radiusForMass(30);
+  state.player.x = fuel.x;
+  state.player.z = fuel.z;
+  state = step(state, {});
+  assert.equal(state.objects.find((object) => object.id === fuel.id).active, true);
+  assert.equal(state.objects.find((object) => object.id === fuel.id).polarity, 'dark');
+
+  state.player.x = fuel.x - 5;
+  state.player.z = fuel.z;
+  state = advance(state, { gravityHeld: true }, 0.7);
+  assert.equal(state.objects.find((object) => object.id === fuel.id).polarity, 'light');
+  assert.equal(state.actionEvents.filter((event) => event.type === 'polarityFlip').length, 1);
+
+  state = advance(state, { gravityHeld: true }, 0.7);
+  assert.equal(state.actionEvents.filter((event) => event.type === 'polarityFlip').length, 1);
+  state.player.x = fuel.x;
+  state.player.z = fuel.z;
+  state = step(state, {});
+  assert.equal(state.objects.find((object) => object.id === fuel.id).active, false);
+});
+
 test('dash spends resonance, locks direction, and cools down', () => {
   let state = createGame();
   state = step(state, { x: 1, dashPressed: true });

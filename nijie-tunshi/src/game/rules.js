@@ -19,7 +19,7 @@ export function consumePower(player) {
 }
 
 export function canConsume(player, object, encounter) {
-  if (!object.active) return false;
+  if (!object.active || object.polarity === 'dark') return false;
   if (object.type === 'core') return encounter.coreUnlocked;
   return object.mass <= consumePower(player);
 }

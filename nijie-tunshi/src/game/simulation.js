@@ -2,9 +2,9 @@ import { ABILITIES, createAbilityState, dashActive, phaseActive, updateAbilities
 import { createEncounterState, updateEncounter } from './encounters.js';
 import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
-import { createUniverseProgress, universeForIndex } from './universes.js';
+import { createUniverseProgress, POLARITY_FLIP_DURATION, universeForIndex } from './universes.js';
 import {
-  ASCENSION_MASS, canConsume, INITIAL_RADIUS, MAX_NAVIGATION_RADIUS, radiusForMass,
+  ASCENSION_MASS, canConsume, consumePower, INITIAL_RADIUS, MAX_NAVIGATION_RADIUS, radiusForMass,
   RING_COMPLETION_MASS, resultStars, stellarIgnitionReady, STELLAR_FUEL_TARGET,
 } from './rules.js';
 
@@ -15,13 +15,20 @@ const ACCELERATION = 28;
 const DAMPING = 0.86;
 const COMBO_WINDOW = 2.7;
 
-const cloneLevelObjects = (massScale = 1) => LEVEL.objects.map((object) => ({
-  ...object,
-  mass: Number((object.mass * massScale).toFixed(2)),
-  vx: 0,
-  vz: 0,
-  active: true,
-}));
+const cloneLevelObjects = (universeDefinition) => LEVEL.objects.map((object) => {
+  const polarity = universeDefinition.id === 'antimatter' && object.fuel
+    ? universeDefinition.darkFuelIds?.includes(object.id) ? 'dark' : 'light'
+    : 'neutral';
+  return {
+    ...object,
+    mass: Number((object.mass * universeDefinition.massScale).toFixed(2)),
+    polarity,
+    polarityCharge: 0,
+    vx: 0,
+    vz: 0,
+    active: true,
+  };
+});
 const cloneStructures = () => LEVEL.structures.map((structure) => ({ ...structure, active: true }));
 const cloneAnchors = () => LEVEL.anchors.map((anchor) => ({ ...anchor, integrity: 2, active: true }));
 const navigationRadius = (player) => Math.min(player.radius, MAX_NAVIGATION_RADIUS);
@@ -31,7 +38,7 @@ export { radiusForMass };
 export function createGame(seed = LEVEL.seed, universeProgress = {}) {
   const universe = createUniverseProgress(universeProgress);
   const universeDefinition = universeForIndex(universe.index);
-  const objects = cloneLevelObjects(universeDefinition.massScale);
+  const objects = cloneLevelObjects(universeDefinition);
   return {
     seed,
     universe,
@@ -137,13 +144,43 @@ function lineBlocked(from, to) {
 }
 
 function updateGravityObjects(state, dt) {
-  if (!state.player.abilities.gravity.active) return;
+  const gravityActive = state.player.abilities.gravity.active;
   for (const object of state.objects) {
-    if (!object.active || !object.gravity) continue;
+    if (!object.active) continue;
     const dx = state.player.x - object.x;
     const dz = state.player.z - object.z;
     const distance = Math.hypot(dx, dz);
-    if (distance > ABILITIES.gravity.radius || distance < 0.01 || lineBlocked(object, state.player)) continue;
+    const blocked = lineBlocked(object, state.player);
+    if (object.polarity === 'dark') {
+      const consumeReady = object.type === 'core'
+        ? state.encounter.coreUnlocked
+        : object.mass <= consumePower(state.player);
+      const repelDistance = navigationRadius(state.player) + object.size * 0.72;
+      if (consumeReady && distance < repelDistance && distance > 0.01) {
+        const overlap = repelDistance - distance;
+        state.player.x += (dx / distance) * overlap;
+        state.player.z += (dz / distance) * overlap;
+        state.player.vx *= 0.35;
+        state.player.vz *= 0.35;
+        state.message = gravityActive ? '正在反转暗极性燃料' : '暗极性排斥 · 使用引力反转';
+      }
+      if (gravityActive && distance <= ABILITIES.gravity.radius && !blocked) {
+        object.polarityCharge = Math.min(POLARITY_FLIP_DURATION, object.polarityCharge + dt);
+        if (object.polarityCharge >= POLARITY_FLIP_DURATION) {
+          object.polarity = 'light';
+          object.polarityCharge = POLARITY_FLIP_DURATION;
+          pushEvent(state, 'actionEvents', {
+            type: 'polarityFlip', objectId: object.id,
+            x: object.x, z: object.z, color: 0xffca70,
+          });
+          state.message = `极性反转 · ${object.id}`;
+        }
+      } else {
+        object.polarityCharge = Math.max(0, object.polarityCharge - dt * 0.5);
+      }
+      continue;
+    }
+    if (!gravityActive || !object.gravity || distance > ABILITIES.gravity.radius || distance < 0.01 || blocked) continue;
     const force = ABILITIES.gravity.strength * (1 - distance / ABILITIES.gravity.radius);
     object.vx += (dx / distance) * force * dt;
     object.vz += (dz / distance) * force * dt;

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { LEVEL } from '../game/level.js';
 import { ambientOffset, burstDirection, profileFor, seedFor } from '../game/effects.js';
 import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitState, stageChargeProgress } from '../game/progression.js';
+import { POLARITY_FLIP_DURATION } from '../game/universes.js';
 
 const geometryFor = (object) => {
   const size = object.size;
@@ -14,6 +15,9 @@ const geometryFor = (object) => {
 
 const rgbColor = (hue, saturation = 0.86, lightness = 0.68) => new THREE.Color().setHSL(hue % 1, saturation, lightness);
 const cssColor = (value) => new THREE.Color(value);
+const POLARITY_DARK_COLOR = cssColor('#d65cff');
+const POLARITY_LIGHT_COLOR = cssColor('#ffca70');
+const polarityTargetColor = new THREE.Color();
 
 const glowMaterial = (color, opacity = 1) => new THREE.MeshStandardMaterial({
   color,
@@ -116,6 +120,11 @@ const createLabel = (text, color) => {
 };
 
 const labelColor = (available) => available ? '#a2ffe8' : '#5a8580';
+const objectLabelState = (object, available) => {
+  if (object.polarity === 'dark') return { text: `-${Math.round(object.mass)}`, color: '#f28dff' };
+  if (object.polarity === 'light') return { text: `+${Math.round(object.mass)}`, color: available ? '#ffd584' : '#8e795e' };
+  return { text: String(Math.round(object.mass)), color: labelColor(available) };
+};
 
 const ringEuler = new THREE.Euler();
 const ringQuaternion = new THREE.Quaternion();
@@ -222,15 +231,18 @@ function createAmbientSwarm(object, profile) {
   return swarm;
 }
 
-function updateAmbientSwarm(swarm, time) {
+function updateAmbientSwarm(swarm, time, polarity = 'neutral') {
   const { object, seed, radius } = swarm.userData;
   const profile = profileFor(object.type);
   const positions = swarm.geometry.attributes.position.array;
+  const sampleTime = polarity === 'dark' ? -time : time;
   for (let index = 0; index < profile.ambientCount; index += 1) {
-    const [x, y, z] = ambientOffset(object.type, index, seed, time, radius);
-    positions[index * 3] = x;
-    positions[index * 3 + 1] = y;
-    positions[index * 3 + 2] = z;
+    const [x, y, z] = ambientOffset(object.type, index, seed, sampleTime, radius);
+    const flow = (time * 0.55 + index / profile.ambientCount) % 1;
+    const flowScale = polarity === 'dark' ? 0.45 + flow * 0.85 : polarity === 'light' ? 1.15 - flow * 0.65 : 1;
+    positions[index * 3] = x * flowScale;
+    positions[index * 3 + 1] = y * flowScale;
+    positions[index * 3 + 2] = z * flowScale;
   }
   swarm.geometry.attributes.position.needsUpdate = true;
   swarm.rotation.y = time * 0.1;
@@ -417,6 +429,7 @@ export function createScene(host) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.baseY = mesh.position.y;
+    mesh.userData.baseColor = cssColor(object.color);
     scene.add(mesh);
     objectMeshes.set(object.id, mesh);
     const swarm = createAmbientSwarm(object, profileFor(object.type));
@@ -550,11 +563,12 @@ export function createScene(host) {
       seenActionEvents.add(event.id);
       const isIgnition = event.type === 'stellarIgnition';
       const isAnchor = event.type === 'anchorBreak';
+      const isPolarity = event.type === 'polarityFlip';
       const burst = createBurst({
         ...event,
-        objectId: event.structureId ?? event.anchorId ?? event.type,
-        type: isIgnition ? 'core' : isAnchor ? 'crystal' : 'cube',
-        size: isIgnition ? 2.4 : isAnchor ? 1.5 : 1.1,
+        objectId: event.structureId ?? event.anchorId ?? event.objectId ?? event.type,
+        type: isIgnition ? 'core' : isAnchor || isPolarity ? 'crystal' : 'cube',
+        size: isIgnition ? 2.4 : isAnchor ? 1.5 : isPolarity ? 1.35 : 1.1,
       });
       burst.bornAt = now;
       activeBursts.push(burst);
@@ -685,15 +699,24 @@ export function createScene(host) {
           mesh.rotation.y += 0.003 + object.mass * 0.00005;
           mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12;
           swarm.position.y = mesh.position.y;
-          updateAmbientSwarm(swarm, time);
-          const available = playerState.mass + 2 >= object.mass;
-          mesh.material.emissiveIntensity += ((available ? 2.4 : 0.55) - mesh.material.emissiveIntensity) * 0.08;
-          swarm.material.opacity += ((available ? profileFor(object.type).ambientOpacity : 0.12) - swarm.material.opacity) * 0.08;
+          updateAmbientSwarm(swarm, time, object.polarity);
+          const available = playerState.mass + 2 >= object.mass && object.polarity !== 'dark';
+          const polarityAmount = object.polarity === 'dark'
+            ? clamp01(object.polarityCharge / POLARITY_FLIP_DURATION)
+            : object.polarity === 'light' ? 1 : 0;
+          const targetObjectColor = object.polarity === 'dark'
+            ? polarityTargetColor.copy(POLARITY_DARK_COLOR).lerp(POLARITY_LIGHT_COLOR, polarityAmount)
+            : object.polarity === 'light' ? POLARITY_LIGHT_COLOR : mesh.userData.baseColor;
+          mesh.material.color.lerp(targetObjectColor, 0.12);
+          mesh.material.emissive.lerp(targetObjectColor, 0.12);
+          swarm.material.color.lerp(targetObjectColor, 0.12);
+          mesh.material.emissiveIntensity += ((available ? 2.4 : object.polarity === 'dark' ? 1.5 + polarityAmount * 2 : 0.55) - mesh.material.emissiveIntensity) * 0.08;
+          swarm.material.opacity += ((available || object.polarity === 'dark' ? profileFor(object.type).ambientOpacity : 0.12) - swarm.material.opacity) * 0.08;
           const label = labels.get(object.id);
           if (label) {
-            const targetColor = labelColor(available);
-            const currentColor = label.material.map === labelTexture(String(Math.round(object.mass)), targetColor) ? targetColor : null;
-            if (currentColor !== targetColor) label.material.map = labelTexture(String(Math.round(object.mass)), targetColor);
+            const targetLabel = objectLabelState(object, available);
+            const texture = labelTexture(targetLabel.text, targetLabel.color);
+            if (label.material.map !== texture) label.material.map = texture;
             label.material.needsUpdate = true;
             label.position.x = object.x;
             label.position.z = object.z;
