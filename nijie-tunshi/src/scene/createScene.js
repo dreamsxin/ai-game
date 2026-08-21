@@ -3,6 +3,7 @@ import { LEVEL } from '../game/level.js';
 import { ambientOffset, burstDirection, profileFor, seedFor } from '../game/effects.js';
 import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitState, stageChargeProgress } from '../game/progression.js';
 import { POLARITY_FLIP_DURATION } from '../game/universes.js';
+import { CANDY_LIGHTING, lightingState } from '../game/lighting.js';
 
 const geometryFor = (object) => {
   const size = object.size;
@@ -19,12 +20,14 @@ const POLARITY_DARK_COLOR = cssColor('#a45cff');
 const POLARITY_LIGHT_COLOR = cssColor('#ffe36e');
 const polarityTargetColor = new THREE.Color();
 
-const glowMaterial = (color, opacity = 1) => new THREE.MeshStandardMaterial({
+const glowMaterial = (color, opacity = 1) => new THREE.MeshPhysicalMaterial({
   color,
   emissive: color,
   emissiveIntensity: 1.45,
-  roughness: 0.25,
-  metalness: 0.2,
+  roughness: 0.2,
+  metalness: 0.06,
+  clearcoat: 0.72,
+  clearcoatRoughness: 0.22,
   transparent: opacity < 1,
   opacity,
 });
@@ -117,6 +120,23 @@ const createLabel = (text, color) => {
   sprite.scale.set(1.6, 0.8, 1);
   sprite.renderOrder = 999;
   return sprite;
+};
+
+const addCandyGlints = (mesh, object) => {
+  const glints = new THREE.Group();
+  const geometry = new THREE.SphereGeometry(1, 12, 8);
+  const positions = [
+    [-0.32, 0.36, 0.42, 0.13],
+    [0.34, 0.2, 0.48, 0.085],
+  ];
+  for (const [x, y, z, size] of positions) {
+    const glint = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.86 }));
+    glint.position.set(x * object.size, y * object.size, z * object.size);
+    glint.scale.setScalar(object.size * size);
+    glints.add(glint);
+  }
+  mesh.add(glints);
+  return glints;
 };
 
 const labelColor = (available) => available ? '#fff1a8' : '#7b5a68';
@@ -352,24 +372,30 @@ function updateBurst(burst, age) {
 
 export function createScene(host) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a0717);
-  scene.fog = new THREE.FogExp2(0x1a0717, 0.025);
+  scene.background = new THREE.Color(CANDY_LIGHTING.background);
+  scene.fog = new THREE.FogExp2(CANDY_LIGHTING.background, 0.025);
   const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 180);
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.08;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   host.appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xffd6f2, 0x160916, 2.2));
-  const keyLight = new THREE.DirectionalLight(0xffcf8b, 4.2);
+  scene.add(new THREE.HemisphereLight(CANDY_LIGHTING.hemisphereSky, CANDY_LIGHTING.hemisphereGround, 2.2));
+  const keyLight = new THREE.DirectionalLight(CANDY_LIGHTING.key, 4.2);
   keyLight.position.set(-12, 24, 8);
   keyLight.castShadow = true;
   keyLight.shadow.mapSize.set(1024, 1024);
   scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(CANDY_LIGHTING.rim, 2.3);
+  rimLight.position.set(14, 12, -18);
+  scene.add(rimLight);
+  const fillLight = new THREE.PointLight(CANDY_LIGHTING.fill, 1.35, 28, 1.6);
+  fillLight.position.set(2, 8, 13);
+  scene.add(fillLight);
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(52, 40, 26, 20),
@@ -430,6 +456,7 @@ export function createScene(host) {
     mesh.receiveShadow = true;
     mesh.userData.baseY = mesh.position.y;
     mesh.userData.baseColor = cssColor(object.color);
+    mesh.userData.glints = addCandyGlints(mesh, object);
     scene.add(mesh);
     objectMeshes.set(object.id, mesh);
     const swarm = createAmbientSwarm(object, profileFor(object.type));
@@ -508,7 +535,9 @@ export function createScene(host) {
   );
   gravityField.rotation.x = Math.PI / 2;
   gravityField.position.y = -1.05;
-  player.add(gravityField);
+  const playerLight = new THREE.PointLight(CANDY_LIGHTING.playerLight, 1.5, 9, 1.5);
+  playerLight.position.y = 1.8;
+  player.add(playerLight);
   scene.add(player);
 
   const stageShockwave = new THREE.Mesh(
@@ -599,6 +628,22 @@ export function createScene(host) {
       const chargePulse = charge.progress >= 0.7 ? Math.sin(time * 5.5) * stage.chargePulse * ((charge.progress - 0.7) / 0.3) : 0;
       const ascending = state.status === 'ascending';
       const ascensionProgress = ascending ? clamp01(state.ascensionElapsed / 4) : 0;
+      const phaseActive = playerState.abilities?.phase.activeFor > 0;
+      const dashActive = playerState.abilities?.dash.activeFor > 0;
+      const lighting = lightingState({
+        mass: playerState.mass,
+        ignited: playerState.ignited,
+        ascensionProgress,
+        dashActive,
+        gravityActive: playerState.abilities?.gravity.active,
+      });
+      renderer.toneMappingExposure += (lighting.exposure - renderer.toneMappingExposure) * 0.12;
+      keyLight.intensity += (lighting.keyIntensity - keyLight.intensity) * 0.08;
+      rimLight.intensity += (lighting.rimIntensity - rimLight.intensity) * 0.08;
+      fillLight.intensity += (lighting.fillIntensity - fillLight.intensity) * 0.08;
+      playerLight.intensity += (lighting.playerIntensity - playerLight.intensity) * 0.12;
+      playerLight.distance += (lighting.playerDistance - playerLight.distance) * 0.12;
+      playerLight.color.set(lighting.playerColor);
       player.position.set(playerState.x, playerState.radius + ascensionProgress * 3.5, playerState.z);
       player.scale.setScalar(playerState.radius * (1 + ascensionProgress * 0.22));
       const coreColor = cssColor(stage.coreColor);
@@ -614,8 +659,6 @@ export function createScene(host) {
         bodyMaterial.emissive.setHex(0xffd86b);
       }
       shellMaterial.color.copy(shellColor);
-      const phaseActive = playerState.abilities?.phase.activeFor > 0;
-      const dashActive = playerState.abilities?.dash.activeFor > 0;
       shellMaterial.opacity = playerState.ignited ? 0.92 : phaseActive ? 0.08 : stage.shellOpacity + ascensionProgress * 0.2;
       if (playerState.ignited) shellMaterial.color.setHex(0xffca70);
       bodyMaterial.opacity = phaseActive ? 0.42 : 1;
@@ -712,6 +755,12 @@ export function createScene(host) {
           swarm.material.color.lerp(targetObjectColor, 0.12);
           mesh.material.emissiveIntensity += ((available ? 2.4 : object.polarity === 'dark' ? 1.5 + polarityAmount * 2 : 0.55) - mesh.material.emissiveIntensity) * 0.08;
           swarm.material.opacity += ((available || object.polarity === 'dark' ? profileFor(object.type).ambientOpacity : 0.12) - swarm.material.opacity) * 0.08;
+          if (mesh.userData.glints) {
+            mesh.userData.glints.rotation.y = time * 0.35;
+            mesh.userData.glints.children.forEach((glint, index) => {
+              glint.material.opacity = (0.38 + Math.sin(time * 3 + index * 2) * 0.22) * (available ? 1 : 0.55);
+            });
+          }
           const label = labels.get(object.id);
           if (label) {
             const targetLabel = objectLabelState(object, available);

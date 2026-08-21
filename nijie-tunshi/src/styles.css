@@ -91,7 +91,7 @@ dd { margin: 0; font: 600 14px/1 'Chakra Petch', sans-serif; }
   .virtual-stick { display: block; position: absolute; z-index: 4; left: max(18px, env(safe-area-inset-left)); bottom: max(20px, env(safe-area-inset-bottom)); width: 112px; height: 112px; border: 1px solid rgba(255, 158, 214, .3); border-radius: 50%; background: rgba(67, 23, 54, .5); touch-action: none; }
   .virtual-stick::before { content: ''; position: absolute; inset: 32%; border: 1px solid rgba(255, 227, 110, .18); border-radius: 50%; }
   .virtual-stick span { position: absolute; left: calc(50% - 20px); top: calc(50% - 20px); width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 227, 110, .8); box-shadow: 0 0 20px rgba(255, 227, 110, .35); }
-  .mobile-actions { position: absolute; z-index: 4; right: max(16px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: 48px 48px 66px; align-items: end; gap: 7px; }
+  .mobile-actions { position: absolute; z-index: 4; right: max(16px, env(safe-area-inset-right)); bottom: max(34px, calc(env(safe-area-inset-bottom) + 14px)); display: grid; grid-template-columns: 48px 48px 66px; align-items: end; gap: 7px; }
   .action-button { height: 48px; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid rgba(255, 158, 214, .28); border-radius: 50%; color: #fff2e1; background: rgba(67, 23, 54, .82); touch-action: none; }
   .action-button span { font-size: 8px; }
   .action-button.primary-action { width: 66px; height: 66px; color: #26091f; border: 0; background: #ff62c7; box-shadow: 0 0 24px rgba(255, 98, 199, .32); }
@@ -108,7 +108,7 @@ dd { margin: 0; font: 600 14px/1 'Chakra Petch', sans-serif; }
   .mission-panel .charge-track { margin-bottom: 7px; }
   .objective-chip { top: 57px; }
   .ability-hud { top: 112px; }
-  .virtual-stick { width: 90px; height: 90px; bottom: 10px; }
-  .mobile-actions { bottom: 10px; }
+  .virtual-stick { width: 90px; height: 90px; bottom: 14px; }
+  .mobile-actions { bottom: 14px; }
   .status-line { left: 50%; bottom: 10px; width: 46%; }
 }
