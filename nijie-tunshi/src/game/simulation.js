@@ -1,5 +1,6 @@
 import { ABILITIES, createAbilityState, dashActive, phaseActive, updateAbilities } from './abilities.js';
 import { createEncounterState, updateEncounter } from './encounters.js';
+import { creatureMotion } from './creatures.js';
 import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
 import { createUniverseProgress, POLARITY_FLIP_DURATION, universeForIndex } from './universes.js';
@@ -237,6 +238,17 @@ function updateAnchors(state, dt) {
   }
 }
 
+function updateCreatures(state, dt) {
+  for (const object of state.objects) {
+    const motion = creatureMotion(object, state.player, state.encounter, dt);
+    if (motion.x === 0 && motion.z === 0) continue;
+    object.x += motion.x;
+    object.z += motion.z;
+    object.vx *= 0.88;
+    object.vz *= 0.88;
+  }
+}
+
 function collectObjects(state) {
   const player = state.player;
   const previousStage = stageIndexForMass(player.mass);
@@ -339,6 +351,7 @@ export function step(state, input = {}, dt = STEP) {
   player.z = Math.max(LEVEL.bounds.minZ + collisionRadius, Math.min(LEVEL.bounds.maxZ - collisionRadius, player.z));
   updateGravityObjects(next, dt);
   updateAnchors(next, dt);
+  updateCreatures(next, dt);
   collectObjects(next);
   next.elapsed += dt;
   const objective = updateEncounter(next);
