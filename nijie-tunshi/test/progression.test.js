@@ -41,10 +41,20 @@ test('player visual stages increase energy without exceeding three rings', () =>
   assert.equal(middle.ringCount, 3);
   assert.equal(final.ringCount, 3);
   assert.ok(early.trailCount < final.trailCount);
-  assert.equal(protostar.stageName, '原恒星');
-  assert.equal(protostar.shellColor, '#ffaf73');
-  assert.equal(final.stageName, '恒星');
+  assert.equal(protostar.stageName, '熔糖巨怪');
+  assert.equal(protostar.shellColor, '#ff5f8f');
+  assert.equal(final.stageName, '霓虹糖星');
   assert.equal(final.energy, 1);
+});
+
+test('monster candy theme names the full growth chain and glazed rings', () => {
+  assert.deepEqual(
+    PLAYER_STAGES.map((stage) => stage.name),
+    ['糖心幼体', '果冻怪', '糖霜兽', '硬糖王', '熔糖巨怪', '霓虹糖星'],
+  );
+  assert.deepEqual(PLANETARY_RINGS.map((ring) => ring.name), ['第一糖釉环', '第二糖釉环', '第三糖釉环']);
+  assert.ok(PLAYER_STAGES.every((stage) => stage.coreColor.startsWith('#')));
+  assert.ok(PLANETARY_RINGS.every((ring) => ring.gradientEnd !== ring.trackColor));
 });
 
 test('planetary rings unlock only after the previous complete threshold', () => {
@@ -82,11 +92,11 @@ test('visible ring records contain complete geometry and valid gradients', () =>
   }
 });
 
-test('stage palette progresses from silver white to vivid purple', () => {
+test('stage palette progresses from warm jelly white to neon candy gold', () => {
   const early = playerVisualForMass(0);
   const middle = playerVisualForMass(45);
   const final = playerVisualForMass(130, true);
-  assert.equal(early.coreColor, '#f1fbff');
+  assert.equal(early.coreColor, '#fff8f3');
   assert.notEqual(early.shellColor, middle.shellColor);
   assert.notEqual(middle.shellColor, final.shellColor);
   assert.match(final.shellColor, /^#[0-9a-f]{6}$/i);
@@ -96,7 +106,7 @@ test('stage palette progresses from silver white to vivid purple', () => {
 
 test('visual stage interpolation is continuous between thresholds', () => {
   const stage = playerVisualForMass(20);
-  assert.equal(stage.stageName, '虹彩');
+  assert.equal(stage.stageName, '果冻怪');
   assert.ok(stage.stageProgress > 0 && stage.stageProgress < 1);
   assert.notEqual(stage.coreColor, PLAYER_STAGES[1].coreColor);
   assert.notEqual(stage.coreColor, PLAYER_STAGES[2].coreColor);
@@ -194,13 +204,13 @@ test('charge HUD follows the current ring rather than exposing half geometry', (
   assert.deepEqual(stageChargeProgress(6), {
     stageIndex: 0,
     ringIndex: 0,
-    ringName: '第一共鸣环',
+    ringName: '第一糖釉环',
     progress: 0.5,
     nextThreshold: 12,
     complete: false,
   });
   const final = stageChargeProgress(90);
-  assert.equal(final.ringName, '第三共鸣环');
+  assert.equal(final.ringName, '第三糖釉环');
   assert.equal(final.progress, 1);
   assert.equal(final.complete, true);
 });

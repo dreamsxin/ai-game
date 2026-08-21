@@ -1,11 +1,11 @@
 export const ENCOUNTER_STAGES = [
-  { id: 'awakening', minMass: 0, label: '冲破晶板，吞噬前方光球' },
-  { id: 'gravity', minMass: 12, label: '中环已唤醒 · 牵引散落碎片' },
-  { id: 'crossroads', minMass: 22, label: '选择路线 · 北侧迅捷，南侧稳妥' },
-  { id: 'phase', minMass: 32, label: '外环已唤醒 · 穿越相位门' },
-  { id: 'core', minMass: 60, label: '建立行星系统 · 收集恒星燃料' },
-  { id: 'protostar', minMass: 90, label: '原恒星阶段 · 解除三轴点火锚点' },
-  { id: 'ignition', minMass: 130, label: '满足点火条件 · 前往宇宙裂隙' },
+  { id: 'awakening', minMass: 0, label: '撞碎糖壳板，吞下前方果冻怪' },
+  { id: 'gravity', minMass: 12, label: '第二糖釉环已醒 · 吸住散落糖屑' },
+  { id: 'crossroads', minMass: 22, label: '选择甜味路线 · 北侧迅捷，南侧稳妥' },
+  { id: 'phase', minMass: 32, label: '第三糖釉环已醒 · 穿过酸糖雾门' },
+  { id: 'core', minMass: 60, label: '建立糖宠系统 · 收集夹心燃料' },
+  { id: 'protostar', minMass: 90, label: '熔糖巨怪阶段 · 解除三枚糖核锚点' },
+  { id: 'ignition', minMass: 130, label: '完成糖化爆发 · 前往彩虹糖洞' },
 ];
 
 export const createEncounterState = () => ({

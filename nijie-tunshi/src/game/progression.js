@@ -1,56 +1,56 @@
 export const PLAYER_STAGES = [
   {
-    name: '初醒', minMass: 0, shellOpacity: 0.3, trailCount: 18,
-    coreColor: '#f1fbff', shellColor: '#8bd9ee',
+    name: '糖心幼体', minMass: 0, shellOpacity: 0.3, trailCount: 18,
+    coreColor: '#fff8f3', shellColor: '#8cffd7',
     glow: 2.2, chargePulse: 0.08,
   },
   {
-    name: '虹彩', minMass: 12, shellOpacity: 0.42, trailCount: 26,
-    coreColor: '#f5f1ff', shellColor: '#c59cff',
+    name: '果冻怪', minMass: 12, shellOpacity: 0.42, trailCount: 26,
+    coreColor: '#fff0ff', shellColor: '#ff9df2',
     glow: 2.8, chargePulse: 0.12,
   },
   {
-    name: '脉冲', minMass: 32, shellOpacity: 0.56, trailCount: 34,
-    coreColor: '#fff2ff', shellColor: '#d66cff',
+    name: '糖霜兽', minMass: 32, shellOpacity: 0.56, trailCount: 34,
+    coreColor: '#fff6fb', shellColor: '#7df3ff',
     glow: 3.5, chargePulse: 0.17,
   },
   {
-    name: '星冠', minMass: 60, shellOpacity: 0.68, trailCount: 44,
-    coreColor: '#fff5ff', shellColor: '#f06cff',
+    name: '硬糖王', minMass: 60, shellOpacity: 0.68, trailCount: 44,
+    coreColor: '#fff8f1', shellColor: '#ffb257',
     glow: 4.2, chargePulse: 0.23,
   },
   {
-    name: '原恒星', minMass: 90, shellOpacity: 0.8, trailCount: 54,
-    coreColor: '#fff8e8', shellColor: '#ffaf73',
+    name: '熔糖巨怪', minMass: 90, shellOpacity: 0.8, trailCount: 54,
+    coreColor: '#fffbe8', shellColor: '#ff5f8f',
     glow: 5.2, chargePulse: 0.3,
   },
   {
-    name: '恒星', minMass: 130, shellOpacity: 0.92, trailCount: 58,
-    coreColor: '#ffffff', shellColor: '#ffca70',
+    name: '霓虹糖星', minMass: 130, shellOpacity: 0.92, trailCount: 58,
+    coreColor: '#ffffff', shellColor: '#ffe36e',
     glow: 7.5, chargePulse: 0.38, requiresIgnition: true,
   },
 ];
 
 export const ORBITAL_SATELLITES = [
-  { id: 'lumen', ringId: 'inner', unlockMass: 0, radius: 1.32, speed: 1.18, direction: 1, phase: 0, size: 0.055, color: '#c8fff2' },
-  { id: 'ember', ringId: 'middle', unlockMass: 12, radius: 1.52, speed: 0.82, direction: -1, phase: 0, size: 0.062, color: '#ffbd89' },
-  { id: 'violet', ringId: 'outer', unlockMass: 32, radius: 1.74, speed: 0.58, direction: 1, phase: 0, size: 0.07, color: '#e7b1ff' },
+  { id: 'lumen', ringId: 'inner', unlockMass: 0, radius: 1.32, speed: 1.18, direction: 1, phase: 0, size: 0.055, color: '#b8ffe4' },
+  { id: 'ember', ringId: 'middle', unlockMass: 12, radius: 1.52, speed: 0.82, direction: -1, phase: 0, size: 0.062, color: '#ff8fbf' },
+  { id: 'violet', ringId: 'outer', unlockMass: 32, radius: 1.74, speed: 0.58, direction: 1, phase: 0, size: 0.07, color: '#ffe36e' },
 ];
 
 export const PLANETARY_RINGS = [
   {
-    id: 'inner', name: '第一共鸣环', radius: 1.32, unlockMass: 0, completeMass: 12,
-    trackColor: '#173743', gradientStart: '#d8fdff', gradientEnd: '#52d9ff',
+    id: 'inner', name: '第一糖釉环', radius: 1.32, unlockMass: 0, completeMass: 12,
+    trackColor: '#173a2e', gradientStart: '#f6fff1', gradientEnd: '#58ffbf',
     direction: 1, rotationSpeed: 0.42, flowSpeed: 0.08,
   },
   {
-    id: 'middle', name: '第二共鸣环', radius: 1.52, unlockMass: 12, completeMass: 32,
-    trackColor: '#302044', gradientStart: '#f4d2ff', gradientEnd: '#b54cff',
+    id: 'middle', name: '第二糖釉环', radius: 1.52, unlockMass: 12, completeMass: 32,
+    trackColor: '#3b1735', gradientStart: '#ffe7fa', gradientEnd: '#ff62c7',
     direction: -1, rotationSpeed: 0.31, flowSpeed: 0.065,
   },
   {
-    id: 'outer', name: '第三共鸣环', radius: 1.74, unlockMass: 32, completeMass: 90,
-    trackColor: '#351a49', gradientStart: '#ffb5f1', gradientEnd: '#694cff',
+    id: 'outer', name: '第三糖釉环', radius: 1.74, unlockMass: 32, completeMass: 90,
+    trackColor: '#422111', gradientStart: '#fff0a6', gradientEnd: '#ff7a45',
     direction: 1, rotationSpeed: 0.22, flowSpeed: 0.045,
   },
 ];

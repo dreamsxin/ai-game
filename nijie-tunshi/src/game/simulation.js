@@ -61,7 +61,7 @@ export function createGame(seed = LEVEL.seed, universeProgress = {}) {
     stageUpEvents: [],
     actionEvents: [],
     eventCursor: 0,
-    message: `宇宙 ${universe.index} · ${universe.name} · ${universe.rule}`,
+    message: `糖域 ${universe.index} · ${universe.name} · ${universe.rule}`,
     result: null,
   };
 }
@@ -162,7 +162,7 @@ function updateGravityObjects(state, dt) {
         state.player.z += (dz / distance) * overlap;
         state.player.vx *= 0.35;
         state.player.vz *= 0.35;
-        state.message = gravityActive ? '正在反转暗极性燃料' : '暗极性排斥 · 使用引力反转';
+        state.message = gravityActive ? '正在融化酸极性夹心' : '酸极性排斥 · 使用糖引力反转';
       }
       if (gravityActive && distance <= ABILITIES.gravity.radius && !blocked) {
         object.polarityCharge = Math.min(POLARITY_FLIP_DURATION, object.polarityCharge + dt);
@@ -173,7 +173,7 @@ function updateGravityObjects(state, dt) {
             type: 'polarityFlip', objectId: object.id,
             x: object.x, z: object.z, color: 0xffca70,
           });
-          state.message = `极性反转 · ${object.id}`;
+          state.message = `甜酸反转 · ${object.id}`;
         }
       } else {
         object.polarityCharge = Math.max(0, object.polarityCharge - dt * 0.5);
@@ -207,7 +207,7 @@ function updateStructures(state) {
         structure.active = false;
         state.encounter.brokenStructures.push(structure.id);
         pushEvent(state, 'actionEvents', { type: 'structureBreak', structureId: structure.id, x: structure.x, z: structure.z, color: structure.color });
-        state.message = '冲刺破壁 · 连击窗口延长';
+        state.message = '冲刺碎糖壳 · 连击窗口延长';
         state.player.comboRemaining = COMBO_WINDOW;
         continue;
       }
@@ -233,7 +233,7 @@ function updateAnchors(state, dt) {
     state.encounter.anchors[anchor.id] = 0;
     if (anchor.ability === 'phase') state.encounter.phaseIgnited = true;
     pushEvent(state, 'actionEvents', { type: 'anchorBreak', anchorId: anchor.id, x: anchor.x, z: anchor.z, color: anchor.color });
-    state.message = `点火锚点解除 · ${state.anchors.filter((item) => item.active).length} 个剩余`;
+    state.message = `糖核锚点解除 · ${state.anchors.filter((item) => item.active).length} 个剩余`;
   }
 }
 
@@ -268,9 +268,9 @@ function collectObjects(state) {
       type: 'stageUp', fromStage: previousStage, toStage: newStage,
       stageName: PLAYER_STAGES[newStage].name, x: player.x, z: player.z, radius: player.radius,
     });
-    state.message = `能力解锁 · ${PLAYER_STAGES[newStage].name}`;
+    state.message = `糖怪解锁 · ${PLAYER_STAGES[newStage].name}`;
   } else {
-    state.message = `${player.combo > 1 ? `共鸣连击 ×${player.combo}` : '吞噬完成'} · 质量 ${player.mass.toFixed(1)}`;
+    state.message = `${player.combo > 1 ? `糖果连击 ×${player.combo}` : '吞噬完成'} · 质量 ${player.mass.toFixed(1)}`;
   }
 }
 
@@ -297,7 +297,7 @@ export function step(state, input = {}, dt = STEP) {
         phaseShortcut: next.encounter.phaseShortcut,
       };
       next.result.stars = resultStars(next.result);
-      next.message = `维度跃迁完成 · ${next.result.stars} 星评价`;
+      next.message = `糖洞跃迁完成 · ${next.result.stars} 星评价`;
     }
     return next;
   }
@@ -354,24 +354,24 @@ export function step(state, input = {}, dt = STEP) {
     pushEvent(next, 'actionEvents', {
       type: 'stellarIgnition', x: next.player.x, z: next.player.z, color: 0xffffff,
     });
-    next.message = '恒星点火完成 · 宇宙裂隙已开放';
+    next.message = '糖化爆发完成 · 彩虹糖洞已开放';
   }
 
   if (canEnterExit(next)) {
     next.status = 'ascending';
     next.ascensionElapsed = 0;
-    next.message = '宇宙裂隙启动 · 正在压缩恒星核心';
+    next.message = '彩虹糖洞启动 · 正在压缩糖心核心';
   } else if (isAscensionUnlocked(next)) {
-    next.message = '恒星已点燃 · 前往宇宙裂隙';
+    next.message = '糖星已诞生 · 前往彩虹糖洞';
   } else if (next.player.mass >= ASCENSION_MASS) {
     const missing = [];
-    if (next.player.fuel < STELLAR_FUEL_TARGET) missing.push(`燃料 ${Math.floor(next.player.fuel)}%`);
-    if (!next.encounter.phaseIgnited) missing.push('相位节点');
-    if (next.anchors.some((anchor) => anchor.active)) missing.push('点火锚点');
-    if (next.objects.find((object) => object.id === 'core')?.active) missing.push('恒星核心');
-    next.message = `原恒星待点火 · ${missing.join(' / ') || '稳定度校准'}`;
+    if (next.player.fuel < STELLAR_FUEL_TARGET) missing.push(`夹心燃料 ${Math.floor(next.player.fuel)}%`);
+    if (!next.encounter.phaseIgnited) missing.push('酸雾节点');
+    if (next.anchors.some((anchor) => anchor.active)) missing.push('糖核锚点');
+    if (next.objects.find((object) => object.id === 'core')?.active) missing.push('糖心熔炉');
+    next.message = `熔糖巨怪待爆发 · ${missing.join(' / ') || '稳定度校准'}`;
   } else if (next.player.mass >= RING_COMPLETION_MASS) {
-    next.message = '三环已完整 · 收集燃料并解除点火锚点';
+    next.message = '三环糖釉已完整 · 收集夹心并解除糖核锚点';
   } else if (!next.message.includes('·') || next.elapsed % 3 < dt) {
     next.message = objective;
   }
@@ -384,7 +384,7 @@ export function startGame(state) {
 }
 
 export function togglePause(state) {
-  if (state.status === 'playing') return { ...state, status: 'paused', message: '世界暂停，能量仍在你手中' };
+  if (state.status === 'playing') return { ...state, status: 'paused', message: '糖果世界暂停，糖心仍在你手中' };
   if (state.status === 'paused') return { ...state, status: 'playing', message: '继续滚动' };
   return state;
 }

@@ -2,24 +2,24 @@ export const POLARITY_FLIP_DURATION = 0.65;
 
 export const UNIVERSES = [
   {
-    id: 'genesis', name: '初生星海', rule: '稳定引力',
-    description: '基础天体演化，建立第一套卫星与行星环。',
+    id: 'genesis', name: '软糖幼巢', rule: '稳定糖引力',
+    description: '基础糖怪演化，建立第一套糖宠与糖釉光环。',
     massScale: 1,
   },
   {
-    id: 'antimatter', name: '反物质潮', rule: '极性质量',
-    description: '质量密度提高，燃料天体在明暗极性间切换。',
+    id: 'antimatter', name: '酸味反物质潮', rule: '甜酸极性',
+    description: '糖果密度提高，夹心燃料在甜酸极性间切换。',
     massScale: 1.04,
     darkFuelIds: ['prism-1', 'crystal-2', 'core'],
   },
   {
-    id: 'binary', name: '双星摇篮', rule: '双核共振',
-    description: '恒星点火需要维持两个核心的共同轨道。',
+    id: 'binary', name: '双糖摇篮', rule: '双核共糖化',
+    description: '糖化爆发需要维持两个夹心核心的共同轨道。',
     massScale: 1.08,
   },
   {
-    id: 'dark-matter', name: '暗物质深空', rule: '引力感知',
-    description: '部分天体只在引力牵引时显形。',
+    id: 'dark-matter', name: '黑糖深空', rule: '糖引力感知',
+    description: '部分糖果怪只在糖引力牵引时显形。',
     massScale: 1.12,
   },
 ];

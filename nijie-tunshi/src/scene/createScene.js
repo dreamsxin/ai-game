@@ -15,8 +15,8 @@ const geometryFor = (object) => {
 
 const rgbColor = (hue, saturation = 0.86, lightness = 0.68) => new THREE.Color().setHSL(hue % 1, saturation, lightness);
 const cssColor = (value) => new THREE.Color(value);
-const POLARITY_DARK_COLOR = cssColor('#d65cff');
-const POLARITY_LIGHT_COLOR = cssColor('#ffca70');
+const POLARITY_DARK_COLOR = cssColor('#a45cff');
+const POLARITY_LIGHT_COLOR = cssColor('#ffe36e');
 const polarityTargetColor = new THREE.Color();
 
 const glowMaterial = (color, opacity = 1) => new THREE.MeshStandardMaterial({
@@ -119,10 +119,10 @@ const createLabel = (text, color) => {
   return sprite;
 };
 
-const labelColor = (available) => available ? '#a2ffe8' : '#5a8580';
+const labelColor = (available) => available ? '#fff1a8' : '#7b5a68';
 const objectLabelState = (object, available) => {
-  if (object.polarity === 'dark') return { text: `-${Math.round(object.mass)}`, color: '#f28dff' };
-  if (object.polarity === 'light') return { text: `+${Math.round(object.mass)}`, color: available ? '#ffd584' : '#8e795e' };
+  if (object.polarity === 'dark') return { text: `-${Math.round(object.mass)}`, color: '#ff8bdc' };
+  if (object.polarity === 'light') return { text: `+${Math.round(object.mass)}`, color: available ? '#ffe36e' : '#9a7651' };
   return { text: String(Math.round(object.mass)), color: labelColor(available) };
 };
 
@@ -352,8 +352,8 @@ function updateBurst(burst, age) {
 
 export function createScene(host) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x061113);
-  scene.fog = new THREE.FogExp2(0x061113, 0.025);
+  scene.background = new THREE.Color(0x1a0717);
+  scene.fog = new THREE.FogExp2(0x1a0717, 0.025);
   const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 180);
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -364,8 +364,8 @@ export function createScene(host) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   host.appendChild(renderer.domElement);
 
-  scene.add(new THREE.HemisphereLight(0xa7fff0, 0x071018, 2.2));
-  const keyLight = new THREE.DirectionalLight(0xffb78b, 4.2);
+  scene.add(new THREE.HemisphereLight(0xffd6f2, 0x160916, 2.2));
+  const keyLight = new THREE.DirectionalLight(0xffcf8b, 4.2);
   keyLight.position.set(-12, 24, 8);
   keyLight.castShadow = true;
   keyLight.shadow.mapSize.set(1024, 1024);
@@ -373,13 +373,13 @@ export function createScene(host) {
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(52, 40, 26, 20),
-    new THREE.MeshStandardMaterial({ color: 0x0b2020, roughness: 0.78, metalness: 0.18 }),
+    new THREE.MeshStandardMaterial({ color: 0x281027, roughness: 0.78, metalness: 0.18 }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   ground.position.set(0, -0.03, 2);
   scene.add(ground);
-  const grid = new THREE.GridHelper(52, 26, 0x3df6cf, 0x174b48);
+  const grid = new THREE.GridHelper(52, 26, 0xff62c7, 0x47223d);
   grid.position.y = 0.02;
   grid.material.transparent = true;
   grid.material.opacity = 0.34;
@@ -395,7 +395,7 @@ export function createScene(host) {
     mesh.receiveShadow = true;
     scene.add(mesh);
     structureMeshes.set(structure.id, mesh);
-    const label = createLabel(structure.kind === 'phaseable' ? 'SHIFT' : 'DASH', structure.kind === 'phaseable' ? '#e9b6ff' : '#a2ffe8');
+    const label = createLabel(structure.kind === 'phaseable' ? 'SHIFT' : 'DASH', structure.kind === 'phaseable' ? '#ff8bdc' : '#fff1a8');
     label.position.set(structure.x, structure.height + 0.8, structure.z);
     scene.add(label);
     structureMeshes.set(`${structure.id}-label`, label);
@@ -412,7 +412,7 @@ export function createScene(host) {
     scene.add(group);
     anchorMeshes.set(anchor.id, group);
     const abilityLabel = anchor.ability === 'dash' ? 'DASH' : anchor.ability === 'gravity' ? 'PULL' : 'PHASE';
-    const abilityColor = anchor.ability === 'dash' ? '#ffaf73' : anchor.ability === 'gravity' ? '#73fbd3' : '#e7b1ff';
+    const abilityColor = anchor.ability === 'dash' ? '#ffb257' : anchor.ability === 'gravity' ? '#58ffbf' : '#ff62c7';
     const label = createLabel(abilityLabel, abilityColor);
     label.position.set(anchor.x, anchor.radius * 2 + 1.2, anchor.z);
     label.scale.set(2.2, 1.1, 1);
@@ -444,7 +444,7 @@ export function createScene(host) {
   for (const obstacle of LEVEL.obstacles) {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(obstacle.width, obstacle.height, obstacle.depth),
-      new THREE.MeshStandardMaterial({ color: 0x173c3d, emissive: 0x0c4643, emissiveIntensity: 0.65, roughness: 0.42 }),
+      new THREE.MeshStandardMaterial({ color: 0x3a1732, emissive: 0x6d244f, emissiveIntensity: 0.65, roughness: 0.42 }),
     );
     mesh.position.set(obstacle.x, obstacle.height / 2, obstacle.z);
     mesh.receiveShadow = true;
@@ -455,13 +455,13 @@ export function createScene(host) {
   const exit = new THREE.Group();
   const exitRing = new THREE.Mesh(
     new THREE.TorusGeometry(LEVEL.exit.radius, 0.18, 12, 48),
-    glowMaterial(0xff735c, 0.65),
+    glowMaterial(0xff5f8f, 0.65),
   );
   exitRing.rotation.x = Math.PI / 2;
   exit.add(exitRing);
   const exitBeam = new THREE.Mesh(
     new THREE.CylinderGeometry(LEVEL.exit.radius * 0.72, LEVEL.exit.radius * 1.1, 5.5, 24, 1, true),
-    glowMaterial(0xff735c, 0.1),
+    glowMaterial(0xff5f8f, 0.1),
   );
   exitBeam.position.y = 2.75;
   exit.add(exitBeam);
@@ -469,7 +469,7 @@ export function createScene(host) {
   scene.add(exit);
 
   const player = new THREE.Group();
-  const bodyMaterial = glowMaterial(0x71ffe0);
+  const bodyMaterial = glowMaterial(0xffb1e8);
   const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 4), bodyMaterial);
   body.castShadow = true;
   player.add(body);
@@ -504,7 +504,7 @@ export function createScene(host) {
   player.add(trail);
   const gravityField = new THREE.Mesh(
     new THREE.RingGeometry(6.7, 7.2, 72),
-    new THREE.MeshBasicMaterial({ color: 0x73fbd3, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xff62c7, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   gravityField.rotation.x = Math.PI / 2;
   gravityField.position.y = -1.05;
@@ -768,8 +768,8 @@ export function createScene(host) {
         }
       }
       const exitOpen = Boolean(playerState.ignited);
-      exitRing.material.color.setHex(exitOpen ? 0x7dffe4 : 0xff735c);
-      exitRing.material.emissive.setHex(exitOpen ? 0x7dffe4 : 0xff735c);
+      exitRing.material.color.setHex(exitOpen ? 0x58ffbf : 0xff5f8f);
+      exitRing.material.emissive.setHex(exitOpen ? 0x58ffbf : 0xff5f8f);
       exit.rotation.y += exitOpen ? 0.018 : 0.004;
       const tunnelOpacity = ascending ? Math.sin(Math.PI * ascensionProgress) * 0.78 : 0;
       dimensionTunnel.visible = tunnelOpacity > 0.01;

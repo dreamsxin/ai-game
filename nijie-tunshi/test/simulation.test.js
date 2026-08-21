@@ -54,7 +54,7 @@ test('winning advances to the next universe and preserves meta progress', () => 
   assert.equal(next.universe.cumulativeStars, 2);
   assert.equal(next.universe.bestCombo, 7);
   assert.equal(next.universe.completedRuns, 1);
-  assert.ok(next.universe.discoveredRules.includes('极性质量'));
+  assert.ok(next.universe.discoveredRules.includes('甜酸极性'));
   assert.equal(next.player.mass, 0);
   assert.equal(next.player.fuel, 0);
   assert.ok(next.objects[0].mass > state.objects[0].mass);
@@ -202,12 +202,12 @@ test('simulation ignites once and emits the stellar transition events', () => {
   state = step(state, {});
   assert.equal(state.player.ignited, true);
   assert.equal(state.player.ignitionAttempts, 1);
-  assert.equal(state.stageUpEvents.at(-1).stageName, '恒星');
+  assert.equal(state.stageUpEvents.at(-1).stageName, '霓虹糖星');
   assert.equal(state.actionEvents.at(-1).type, 'stellarIgnition');
 
   state = step(state, {});
   assert.equal(state.player.ignitionAttempts, 1);
-  assert.equal(state.stageUpEvents.filter((event) => event.stageName === '恒星').length, 1);
+  assert.equal(state.stageUpEvents.filter((event) => event.stageName === '霓虹糖星').length, 1);
   assert.equal(state.actionEvents.filter((event) => event.type === 'stellarIgnition').length, 1);
 });
 
