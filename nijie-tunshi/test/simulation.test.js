@@ -7,7 +7,7 @@ import {
   restartCurrentUniverse, step, togglePause,
 } from '../src/game/simulation.js';
 import {
-  OVERLOAD_STABILITY_COST, STABILITY_MAX, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS,
+  massToCross, OVERLOAD_STABILITY_COST, STABILITY_MAX, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS,
   STELLAR_STABILITY_TARGET, stellarIgnitionReady,
 } from '../src/game/rules.js';
 import { createReplayAgent } from './helpers/replayAgent.js';
@@ -331,6 +331,52 @@ test('the replay agent actually routes around walls instead of grinding along th
   assert.equal(stats.failedPlans, 0, '路线上的目标都应可达');
   assert.ok(stats.followedSteps > 100, `沿路径行进的步数过少: ${stats.followedSteps}`);
   assert.ok(stats.straightSteps > 0, '视野无阻时应走直线而非绕路');
+});
+
+test('a low wall blocks a small candy heart and stops blocking once it can roll over', () => {
+  const wall = LEVEL.obstacles.find((obstacle) => obstacle.id === 'wall-a');
+  const westFace = wall.x - wall.width / 2;
+
+  let small = createGame();
+  small.player.x = westFace - 3;
+  small.player.z = wall.z;
+  small = advance(small, { x: 1, z: 0 }, 3);
+  assert.ok(small.player.x < westFace, `小身位不应穿墙，实际 x=${small.player.x}`);
+
+  let grown = createGame();
+  grown.player.mass = massToCross(wall.height) + 5;
+  grown.player.radius = radiusForMass(grown.player.mass);
+  grown.player.x = westFace - 3;
+  grown.player.z = wall.z;
+  grown = advance(grown, { x: 1, z: 0 }, 3);
+  assert.ok(
+    grown.player.x > wall.x + wall.width / 2,
+    `体型足够时应从墙上滚过，实际 x=${grown.player.x}`,
+  );
+});
+
+test('a narrow gate lets a small heart through and closes permanently after growth', () => {
+  const gate = LEVEL.gates.find((candidate) => candidate.id === 'gate-north');
+  const southFace = gate.z - gate.depth / 2;
+
+  let small = createGame();
+  small.player.mass = gate.maxMass - 8;
+  small.player.radius = radiusForMass(small.player.mass);
+  small.player.x = gate.x;
+  small.player.z = southFace - 5;
+  small = advance(small, { x: 0, z: 1 }, 4);
+  assert.ok(
+    small.player.z > gate.z + gate.depth / 2,
+    `未超上限时应能穿过窄门，实际 z=${small.player.z}`,
+  );
+
+  let grown = createGame();
+  grown.player.mass = gate.maxMass + 12;
+  grown.player.radius = radiusForMass(grown.player.mass);
+  grown.player.x = gate.x;
+  grown.player.z = southFace - 5;
+  grown = advance(grown, { x: 0, z: 1 }, 4);
+  assert.ok(grown.player.z < southFace, `超过上限后窄门应关闭，实际 z=${grown.player.z}`);
 });
 
 test('phase anchor only breaks while phase is active', () => {

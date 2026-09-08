@@ -5,7 +5,7 @@ import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitSt
 import { POLARITY_FLIP_DURATION } from '../game/universes.js';
 import { CANDY_LIGHTING, lightingState } from '../game/lighting.js';
 import { creatureMoodPose } from '../game/moods.js';
-import { canConsume } from '../game/rules.js';
+import { canConsume, canCrossObstacle, canPassGate } from '../game/rules.js';
 import { voxelProfileFor, voxelSurface } from './voxel.js';
 
 // 体素几何按“形状 + 分辨率”缓存，缩放交给 mesh.scale，避免每个对象重复构网格。
@@ -495,6 +495,7 @@ export function createScene(host) {
     labels.set(object.id, label);
   }
 
+  const obstacleLabels = new Map();
   for (const obstacle of LEVEL.obstacles) {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(obstacle.width, obstacle.height, obstacle.depth),
@@ -504,6 +505,32 @@ export function createScene(host) {
     mesh.receiveShadow = true;
     mesh.castShadow = true;
     scene.add(mesh);
+    // 高度标注：够高时转阶段色，否则保持暗灰，玩家不暂停也能判断能否跨越
+    const label = createLabel(`H${obstacle.height.toFixed(1)}`, labelColor(false));
+    label.position.set(obstacle.x, obstacle.height + 0.9, obstacle.z);
+    label.scale.set(2, 1, 1);
+    scene.add(label);
+    obstacleLabels.set(obstacle.id, label);
+  }
+
+  const gateMeshes = new Map();
+  const gateLabels = new Map();
+  for (const gate of LEVEL.gates ?? []) {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(gate.width, gate.height, gate.depth),
+      new THREE.MeshStandardMaterial({
+        color: 0x7df3ff, emissive: 0x58ffbf, emissiveIntensity: 0.9,
+        roughness: 0.3, transparent: true, opacity: 0.32,
+      }),
+    );
+    mesh.position.set(gate.x, gate.height / 2, gate.z);
+    scene.add(mesh);
+    gateMeshes.set(gate.id, mesh);
+    const label = createLabel(`≤${gate.maxMass}`, labelColor(true));
+    label.position.set(gate.x, gate.height + 0.9, gate.z);
+    label.scale.set(2, 1, 1);
+    scene.add(label);
+    gateLabels.set(gate.id, label);
   }
 
   const exit = new THREE.Group();
@@ -759,6 +786,34 @@ export function createScene(host) {
       body.rotation.z -= dx / Math.max(playerState.radius, 0.1);
       shell.rotation.y += 0.003 + stage.energy * 0.006;
       previous = { x: playerState.x, z: playerState.z };
+      // 高度标注与窄门状态：全部由权威质量推导，玩家不暂停也能读出门槛
+      for (const obstacle of LEVEL.obstacles) {
+        const label = obstacleLabels.get(obstacle.id);
+        if (!label) continue;
+        const crossable = canCrossObstacle(playerState.mass, obstacle);
+        const texture = labelTexture(`H${obstacle.height.toFixed(1)}`, labelColor(crossable));
+        if (label.material.map !== texture) {
+          label.material.map = texture;
+          label.material.needsUpdate = true;
+        }
+      }
+      for (const gate of LEVEL.gates ?? []) {
+        const mesh = gateMeshes.get(gate.id);
+        const label = gateLabels.get(gate.id);
+        const open = canPassGate(playerState.mass, gate);
+        if (mesh) {
+          mesh.material.opacity += ((open ? 0.32 : 0.85) - mesh.material.opacity) * 0.1;
+          mesh.material.color.lerp(cssColor(open ? 0x7df3ff : 0xff6e9f), 0.1);
+          mesh.material.emissive.lerp(cssColor(open ? 0x58ffbf : 0xff62c7), 0.1);
+        }
+        if (label) {
+          const texture = labelTexture(`≤${gate.maxMass}`, labelColor(open));
+          if (label.material.map !== texture) {
+            label.material.map = texture;
+            label.material.needsUpdate = true;
+          }
+        }
+      }
       for (const object of state.objects) {
         const mesh = objectMeshes.get(object.id);
         const swarm = ambientSwarms.get(object.id);

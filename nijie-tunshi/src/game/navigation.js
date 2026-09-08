@@ -1,28 +1,34 @@
 import { LEVEL } from './level.js';
-import { MAX_NAVIGATION_RADIUS } from './rules.js';
+import { canCrossObstacle, canPassGate, MAX_NAVIGATION_RADIUS } from './rules.js';
 
 // 导航网格：把关卡压成占位格，供回放代理避障与后续的死锁验证器共用。
 // 全部为纯函数且确定性，A* 的 tie-break 按格索引排序，不引入随机数。
+// 网格随质量变化：矮墙在体型足够时不再阻挡，窄门在体型过大时反而关闭。
 
 export const NAV_CELL_SIZE = 1;
 
 const cellIndex = (grid, col, row) => col + grid.cols * row;
 
-export function createNavGrid(radius = MAX_NAVIGATION_RADIUS, cellSize = NAV_CELL_SIZE) {
+export function createNavGrid(radius = MAX_NAVIGATION_RADIUS, mass = 0, cellSize = NAV_CELL_SIZE) {
   const { minX, maxX, minZ, maxZ } = LEVEL.bounds;
   const cols = Math.ceil((maxX - minX) / cellSize);
   const rows = Math.ceil((maxZ - minZ) / cellSize);
   const blocked = new Uint8Array(cols * rows);
-  const grid = { cols, rows, cellSize, minX, minZ, radius, blocked };
+  const grid = { cols, rows, cellSize, minX, minZ, radius, mass, blocked };
+  // 只有当前体型跨不过去的墙才计入障碍
+  const walls = LEVEL.obstacles.filter((obstacle) => !canCrossObstacle(mass, obstacle));
+  // 只有当前体型挤不过去的窄门才计入障碍
+  const gates = (LEVEL.gates ?? []).filter((gate) => !canPassGate(mass, gate));
+  const barriers = [...walls, ...gates];
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
       const x = minX + (col + 0.5) * cellSize;
       const z = minZ + (row + 0.5) * cellSize;
       // 障碍按导航半径膨胀，格中心落在膨胀区内即视为不可通行。
       // 可破坏糖板与相位门不算障碍：代理用冲刺与相位处理它们。
-      const hit = LEVEL.obstacles.some((obstacle) => (
-        Math.abs(x - obstacle.x) <= obstacle.width / 2 + radius
-        && Math.abs(z - obstacle.z) <= obstacle.depth / 2 + radius
+      const hit = barriers.some((barrier) => (
+        Math.abs(x - barrier.x) <= barrier.width / 2 + radius
+        && Math.abs(z - barrier.z) <= barrier.depth / 2 + radius
       ));
       const outside = x < minX + radius || x > maxX - radius || z < minZ + radius || z > maxZ - radius;
       if (hit || outside) blocked[cellIndex(grid, col, row)] = 1;
@@ -30,6 +36,16 @@ export function createNavGrid(radius = MAX_NAVIGATION_RADIUS, cellSize = NAV_CEL
   }
   return grid;
 }
+
+// 当前体型下窄门的开合状态，用于给网格缓存做键。
+export const gateSignature = (mass) => (LEVEL.gates ?? [])
+  .map((gate) => (canPassGate(mass, gate) ? '1' : '0'))
+  .join('');
+
+// 当前体型下可跨越墙体的状态，同样参与缓存键。
+export const crossSignature = (mass) => LEVEL.obstacles
+  .map((obstacle) => (canCrossObstacle(mass, obstacle) ? '1' : '0'))
+  .join('');
 
 export const worldToCell = (grid, x, z) => ({
   col: Math.max(0, Math.min(grid.cols - 1, Math.floor((x - grid.minX) / grid.cellSize))),

@@ -37,6 +37,27 @@ export function passageHeight(mass) {
   return INITIAL_RADIUS + Math.sqrt(Math.max(0, mass) / MASS_PER_RADIUS);
 }
 
+// 跨越安全余量：让"再吃一个就能翻过去"这件事有明确门槛，而不是贴着相等值抖动。
+export const CROSS_SAFE_MARGIN = 0.6;
+
+export function canCrossObstacle(mass, obstacle) {
+  if (!obstacle || typeof obstacle.height !== 'number') return false;
+  return passageHeight(mass) >= obstacle.height + CROSS_SAFE_MARGIN;
+}
+
+// 窄门只看质量上限：体型一旦超过就永久关闭，这是"成长不可逆"的载体。
+export function canPassGate(mass, gate) {
+  if (!gate || typeof gate.maxMass !== 'number') return true;
+  return mass <= gate.maxMass;
+}
+
+// 恰好能翻过某高度所需的质量，供关卡标注与验证器使用。
+export function massToCross(height) {
+  const required = height + CROSS_SAFE_MARGIN - INITIAL_RADIUS;
+  if (required <= 0) return 0;
+  return required * required * MASS_PER_RADIUS;
+}
+
 export function isOverloadConsume(player, object) {
   return player.mass >= OVERLOAD_SAFE_MASS && object.mass > player.mass;
 }

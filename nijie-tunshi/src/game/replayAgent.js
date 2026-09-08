@@ -1,6 +1,6 @@
 import { LEVEL } from './level.js';
 import { MAX_NAVIGATION_RADIUS } from './rules.js';
-import { createNavGrid, findPath, segmentBlocked, simplifyPath } from './navigation.js';
+import { createNavGrid, crossSignature, findPath, gateSignature, segmentBlocked, simplifyPath } from './navigation.js';
 
 // ROUTE 只描述"先后要处理哪些目标"这一层策略，具体怎么绕过墙体交给寻路。
 const ROUTE = [
@@ -35,7 +35,7 @@ export function createReplayAgent() {
   let previousPhase = false;
   let active = false;
   let grid = null;
-  let gridRadius = -1;
+  let gridKey = '';
   let path = null;
   let pathSlot = 0;
   let pathKey = '';
@@ -47,9 +47,11 @@ export function createReplayAgent() {
 
   const ensureGrid = (player) => {
     const radius = quantizeRadius(player);
-    if (!grid || radius !== gridRadius) {
-      grid = createNavGrid(radius);
-      gridRadius = radius;
+    // 网格同时取决于半径、可跨越墙体和窄门开合，三者任一变化都要重建
+    const key = `${radius}|${crossSignature(player.mass)}|${gateSignature(player.mass)}`;
+    if (!grid || key !== gridKey) {
+      grid = createNavGrid(radius, player.mass);
+      gridKey = key;
       clearPath();
     }
     return grid;
@@ -62,7 +64,7 @@ export function createReplayAgent() {
       previousPhase = false;
       active = true;
       grid = null;
-      gridRadius = -1;
+      gridKey = '';
       sinceReplan = 0;
       clearPath();
     },

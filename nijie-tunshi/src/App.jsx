@@ -9,7 +9,7 @@ import {
   step, STEP, togglePause,
 } from './game/simulation.js';
 import {
-  ASCENSION_MASS, RING_COMPLETION_MASS, STABILITY_MAX, STELLAR_FUEL_TARGET,
+  ASCENSION_MASS, passageHeight, RING_COMPLETION_MASS, STABILITY_MAX, STELLAR_FUEL_TARGET,
   STELLAR_STABILITY_TARGET,
 } from './game/rules.js';
 import { createScene } from './scene/createScene.js';
@@ -184,6 +184,7 @@ export default function App() {
         <div className={`stellar-track stability${stabilityAtRisk ? ' at-risk' : ''}`} role="progressbar" aria-label="糖心稳定度" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(view.player.stability)}><i style={{ width: `${stabilityProgress}%` }} /></div>
         <dl>
           <div><dt>糖域层级</dt><dd>U{view.universe.index}</dd></div>
+          <div><dt>通行高度</dt><dd>H{passageHeight(view.player.mass).toFixed(1)}</dd></div>
           <div><dt>糖核锚点</dt><dd>{3 - activeAnchors} / 3</dd></div>
         </dl>
       </section>

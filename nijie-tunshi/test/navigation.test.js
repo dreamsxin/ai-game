@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LEVEL } from '../src/game/level.js';
+import { massToCross } from '../src/game/rules.js';
 import {
-  cellToWorld, createNavGrid, findPath, isBlocked, nearestOpenCell, simplifyPath, worldToCell,
+  cellToWorld, createNavGrid, crossSignature, findPath, gateSignature, isBlocked, nearestOpenCell,
+  simplifyPath, worldToCell,
 } from '../src/game/navigation.js';
 
 const grid = createNavGrid(1.2);
@@ -77,4 +79,36 @@ test('collinear waypoints are collapsed', () => {
 test('an oversized navigation radius seals the map instead of returning a bogus path', () => {
   const sealed = createNavGrid(40);
   assert.equal(findPath(sealed, LEVEL.start, LEVEL.exit), null, '无解时必须返回 null');
+});
+
+test('low walls drop out of the grid once the player can roll over them', () => {
+  const wall = LEVEL.obstacles.find((obstacle) => obstacle.id === 'wall-a');
+  const cell = worldToCell(grid, wall.x, wall.z);
+  assert.equal(isBlocked(grid, cell.col, cell.row), true, '质量 0 时矮墙应阻挡');
+
+  const grown = createNavGrid(1.2, 40);
+  assert.equal(isBlocked(grown, cell.col, cell.row), false, '体型足够时矮墙应从网格中消失');
+
+  const tall = LEVEL.obstacles.find((obstacle) => obstacle.id === 'wall-c');
+  const tallCell = worldToCell(grown, tall.x, tall.z);
+  assert.equal(isBlocked(grown, tallCell.col, tallCell.row), true, '高墙永远不可跨越');
+});
+
+test('narrow gates enter the grid only after the player outgrows them', () => {
+  const gate = LEVEL.gates.find((candidate) => candidate.id === 'gate-north');
+  const small = createNavGrid(1.2, 0);
+  const smallCell = worldToCell(small, gate.x, gate.z);
+  assert.equal(isBlocked(small, smallCell.col, smallCell.row), false, '小身位时窄门应可通行');
+
+  const large = createNavGrid(1.2, gate.maxMass + 5);
+  assert.equal(isBlocked(large, smallCell.col, smallCell.row), true, '超过上限后窄门应关闭');
+});
+
+test('grid signatures change exactly at the crossing and gate thresholds', () => {
+  const wall = LEVEL.obstacles.find((obstacle) => obstacle.id === 'wall-a');
+  const threshold = massToCross(wall.height);
+  assert.notEqual(crossSignature(threshold - 1), crossSignature(threshold + 1), '跨越阈值两侧的签名必须不同');
+
+  const gate = LEVEL.gates.find((candidate) => candidate.id === 'gate-mid');
+  assert.notEqual(gateSignature(gate.maxMass), gateSignature(gate.maxMass + 1), '窄门上限两侧的签名必须不同');
 });

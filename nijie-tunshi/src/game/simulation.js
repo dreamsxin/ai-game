@@ -5,10 +5,11 @@ import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
 import { createUniverseProgress, POLARITY_FLIP_DURATION, universeForIndex } from './universes.js';
 import {
-  ASCENSION_MASS, applyStabilityPenalty, canConsume, consumePower, IMPACT_SPEED_THRESHOLD,
-  IMPACT_STABILITY_COST, INITIAL_RADIUS, isOverloadConsume, MAX_NAVIGATION_RADIUS,
-  OVERLOAD_STABILITY_COST, radiusForMass, recoverStability, RING_COMPLETION_MASS, resultStars,
-  STABILITY_MAX, stellarIgnitionReady, STELLAR_FUEL_TARGET, STELLAR_STABILITY_TARGET,
+  ASCENSION_MASS, applyStabilityPenalty, canConsume, canCrossObstacle, canPassGate, consumePower,
+  IMPACT_SPEED_THRESHOLD, IMPACT_STABILITY_COST, INITIAL_RADIUS, isOverloadConsume,
+  MAX_NAVIGATION_RADIUS, OVERLOAD_STABILITY_COST, passageHeight, radiusForMass, recoverStability,
+  RING_COMPLETION_MASS, resultStars, STABILITY_MAX, stellarIgnitionReady, STELLAR_FUEL_TARGET,
+  STELLAR_STABILITY_TARGET,
 } from './rules.js';
 
 export const STEP = 1 / 60;
@@ -146,6 +147,8 @@ function pushObjectOutOfRect(object, rect) {
 
 function confineObject(state, object) {
   for (const obstacle of LEVEL.obstacles) pushObjectOutOfRect(object, obstacle);
+  // 糖果怪没有玩家的跨越能力，窄门与所有墙体对它们一律有效
+  for (const gate of LEVEL.gates ?? []) pushObjectOutOfRect(object, gate);
   for (const structure of state.structures) {
     if (structure.active) pushObjectOutOfRect(object, structure);
   }
@@ -163,8 +166,10 @@ function stageIndexForMass(mass, ignited = false) {
   return index;
 }
 
-function lineBlocked(from, to) {
+function lineBlocked(from, to, mass = 0) {
   for (const obstacle of LEVEL.obstacles) {
+    // 能翻过去的矮墙不再遮挡糖引力，否则"可跨越"与"可牵引"两套规则会互相矛盾
+    if (canCrossObstacle(mass, obstacle)) continue;
     const steps = 12;
     for (let index = 1; index < steps; index += 1) {
       const amount = index / steps;
@@ -183,7 +188,7 @@ function updateGravityObjects(state, dt) {
     const dx = state.player.x - object.x;
     const dz = state.player.z - object.z;
     const distance = Math.hypot(dx, dz);
-    const blocked = lineBlocked(object, state.player);
+    const blocked = lineBlocked(object, state.player, state.player.mass);
     if (object.polarity === 'dark') {
       const consumeReady = object.type === 'core'
         ? state.encounter.coreUnlocked
@@ -391,7 +396,14 @@ export function step(state, input = {}, dt = STEP) {
   player.z += player.vz * dt;
   let blocked = false;
   for (const obstacle of LEVEL.obstacles) {
+    // 体型足够高就直接从矮墙上滚过，这条规则是"成长解锁路线"的载体
+    if (canCrossObstacle(player.mass, obstacle)) continue;
     if (resolveRect(player, obstacle)) blocked = true;
+  }
+  for (const gate of LEVEL.gates ?? []) {
+    // 窄门相反：体型越大越过不去，超过上限即永久关闭
+    if (canPassGate(player.mass, gate)) continue;
+    if (resolveRect(player, gate)) blocked = true;
   }
   if (updateStructures(next)) blocked = true;
   const recklessImpact = blocked
