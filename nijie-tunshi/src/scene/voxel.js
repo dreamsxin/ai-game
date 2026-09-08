@@ -27,6 +27,29 @@ const FACES = [
 
 const FACE_UVS = [[0, 0], [0, 1], [1, 1], [1, 0]];
 
+// 方块面按法线轴向分层：顶面最亮、底面最暗，四个侧面区分前后与左右。
+// 这是体素观感的主要来源，没有它一整块糖会糊成一个剪影。
+const AXIS_BRIGHTNESS = {
+  '0,1,0': 1,
+  '0,-1,0': 0.58,
+  '1,0,0': 0.88,
+  '-1,0,0': 0.8,
+  '0,0,1': 0.74,
+  '0,0,-1': 0.66,
+};
+
+// 逐单元的确定性微差，打散大面积同色方块。不使用随机数，保证可复现。
+const cellTint = (ix, iy, iz) => {
+  const hash = Math.sin(ix * 12.9898 + iy * 78.233 + iz * 37.719) * 43758.5453;
+  return hash - Math.floor(hash);
+};
+
+export const faceBrightness = (normal, ix = 0, iy = 0, iz = 0) => {
+  const base = AXIS_BRIGHTNESS[normal.join(',')] ?? 1;
+  return base * (0.96 + cellTint(ix, iy, iz) * 0.08);
+};
+
+
 export function voxelOccupancy(shape, resolution) {
   const test = SHAPES[shape];
   if (!test) throw new Error(`未知体素形状: ${shape}`);
@@ -57,6 +80,7 @@ export function voxelSurface(shape, resolution) {
   const positions = [];
   const normals = [];
   const uvs = [];
+  const colors = [];
   const step = 2 / size;
   for (let iz = 0; iz < size; iz += 1) {
     for (let iy = 0; iy < size; iy += 1) {
@@ -65,6 +89,7 @@ export function voxelSurface(shape, resolution) {
         for (const face of FACES) {
           const [nx, ny, nz] = face.normal;
           if (at(ix + nx, iy + ny, iz + nz)) continue;
+          const shade = faceBrightness(face.normal, ix, iy, iz);
           // 四角按 0,1,2 与 0,2,3 拆成两个三角形
           const corner = (index) => {
             const [cx, cy, cz] = face.corners[index];
@@ -79,6 +104,7 @@ export function voxelSurface(shape, resolution) {
               positions.push(...corner(index));
               normals.push(nx, ny, nz);
               uvs.push(...FACE_UVS[index]);
+              colors.push(shade, shade, shade);
             }
           }
         }
@@ -89,6 +115,7 @@ export function voxelSurface(shape, resolution) {
     positions: Float32Array.from(positions),
     normals: Float32Array.from(normals),
     uvs: Float32Array.from(uvs),
+    colors: Float32Array.from(colors),
     faceCount: positions.length / 9 / 2,
   };
 }

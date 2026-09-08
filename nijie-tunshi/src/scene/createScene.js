@@ -4,6 +4,8 @@ import { ambientOffset, burstDirection, profileFor, seedFor } from '../game/effe
 import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitState, stageChargeProgress } from '../game/progression.js';
 import { POLARITY_FLIP_DURATION } from '../game/universes.js';
 import { CANDY_LIGHTING, lightingState } from '../game/lighting.js';
+import { creatureMoodPose } from '../game/moods.js';
+import { canConsume } from '../game/rules.js';
 import { voxelProfileFor, voxelSurface } from './voxel.js';
 
 // 体素几何按“形状 + 分辨率”缓存，缩放交给 mesh.scale，避免每个对象重复构网格。
@@ -12,11 +14,12 @@ const voxelGeometry = (shape, resolution) => {
   const key = `${shape}|${resolution}`;
   const cached = voxelGeometryCache.get(key);
   if (cached) return cached;
-  const { positions, normals, uvs } = voxelSurface(shape, resolution);
+  const { positions, normals, uvs, colors } = voxelSurface(shape, resolution);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   voxelGeometryCache.set(key, geometry);
   return geometry;
 };
@@ -46,6 +49,15 @@ const glowMaterial = (color, opacity = 1) => new THREE.MeshPhysicalMaterial({
   transparent: opacity < 1,
   opacity,
 });
+
+// 只有体素网格带 color 属性；平滑几何（圆环、光柱）必须继续用 glowMaterial，
+// 否则缺少属性会导致着色异常。
+const voxelGlowMaterial = (color, opacity = 1) => {
+  const material = glowMaterial(color, opacity);
+  material.vertexColors = true;
+  material.flatShading = true;
+  return material;
+};
 
 const createRingMaterial = (ring) => new THREE.ShaderMaterial({
   uniforms: {
@@ -176,7 +188,7 @@ const orbitalPoint = (orbit, angle, target = new THREE.Vector3()) => {
 
 function createSatelliteVisual(definition) {
   const group = new THREE.Group();
-  const core = new THREE.Mesh(voxelGeometry('sphere', 6), glowMaterial(definition.color));
+  const core = new THREE.Mesh(voxelGeometry('sphere', 6), voxelGlowMaterial(definition.color));
   core.scale.setScalar(definition.size);
   const halo = new THREE.Mesh(
     new THREE.SphereGeometry(definition.size * 2.1, 12, 8),
@@ -444,7 +456,7 @@ export function createScene(host) {
   const anchorMeshes = new Map();
   for (const anchor of LEVEL.anchors) {
     const group = new THREE.Group();
-    const shell = new THREE.Mesh(voxelGeometry('octahedron', 7), glowMaterial(anchor.color));
+    const shell = new THREE.Mesh(voxelGeometry('octahedron', 7), voxelGlowMaterial(anchor.color));
     shell.scale.setScalar(anchor.radius);
     const cage = new THREE.Mesh(new THREE.TorusGeometry(anchor.radius * 1.35, 0.06, 8, 40), glowMaterial(anchor.color, 0.62));
     cage.rotation.x = Math.PI / 2;
@@ -465,7 +477,7 @@ export function createScene(host) {
   const ambientSwarms = new Map();
   const labels = new Map();
   for (const object of LEVEL.objects) {
-    const mesh = voxelMesh(object.type, object.size, glowMaterial(object.color));
+    const mesh = voxelMesh(object.type, object.size, voxelGlowMaterial(object.color));
     mesh.position.set(object.x, object.size * 0.72, object.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -511,7 +523,7 @@ export function createScene(host) {
   scene.add(exit);
 
   const player = new THREE.Group();
-  const bodyMaterial = glowMaterial(0xffb1e8);
+  const bodyMaterial = voxelGlowMaterial(0xffb1e8);
   // 玩家糖心分辨率高于普通糖果怪，保证放大后仍能读出方块层次。
   const body = new THREE.Mesh(voxelGeometry('sphere', 12), bodyMaterial);
   body.castShadow = true;
@@ -610,11 +622,13 @@ export function createScene(host) {
       const isIgnition = event.type === 'stellarIgnition';
       const isAnchor = event.type === 'anchorBreak';
       const isPolarity = event.type === 'polarityFlip';
+      // 稳定度扣减用夹心角兽的尖锐碎屑，尺寸随扣减量放大，与吞噬碎裂区分开。
+      const isStability = event.type === 'stabilityLoss';
       const burst = createBurst({
         ...event,
         objectId: event.structureId ?? event.anchorId ?? event.objectId ?? event.type,
-        type: isIgnition ? 'core' : isAnchor || isPolarity ? 'crystal' : 'cube',
-        size: isIgnition ? 2.4 : isAnchor ? 1.5 : isPolarity ? 1.35 : 1.1,
+        type: isIgnition ? 'core' : isAnchor || isPolarity ? 'crystal' : isStability ? 'prism' : 'cube',
+        size: isIgnition ? 2.4 : isAnchor ? 1.5 : isPolarity ? 1.35 : isStability ? 0.8 + (event.amount ?? 0) * 0.12 : 1.1,
       });
       burst.bornAt = now;
       activeBursts.push(burst);
@@ -757,10 +771,17 @@ export function createScene(host) {
           swarm.position.x = object.x;
           swarm.position.z = object.z;
           mesh.rotation.y += 0.003 + object.mass * 0.00005;
-          mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12;
+          // 情绪姿态由权威模拟状态推导，场景层不自行判断吞噬资格。
+          const pose = creatureMoodPose(object, playerState, state.encounter, time);
+          const toPlayer = Math.hypot(object.x - playerState.x, object.z - playerState.z) || 1;
+          const leanX = (object.z - playerState.z) / toPlayer;
+          const leanZ = (object.x - playerState.x) / toPlayer;
+          mesh.rotation.x += (pose.lean * leanX - mesh.rotation.x) * 0.16;
+          mesh.rotation.z += (-pose.lean * leanZ - mesh.rotation.z) * 0.16;
+          mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12 + pose.bob;
           swarm.position.y = mesh.position.y;
           updateAmbientSwarm(swarm, time, object.polarity);
-          const available = playerState.mass + 2 >= object.mass && object.polarity !== 'dark';
+          const available = canConsume(playerState, object, state.encounter);
           const polarityAmount = object.polarity === 'dark'
             ? clamp01(object.polarityCharge / POLARITY_FLIP_DURATION)
             : object.polarity === 'light' ? 1 : 0;
@@ -774,6 +795,7 @@ export function createScene(host) {
           swarm.material.opacity += ((available || object.polarity === 'dark' ? profileFor(object.type).ambientOpacity : 0.12) - swarm.material.opacity) * 0.08;
           if (mesh.userData.glints) {
             mesh.userData.glints.rotation.y = time * 0.35;
+            mesh.userData.glints.scale.setScalar(pose.glintScale);
             mesh.userData.glints.children.forEach((glint, index) => {
               glint.material.opacity = (0.38 + Math.sin(time * 3 + index * 2) * 0.22) * (available ? 1 : 0.55);
             });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { VOXEL_PROFILES, voxelOccupancy, voxelProfileFor, voxelSurface } from '../src/scene/voxel.js';
+import { VOXEL_PROFILES, faceBrightness, voxelOccupancy, voxelProfileFor, voxelSurface } from '../src/scene/voxel.js';
 
 test('solid box only emits its six outer faces', () => {
   const resolution = 5;
@@ -69,4 +69,29 @@ test('every candy type maps to a defined voxel profile', () => {
 
 test('unknown shapes fail loudly', () => {
   assert.throws(() => voxelOccupancy('teapot', 6), /未知体素形状/);
+});
+
+test('face shading layers by axis so blocks stay readable', () => {
+  const top = faceBrightness([0, 1, 0]);
+  const bottom = faceBrightness([0, -1, 0]);
+  const side = faceBrightness([1, 0, 0]);
+  assert.ok(top > side, `顶面应亮于侧面，实际 ${top} vs ${side}`);
+  assert.ok(side > bottom, `侧面应亮于底面，实际 ${side} vs ${bottom}`);
+  assert.notEqual(faceBrightness([1, 0, 0]), faceBrightness([0, 0, 1]), '前后与左右侧面应可区分');
+});
+
+test('baked vertex colors align with vertices and stay in a sane range', () => {
+  const { positions, colors } = voxelSurface('sphere', 8);
+  assert.equal(colors.length, positions.length, '每个顶点都要有颜色');
+  for (const value of colors) {
+    assert.ok(value > 0.5 && value <= 1.1, `亮度越界: ${value}`);
+  }
+  // 同一形状必须逐字节一致，否则回放与截图对比会漂移
+  assert.deepEqual(colors, voxelSurface('sphere', 8).colors);
+});
+
+test('per cell tint breaks up flat faces without changing geometry', () => {
+  const { colors } = voxelSurface('box', 5);
+  const unique = new Set(Array.from(colors, (value) => value.toFixed(5)));
+  assert.ok(unique.size > 6, `逐单元微差应产生多于 6 种亮度，实际 ${unique.size}`);
 });
