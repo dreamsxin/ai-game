@@ -318,6 +318,21 @@ test('the level carries enough spare fuel to survive a missed pickup', () => {
   );
 });
 
+test('the replay agent actually routes around walls instead of grinding along them', () => {
+  let state = createGame();
+  const agent = createReplayAgent();
+  agent.start();
+  for (let index = 0; index < 40000 && state.status === 'playing'; index += 1) {
+    state = step(state, agent.snapshot(state), 1 / 60);
+  }
+  const stats = agent.stats();
+  assert.equal(state.status, 'ascending');
+  assert.ok(stats.plans > 0, '回放必须真的用到寻路，否则避障是死代码');
+  assert.equal(stats.failedPlans, 0, '路线上的目标都应可达');
+  assert.ok(stats.followedSteps > 100, `沿路径行进的步数过少: ${stats.followedSteps}`);
+  assert.ok(stats.straightSteps > 0, '视野无阻时应走直线而非绕路');
+});
+
 test('phase anchor only breaks while phase is active', () => {
   let state = createGame();
   state.player.mass = 32;
