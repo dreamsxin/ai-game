@@ -6,7 +6,10 @@ import {
   createGame, enterNextUniverse, isAscensionUnlocked, radiusForMass,
   restartCurrentUniverse, step, togglePause,
 } from '../src/game/simulation.js';
-import { STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS, stellarIgnitionReady } from '../src/game/rules.js';
+import {
+  OVERLOAD_STABILITY_COST, STABILITY_MAX, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS,
+  STELLAR_STABILITY_TARGET, stellarIgnitionReady,
+} from '../src/game/rules.js';
 import { createReplayAgent } from './helpers/replayAgent.js';
 
 const advance = (state, input, seconds) => {
@@ -40,7 +43,8 @@ test('restarting preserves the universe while resetting the run', () => {
   assert.equal(restarted.player.mass, 0);
   assert.equal(restarted.player.fuel, 0);
   assert.equal(restarted.objects[0].active, true);
-  assert.deepEqual(restarted.encounter.anchors, { north: 2, south: 2, phase: 1 });
+  assert.deepEqual(restarted.anchors.map((anchor) => anchor.integrity), [2, 2, 2]);
+  assert.equal(restarted.encounter.coreUnlocked, false);
 });
 
 test('winning advances to the next universe and preserves meta progress', () => {
@@ -167,8 +171,10 @@ test('core remains protected until both anchors are broken', () => {
   state = step(state, {});
   assert.equal(state.objects.find((object) => object.id === 'core').active, true);
 
-  state.encounter.anchors.north = 0;
-  state.encounter.anchors.south = 0;
+  state.anchors.filter((anchor) => anchor.id !== 'phase').forEach((anchor) => {
+    anchor.integrity = 0;
+    anchor.active = false;
+  });
   state.encounter.coreUnlocked = true;
   state = step(state, {});
   assert.equal(state.objects.find((object) => object.id === 'core').active, false);
@@ -180,7 +186,7 @@ test('stellar ignition requires mass, fuel, stability, three anchors, phase, and
   state.player.fuel = STELLAR_FUEL_TARGET;
   state.player.stability = 100;
   assert.equal(stellarIgnitionReady(state), false);
-  state.encounter.anchors = { north: 0, south: 0, phase: 0 };
+  state.anchors.forEach((anchor) => { anchor.integrity = 0; anchor.active = false; });
   state.encounter.phaseIgnited = true;
   state.objects.find((object) => object.id === 'core').active = false;
   assert.equal(stellarIgnitionReady(state), true);
@@ -194,7 +200,6 @@ test('simulation ignites once and emits the stellar transition events', () => {
   state.player.mass = STELLAR_IGNITION_MASS;
   state.player.fuel = STELLAR_FUEL_TARGET;
   state.player.stability = 100;
-  state.encounter.anchors = { north: 0, south: 0, phase: 0 };
   state.encounter.phaseIgnited = true;
   state.anchors.forEach((anchor) => { anchor.active = false; anchor.integrity = 0; });
   state.objects.find((object) => object.id === 'core').active = false;
@@ -209,6 +214,108 @@ test('simulation ignites once and emits the stellar transition events', () => {
   assert.equal(state.player.ignitionAttempts, 1);
   assert.equal(state.stageUpEvents.filter((event) => event.stageName === '霓虹糖星').length, 1);
   assert.equal(state.actionEvents.filter((event) => event.type === 'stellarIgnition').length, 1);
+});
+
+test('overload eating costs stability but the tutorial stage stays free', () => {
+  let free = createGame();
+  free.player.mass = 3;
+  free.player.radius = radiusForMass(3);
+  const orb = LEVEL.objects.find((object) => object.id === 'orb-4');
+  free.player.x = orb.x;
+  free.player.z = orb.z;
+  free = step(free, {});
+  assert.equal(free.objects.find((object) => object.id === 'orb-4').active, false);
+  assert.equal(free.player.stability, STABILITY_MAX);
+
+  let risky = createGame();
+  risky.player.mass = 13;
+  risky.player.radius = radiusForMass(13);
+  const prism = LEVEL.objects.find((object) => object.id === 'prism-1');
+  risky.player.x = prism.x;
+  risky.player.z = prism.z;
+  risky = step(risky, {});
+  assert.equal(risky.objects.find((object) => object.id === 'prism-1').active, false);
+  assert.equal(risky.player.stability, STABILITY_MAX - OVERLOAD_STABILITY_COST);
+  const loss = risky.actionEvents.find((event) => event.type === 'stabilityLoss');
+  assert.equal(loss.cause, 'overload');
+  assert.equal(loss.objectId, 'prism-1');
+});
+
+test('stability recovers after the penalty delay without exceeding the maximum', () => {
+  let state = createGame();
+  state.player.mass = 13;
+  state.player.radius = radiusForMass(13);
+  const prism = LEVEL.objects.find((object) => object.id === 'prism-1');
+  state.player.x = prism.x;
+  state.player.z = prism.z;
+  state = step(state, {});
+  const damaged = state.player.stability;
+  assert.ok(damaged < STABILITY_MAX);
+
+  state.player.x = -24;
+  state.player.z = 20;
+  state = advance(state, {}, 2);
+  assert.ok(state.player.stability > damaged, '延迟结束后稳定度应回升');
+  state = advance(state, {}, 30);
+  assert.equal(state.player.stability, STABILITY_MAX);
+});
+
+test('ignition stays blocked while stability is below target', () => {
+  const state = createGame();
+  state.player.mass = STELLAR_IGNITION_MASS;
+  state.player.fuel = STELLAR_FUEL_TARGET;
+  state.encounter.phaseIgnited = true;
+  state.anchors.forEach((anchor) => { anchor.integrity = 0; anchor.active = false; });
+  state.objects.find((object) => object.id === 'core').active = false;
+
+  state.player.stability = STELLAR_STABILITY_TARGET - 1;
+  assert.equal(stellarIgnitionReady(state), false);
+  state.player.stability = STELLAR_STABILITY_TARGET;
+  assert.equal(stellarIgnitionReady(state), true);
+});
+
+test('fleeing candy creatures stay inside walls and level bounds', () => {
+  const wall = LEVEL.obstacles.find((obstacle) => obstacle.id === 'wall-c');
+  let state = createGame();
+  state.player.mass = 30;
+  state.player.radius = radiusForMass(30);
+  const creature = state.objects.find((object) => object.id === 'cube-3');
+  const margin = creature.size * 0.5;
+  const wallEdge = wall.z + wall.depth / 2;
+  creature.x = wall.x;
+  creature.z = wallEdge + 1.5;
+  state.player.x = wall.x;
+  state.player.z = creature.z + 10;
+  state = advance(state, {}, 3);
+  const pushed = state.objects.find((object) => object.id === 'cube-3');
+  assert.equal(pushed.active, true, '糖果怪不应被吃掉，否则本用例失去意义');
+  assert.ok(pushed.z < creature.z + 1e-6, '糖果怪应朝远离玩家的方向逃离');
+  assert.ok(pushed.z >= wallEdge + margin - 1e-6, `糖果怪不应挤入墙体，实际 z=${pushed.z}`);
+
+  state = createGame();
+  state.player.mass = 30;
+  state.player.radius = radiusForMass(30);
+  const runner = state.objects.find((object) => object.id === 'cube-3');
+  runner.x = LEVEL.bounds.maxX - 1;
+  runner.z = 0;
+  state.player.x = runner.x - 10;
+  state.player.z = 0;
+  state = advance(state, {}, 3);
+  const escaped = state.objects.find((object) => object.id === 'cube-3');
+  assert.equal(escaped.active, true, '糖果怪不应被吃掉，否则本用例失去意义');
+  assert.ok(escaped.x > LEVEL.bounds.maxX - 1, '糖果怪应被逼向边界');
+  assert.ok(escaped.x <= LEVEL.bounds.maxX - margin + 1e-6, `糖果怪不应越出边界，实际 x=${escaped.x}`);
+});
+
+test('the level carries enough spare fuel to survive a missed pickup', () => {
+  const sources = LEVEL.objects.filter((object) => object.fuel);
+  const total = sources.reduce((sum, object) => sum + object.fuel, 0);
+  const richest = Math.max(...sources.map((object) => object.fuel));
+  assert.ok(sources.length >= 5, '燃料来源应分布在多个对象上');
+  assert.ok(
+    total - richest >= STELLAR_FUEL_TARGET,
+    `漏掉最大燃料体后仍应能凑满 ${STELLAR_FUEL_TARGET}，当前剩余 ${total - richest}`,
+  );
 });
 
 test('phase anchor only breaks while phase is active', () => {
@@ -250,7 +357,7 @@ test('scripted replay completes stellar ignition and reaches the universe rift',
   assert.equal(state.status, 'ascending');
   assert.equal(state.encounter.coreUnlocked, true);
   assert.equal(state.encounter.phaseIgnited, true);
-  assert.deepEqual(state.encounter.anchors, { north: 0, south: 0, phase: 0 });
+  assert.deepEqual(state.anchors.map((anchor) => anchor.integrity <= 0), [true, true, true]);
   assert.equal(state.objects.find((object) => object.id === 'core').active, false);
   assert.ok(state.player.mass >= STELLAR_IGNITION_MASS);
   assert.equal(state.player.fuel, STELLAR_FUEL_TARGET);

@@ -34,6 +34,7 @@ button { font: inherit; }
 .stellar-track i { display: block; height: 100%; transition: width .2s ease; }
 .stellar-track.fuel i { background: linear-gradient(90deg, #ffe36e, #ff9df2); box-shadow: 0 0 9px rgba(255, 227, 110, .62); }
 .stellar-track.stability i { background: linear-gradient(90deg, #58ffbf, #7df3ff); box-shadow: 0 0 9px rgba(88, 255, 191, .5); }
+.stellar-track.stability.at-risk i { background: linear-gradient(90deg, #ff6e9f, #ffb257); box-shadow: 0 0 9px rgba(255, 110, 159, .62); }
 .progress-track i, .charge-track i { display: block; height: 100%; transition: width .2s ease; }
 .progress-track i { background: linear-gradient(90deg, #ff62c7, #ffe36e); box-shadow: 0 0 12px #ff62c7; }
 .charge-track i { background: linear-gradient(90deg, #7df3ff, #58ffbf); box-shadow: 0 0 10px #7df3ff; }

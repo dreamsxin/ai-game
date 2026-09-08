@@ -9,7 +9,7 @@ import {
   step, STEP, togglePause,
 } from './game/simulation.js';
 import {
-  ASCENSION_MASS, RING_COMPLETION_MASS, STELLAR_FUEL_TARGET,
+  ASCENSION_MASS, RING_COMPLETION_MASS, STABILITY_MAX, STELLAR_FUEL_TARGET,
   STELLAR_STABILITY_TARGET,
 } from './game/rules.js';
 import { createScene } from './scene/createScene.js';
@@ -145,7 +145,8 @@ export default function App() {
   const charge = stageChargeProgress(view.player.mass);
   const progress = Math.min(100, (view.player.mass / ASCENSION_MASS) * 100);
   const fuelProgress = Math.min(100, (view.player.fuel / STELLAR_FUEL_TARGET) * 100);
-  const stabilityProgress = Math.min(100, (view.player.stability / STELLAR_STABILITY_TARGET) * 100);
+  const stabilityProgress = Math.min(100, (view.player.stability / STABILITY_MAX) * 100);
+  const stabilityAtRisk = view.player.stability < STELLAR_STABILITY_TARGET;
   const activeAnchors = view.anchors.filter((anchor) => anchor.active).length;
   const darkPolarityCount = view.objects.filter((object) => object.active && object.polarity === 'dark').length;
   const coreActive = view.objects.find((object) => object.id === 'core')?.active;
@@ -179,8 +180,8 @@ export default function App() {
         <div className="charge-track" role="progressbar" aria-label={charge.ringName} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(charge.progress * 100)}><i style={{ width: `${charge.progress * 100}%` }} /></div>
         <div className="stellar-row"><span>夹心燃料</span><strong>{Math.floor(view.player.fuel)}%</strong></div>
         <div className="stellar-track fuel" role="progressbar" aria-label="夹心燃料" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(fuelProgress)}><i style={{ width: `${fuelProgress}%` }} /></div>
-        <div className="stellar-row"><span>糖心稳定</span><strong>{Math.floor(view.player.stability)}%</strong></div>
-        <div className="stellar-track stability" role="progressbar" aria-label="糖心稳定度" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(view.player.stability)}><i style={{ width: `${stabilityProgress}%` }} /></div>
+        <div className="stellar-row"><span>糖心稳定</span><strong>{Math.floor(view.player.stability)}% {stabilityAtRisk ? `· 需 ${STELLAR_STABILITY_TARGET}%` : ''}</strong></div>
+        <div className={`stellar-track stability${stabilityAtRisk ? ' at-risk' : ''}`} role="progressbar" aria-label="糖心稳定度" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.floor(view.player.stability)}><i style={{ width: `${stabilityProgress}%` }} /></div>
         <dl>
           <div><dt>糖域层级</dt><dd>U{view.universe.index}</dd></div>
           <div><dt>糖核锚点</dt><dd>{3 - activeAnchors} / 3</dd></div>

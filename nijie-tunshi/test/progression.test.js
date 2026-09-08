@@ -21,7 +21,6 @@ const createIgnitedGame = () => {
   state.player.fuel = STELLAR_FUEL_TARGET;
   state.player.stability = 100;
   state.player.ignited = true;
-  state.encounter.anchors = { north: 0, south: 0, phase: 0 };
   state.encounter.phaseIgnited = true;
   state.anchors.forEach((anchor) => { anchor.active = false; anchor.integrity = 0; });
   state.objects.find((object) => object.id === 'core').active = false;

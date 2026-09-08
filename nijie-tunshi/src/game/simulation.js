@@ -5,8 +5,10 @@ import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
 import { createUniverseProgress, POLARITY_FLIP_DURATION, universeForIndex } from './universes.js';
 import {
-  ASCENSION_MASS, canConsume, consumePower, INITIAL_RADIUS, MAX_NAVIGATION_RADIUS, radiusForMass,
-  RING_COMPLETION_MASS, resultStars, stellarIgnitionReady, STELLAR_FUEL_TARGET,
+  ASCENSION_MASS, applyStabilityPenalty, canConsume, consumePower, IMPACT_SPEED_THRESHOLD,
+  IMPACT_STABILITY_COST, INITIAL_RADIUS, isOverloadConsume, MAX_NAVIGATION_RADIUS,
+  OVERLOAD_STABILITY_COST, radiusForMass, recoverStability, RING_COMPLETION_MASS, resultStars,
+  STABILITY_MAX, stellarIgnitionReady, STELLAR_FUEL_TARGET, STELLAR_STABILITY_TARGET,
 } from './rules.js';
 
 export const STEP = 1 / 60;
@@ -49,7 +51,8 @@ export function createGame(seed = LEVEL.seed, universeProgress = {}) {
     ascensionLevel: 1,
     player: {
       x: LEVEL.start.x, z: LEVEL.start.z, vx: 0, vz: -0.8, mass: 0, radius: INITIAL_RADIUS,
-      integrity: 100, fuel: 0, stability: 100, ignited: false, ignitionAttempts: 0,
+      integrity: 100, fuel: 0, stability: STABILITY_MAX, ignited: false, ignitionAttempts: 0,
+      stabilityPenaltyCooldown: 0, stabilityRecoveryDelay: 0,
       abilities: createAbilityState(), combo: 0, comboRemaining: 0, highestCombo: 0,
     },
     objects,
@@ -122,6 +125,35 @@ function resolveRect(player, rect) {
   return true;
 }
 
+function pushObjectOutOfRect(object, rect) {
+  const radius = object.size * 0.5;
+  const halfWidth = rect.width / 2 + radius;
+  const halfDepth = rect.depth / 2 + radius;
+  const dx = object.x - rect.x;
+  const dz = object.z - rect.z;
+  if (Math.abs(dx) >= halfWidth || Math.abs(dz) >= halfDepth) return false;
+  const pushX = halfWidth - Math.abs(dx);
+  const pushZ = halfDepth - Math.abs(dz);
+  if (pushX < pushZ) {
+    object.x += Math.sign(dx || 1) * pushX;
+    object.vx = 0;
+  } else {
+    object.z += Math.sign(dz || 1) * pushZ;
+    object.vz = 0;
+  }
+  return true;
+}
+
+function confineObject(state, object) {
+  for (const obstacle of LEVEL.obstacles) pushObjectOutOfRect(object, obstacle);
+  for (const structure of state.structures) {
+    if (structure.active) pushObjectOutOfRect(object, structure);
+  }
+  const radius = object.size * 0.5;
+  object.x = Math.max(LEVEL.bounds.minX + radius, Math.min(LEVEL.bounds.maxX - radius, object.x));
+  object.z = Math.max(LEVEL.bounds.minZ + radius, Math.min(LEVEL.bounds.maxZ - radius, object.z));
+}
+
 function stageIndexForMass(mass, ignited = false) {
   let index = 0;
   for (let i = 1; i < PLAYER_STAGES.length; i += 1) {
@@ -189,10 +221,12 @@ function updateGravityObjects(state, dt) {
     object.vz *= 0.94;
     object.x += object.vx * dt;
     object.z += object.vz * dt;
+    confineObject(state, object);
   }
 }
 
 function updateStructures(state) {
+  let blocked = false;
   for (const structure of state.structures) {
     if (!structure.active) continue;
     if (structure.kind === 'phaseable' && phaseActive(state.player)) {
@@ -213,8 +247,9 @@ function updateStructures(state) {
         continue;
       }
     }
-    resolveRect(state.player, structure);
+    if (resolveRect(state.player, structure)) blocked = true;
   }
+  return blocked;
 }
 
 function updateAnchors(state, dt) {
@@ -231,7 +266,6 @@ function updateAnchors(state, dt) {
     anchor.integrity -= anchor.ability === 'gravity' ? dt * 1.8 : 2;
     if (anchor.integrity > 0) continue;
     anchor.active = false;
-    state.encounter.anchors[anchor.id] = 0;
     if (anchor.ability === 'phase') state.encounter.phaseIgnited = true;
     pushEvent(state, 'actionEvents', { type: 'anchorBreak', anchorId: anchor.id, x: anchor.x, z: anchor.z, color: anchor.color });
     state.message = `糖核锚点解除 · ${state.anchors.filter((item) => item.active).length} 个剩余`;
@@ -246,6 +280,7 @@ function updateCreatures(state, dt) {
     object.z += motion.z;
     object.vx *= 0.88;
     object.vz *= 0.88;
+    confineObject(state, object);
   }
 }
 
@@ -258,6 +293,7 @@ function collectObjects(state) {
     if (!eligible.has(object.id)) continue;
     const distance = Math.hypot(player.x - object.x, player.z - object.z);
     if (distance > player.radius + object.size * 0.72) continue;
+    const overload = isOverloadConsume(player, object);
     object.active = false;
     player.mass += object.mass;
     player.fuel = Math.min(STELLAR_FUEL_TARGET, player.fuel + (object.fuel ?? 0));
@@ -272,6 +308,14 @@ function collectObjects(state) {
       type: object.type, objectId: object.id, x: object.x, z: object.z,
       size: object.size, mass: object.mass, color: object.color,
     });
+    if (!overload) continue;
+    const lost = applyStabilityPenalty(player, OVERLOAD_STABILITY_COST);
+    if (lost > 0) {
+      pushEvent(state, 'actionEvents', {
+        type: 'stabilityLoss', cause: 'overload', objectId: object.id,
+        amount: lost, x: object.x, z: object.z, color: 0xff62c7,
+      });
+    }
   }
   if (collectedThisStep === 0) return;
   const newStage = stageIndexForMass(player.mass);
@@ -342,10 +386,28 @@ export function step(state, input = {}, dt = STEP) {
     }
   }
 
+  const impactSpeed = Math.hypot(player.vx, player.vz);
   player.x += player.vx * dt;
   player.z += player.vz * dt;
-  for (const obstacle of LEVEL.obstacles) resolveRect(player, obstacle);
-  updateStructures(next);
+  let blocked = false;
+  for (const obstacle of LEVEL.obstacles) {
+    if (resolveRect(player, obstacle)) blocked = true;
+  }
+  if (updateStructures(next)) blocked = true;
+  const recklessImpact = blocked
+    && impactSpeed > IMPACT_SPEED_THRESHOLD
+    && !dashActive(player)
+    && !phaseActive(player);
+  if (recklessImpact) {
+    const lost = applyStabilityPenalty(player, IMPACT_STABILITY_COST);
+    if (lost > 0) {
+      pushEvent(next, 'actionEvents', {
+        type: 'stabilityLoss', cause: 'impact', amount: lost,
+        x: player.x, z: player.z, color: 0x7df3ff,
+      });
+    }
+  }
+  recoverStability(player, dt);
   const collisionRadius = navigationRadius(player);
   player.x = Math.max(LEVEL.bounds.minX + collisionRadius, Math.min(LEVEL.bounds.maxX - collisionRadius, player.x));
   player.z = Math.max(LEVEL.bounds.minZ + collisionRadius, Math.min(LEVEL.bounds.maxZ - collisionRadius, player.z));
@@ -379,10 +441,11 @@ export function step(state, input = {}, dt = STEP) {
   } else if (next.player.mass >= ASCENSION_MASS) {
     const missing = [];
     if (next.player.fuel < STELLAR_FUEL_TARGET) missing.push(`夹心燃料 ${Math.floor(next.player.fuel)}%`);
+    if (next.player.stability < STELLAR_STABILITY_TARGET) missing.push(`糖心稳定度 ${Math.floor(next.player.stability)}%`);
     if (!next.encounter.phaseIgnited) missing.push('酸雾节点');
     if (next.anchors.some((anchor) => anchor.active)) missing.push('糖核锚点');
     if (next.objects.find((object) => object.id === 'core')?.active) missing.push('糖心熔炉');
-    next.message = `熔糖巨怪待爆发 · ${missing.join(' / ') || '稳定度校准'}`;
+    next.message = `熔糖巨怪待爆发 · ${missing.join(' / ') || '糖心校准中'}`;
   } else if (next.player.mass >= RING_COMPLETION_MASS) {
     next.message = '三环糖釉已完整 · 收集夹心并解除糖核锚点';
   } else if (!next.message.includes('·') || next.elapsed % 3 < dt) {

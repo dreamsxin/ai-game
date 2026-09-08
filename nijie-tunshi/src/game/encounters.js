@@ -13,7 +13,6 @@ export const createEncounterState = () => ({
   route: null,
   phaseShortcut: false,
   phaseIgnited: false,
-  anchors: { north: 2, south: 2, phase: 1 },
   coreUnlocked: false,
   brokenStructures: [],
 });
@@ -26,12 +25,17 @@ export function encounterForMass(mass) {
   return stage;
 }
 
+export function anchorCleared(anchors, id) {
+  const anchor = anchors.find((candidate) => candidate.id === id);
+  return !anchor || anchor.integrity <= 0;
+}
+
 export function updateEncounter(state) {
   const nextStage = encounterForMass(state.player.mass);
   state.encounter.stage = nextStage.id;
   if (!state.encounter.route && state.player.x > -2) {
     state.encounter.route = state.player.z < 5 ? 'swift' : 'steady';
   }
-  state.encounter.coreUnlocked = state.encounter.anchors.north <= 0 && state.encounter.anchors.south <= 0;
+  state.encounter.coreUnlocked = anchorCleared(state.anchors, 'north') && anchorCleared(state.anchors, 'south');
   return nextStage.label;
 }
