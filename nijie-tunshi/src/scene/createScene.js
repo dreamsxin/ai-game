@@ -4,14 +4,29 @@ import { ambientOffset, burstDirection, profileFor, seedFor } from '../game/effe
 import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitState, stageChargeProgress } from '../game/progression.js';
 import { POLARITY_FLIP_DURATION } from '../game/universes.js';
 import { CANDY_LIGHTING, lightingState } from '../game/lighting.js';
+import { voxelProfileFor, voxelSurface } from './voxel.js';
 
-const geometryFor = (object) => {
-  const size = object.size;
-  if (object.type === 'orb') return new THREE.IcosahedronGeometry(size, 2);
-  if (object.type === 'cylinder') return new THREE.CylinderGeometry(size * 0.68, size * 0.82, size * 2, 16);
-  if (object.type === 'cube') return new THREE.BoxGeometry(size * 1.55, size * 1.55, size * 1.55);
-  if (object.type === 'prism') return new THREE.CylinderGeometry(size, size, size * 1.7, 3);
-  return new THREE.OctahedronGeometry(size, object.type === 'core' ? 1 : 0);
+// 体素几何按“形状 + 分辨率”缓存，缩放交给 mesh.scale，避免每个对象重复构网格。
+const voxelGeometryCache = new Map();
+const voxelGeometry = (shape, resolution) => {
+  const key = `${shape}|${resolution}`;
+  const cached = voxelGeometryCache.get(key);
+  if (cached) return cached;
+  const { positions, normals, uvs } = voxelSurface(shape, resolution);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  voxelGeometryCache.set(key, geometry);
+  return geometry;
+};
+
+// 归一化体素网格 + 按类型半轴缩放，替代原先的平滑几何。
+const voxelMesh = (type, size, material) => {
+  const profile = voxelProfileFor(type);
+  const mesh = new THREE.Mesh(voxelGeometry(profile.shape, profile.resolution), material);
+  mesh.scale.set(profile.scale[0] * size, profile.scale[1] * size, profile.scale[2] * size);
+  return mesh;
 };
 
 const rgbColor = (hue, saturation = 0.86, lightness = 0.68) => new THREE.Color().setHSL(hue % 1, saturation, lightness);
@@ -124,15 +139,16 @@ const createLabel = (text, color) => {
 
 const addCandyGlints = (mesh, object) => {
   const glints = new THREE.Group();
-  const geometry = new THREE.SphereGeometry(1, 12, 8);
+  // 父网格已归一化到 [-1, 1] 并由 mesh.scale 放大，糖霜高光用局部归一化坐标。
+  const geometry = voxelGeometry('box', 2);
   const positions = [
     [-0.32, 0.36, 0.42, 0.13],
     [0.34, 0.2, 0.48, 0.085],
   ];
   for (const [x, y, z, size] of positions) {
     const glint = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.86 }));
-    glint.position.set(x * object.size, y * object.size, z * object.size);
-    glint.scale.setScalar(object.size * size);
+    glint.position.set(x, y, z);
+    glint.scale.setScalar(size);
     glints.add(glint);
   }
   mesh.add(glints);
@@ -160,10 +176,8 @@ const orbitalPoint = (orbit, angle, target = new THREE.Vector3()) => {
 
 function createSatelliteVisual(definition) {
   const group = new THREE.Group();
-  const core = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(definition.size, 2),
-    glowMaterial(definition.color),
-  );
+  const core = new THREE.Mesh(voxelGeometry('sphere', 6), glowMaterial(definition.color));
+  core.scale.setScalar(definition.size);
   const halo = new THREE.Mesh(
     new THREE.SphereGeometry(definition.size * 2.1, 12, 8),
     new THREE.MeshBasicMaterial({ color: definition.color, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -171,7 +185,7 @@ function createSatelliteVisual(definition) {
   group.add(core, halo);
   const trail = new THREE.Group();
   const trailParticles = [];
-  const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
+  const particleGeometry = voxelGeometry('box', 2);
   for (let index = 0; index < 7; index += 1) {
     const phase = index / 7;
     const material = new THREE.MeshBasicMaterial({
@@ -430,7 +444,8 @@ export function createScene(host) {
   const anchorMeshes = new Map();
   for (const anchor of LEVEL.anchors) {
     const group = new THREE.Group();
-    const shell = new THREE.Mesh(new THREE.OctahedronGeometry(anchor.radius, 1), glowMaterial(anchor.color));
+    const shell = new THREE.Mesh(voxelGeometry('octahedron', 7), glowMaterial(anchor.color));
+    shell.scale.setScalar(anchor.radius);
     const cage = new THREE.Mesh(new THREE.TorusGeometry(anchor.radius * 1.35, 0.06, 8, 40), glowMaterial(anchor.color, 0.62));
     cage.rotation.x = Math.PI / 2;
     group.add(shell, cage);
@@ -450,7 +465,7 @@ export function createScene(host) {
   const ambientSwarms = new Map();
   const labels = new Map();
   for (const object of LEVEL.objects) {
-    const mesh = new THREE.Mesh(geometryFor(object), glowMaterial(object.color));
+    const mesh = voxelMesh(object.type, object.size, glowMaterial(object.color));
     mesh.position.set(object.x, object.size * 0.72, object.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -497,11 +512,13 @@ export function createScene(host) {
 
   const player = new THREE.Group();
   const bodyMaterial = glowMaterial(0xffb1e8);
-  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 4), bodyMaterial);
+  // 玩家糖心分辨率高于普通糖果怪，保证放大后仍能读出方块层次。
+  const body = new THREE.Mesh(voxelGeometry('sphere', 12), bodyMaterial);
   body.castShadow = true;
   player.add(body);
   const shellMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.2 });
-  const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(1.08, 2), shellMaterial);
+  const shell = new THREE.Mesh(voxelGeometry('sphere', 6), shellMaterial);
+  shell.scale.setScalar(1.08);
   player.add(shell);
   const ringGroup = new THREE.Group();
   const ringMaterials = [];
