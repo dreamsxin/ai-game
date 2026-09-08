@@ -187,4 +187,52 @@ export function segmentBlocked(grid, from, to) {
   return false;
 }
 
+// 从一点开始的洪泛，返回可达格位图。验证器用它判断"成长后是否还能回到出口"。
+export function reachableFrom(grid, point) {
+  const raw = worldToCell(grid, point.x, point.z);
+  const seed = nearestOpenCell(grid, raw.col, raw.row);
+  const visited = new Uint8Array(grid.cols * grid.rows);
+  if (!seed) return visited;
+  const queue = [cellIndex(grid, seed.col, seed.row)];
+  visited[queue[0]] = 1;
+  while (queue.length) {
+    const current = queue.pop();
+    const col = current % grid.cols;
+    const row = (current - col) / grid.cols;
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nextCol = col + dc;
+      const nextRow = row + dr;
+      if (isBlocked(grid, nextCol, nextRow)) continue;
+      const next = cellIndex(grid, nextCol, nextRow);
+      if (visited[next]) continue;
+      visited[next] = 1;
+      queue.push(next);
+    }
+  }
+  return visited;
+}
+
+export const cellReachable = (grid, visited, point) => {
+  const cell = worldToCell(grid, point.x, point.z);
+  const open = nearestOpenCell(grid, cell.col, cell.row);
+  if (!open) return false;
+  return visited[cellIndex(grid, open.col, open.row)] === 1;
+};
+
+// 验证用的严格可达性：只接受目标格自身或紧邻一圈中真正被洪泛标记过的格。
+// 不能复用 nearestOpenCell —— 它会向外搜索 6 环，足以跨过一道墙落到另一个连通域，
+// 从而把"被封死的目标"误判成可达。
+export function targetReachable(grid, visited, point, ring = 1) {
+  const cell = worldToCell(grid, point.x, point.z);
+  for (let dr = -ring; dr <= ring; dr += 1) {
+    for (let dc = -ring; dc <= ring; dc += 1) {
+      const col = cell.col + dc;
+      const row = cell.row + dr;
+      if (isBlocked(grid, col, row)) continue;
+      if (visited[cellIndex(grid, col, row)] === 1) return true;
+    }
+  }
+  return false;
+}
+
 
