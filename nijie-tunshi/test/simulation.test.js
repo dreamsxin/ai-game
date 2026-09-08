@@ -7,8 +7,8 @@ import {
   restartCurrentUniverse, step, togglePause,
 } from '../src/game/simulation.js';
 import {
-  massToCross, OVERLOAD_STABILITY_COST, STABILITY_MAX, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS,
-  STELLAR_STABILITY_TARGET, stellarIgnitionReady,
+  canPull, massToCross, massToPull, OVERLOAD_STABILITY_COST, STABILITY_MAX, STELLAR_FUEL_TARGET,
+  STELLAR_IGNITION_MASS, STELLAR_STABILITY_TARGET, stellarIgnitionReady,
 } from '../src/game/rules.js';
 import { createReplayAgent } from './helpers/replayAgent.js';
 
@@ -377,6 +377,55 @@ test('a narrow gate lets a small heart through and closes permanently after grow
   grown.player.z = southFace - 5;
   grown = advance(grown, { x: 0, z: 1 }, 4);
   assert.ok(grown.player.z < southFace, `超过上限后窄门应关闭，实际 z=${grown.player.z}`);
+});
+
+test('pull eligibility scales with mass and never includes the candy furnace', () => {
+  const core = LEVEL.objects.find((object) => object.id === 'core');
+  const shard = LEVEL.objects.find((object) => object.id === 'shard-a');
+  const crystal = LEVEL.objects.find((object) => object.id === 'crystal-2');
+
+  assert.equal(canPull({ mass: 12 }, { ...shard, active: true }), true, '解锁牵引时应能拉动糖屑');
+  assert.equal(canPull({ mass: 12 }, { ...crystal, active: true }), false, '小身位不应拉动糖晶簇');
+  assert.ok(
+    canPull({ mass: massToPull(crystal.mass) + 1 }, { ...crystal, active: true }),
+    '质量足够后应能拉动糖晶簇',
+  );
+  assert.equal(canPull({ mass: 999 }, { ...core, active: true }), false, '糖心熔炉永不参与自动吸附');
+  assert.equal(canPull({ mass: 999 }, { ...shard, active: false }), false, '已吞噬的对象不参与吸附');
+});
+
+test('an unbroken candy panel blocks the pull line until it is smashed', () => {
+  const panel = LEVEL.structures.find((structure) => structure.id === 'crystal-panel');
+
+  // 用糖屑而不是普通糖果怪：糖屑不会自主逃离，位移只可能来自牵引
+  const build = () => {
+    const state = createGame();
+    state.player.mass = 12;
+    state.player.radius = radiusForMass(12);
+    state.player.x = panel.x + 2.4;
+    state.player.z = panel.z;
+    const shard = state.objects.find((object) => object.id === 'shard-a');
+    shard.x = panel.x - 2.6;
+    shard.z = panel.z;
+    return { state, startX: shard.x };
+  };
+
+  const blockedRun = build();
+  const blocked = advance(blockedRun.state, { gravityHeld: true }, 1);
+  const stillThere = blocked.objects.find((object) => object.id === 'shard-a');
+  assert.ok(
+    Math.abs(stillThere.x - blockedRun.startX) < 1e-6,
+    `糖壳板未破时不应被牵引穿透，实际位移 ${stillThere.x - blockedRun.startX}`,
+  );
+
+  const openRun = build();
+  openRun.state.structures.find((structure) => structure.id === 'crystal-panel').active = false;
+  const open = advance(openRun.state, { gravityHeld: true }, 1);
+  const pulled = open.objects.find((object) => object.id === 'shard-a');
+  assert.ok(
+    pulled.x > openRun.startX + 0.1,
+    `糖壳板破除后应被拉向玩家，实际位移 ${pulled.x - openRun.startX}`,
+  );
 });
 
 test('phase anchor only breaks while phase is active', () => {

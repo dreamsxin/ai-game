@@ -5,8 +5,8 @@ import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
 import { createUniverseProgress, POLARITY_FLIP_DURATION, universeForIndex } from './universes.js';
 import {
-  ASCENSION_MASS, applyStabilityPenalty, canConsume, canCrossObstacle, canPassGate, consumePower,
-  IMPACT_SPEED_THRESHOLD, IMPACT_STABILITY_COST, INITIAL_RADIUS, isOverloadConsume,
+  ASCENSION_MASS, applyStabilityPenalty, canConsume, canCrossObstacle, canPassGate, canPull,
+  consumePower, IMPACT_SPEED_THRESHOLD, IMPACT_STABILITY_COST, INITIAL_RADIUS, isOverloadConsume,
   MAX_NAVIGATION_RADIUS, OVERLOAD_STABILITY_COST, passageHeight, radiusForMass, recoverStability,
   RING_COMPLETION_MASS, resultStars, STABILITY_MAX, stellarIgnitionReady, STELLAR_FUEL_TARGET,
   STELLAR_STABILITY_TARGET,
@@ -166,16 +166,25 @@ function stageIndexForMass(mass, ignited = false) {
   return index;
 }
 
-function lineBlocked(from, to, mass = 0) {
-  for (const obstacle of LEVEL.obstacles) {
-    // 能翻过去的矮墙不再遮挡糖引力，否则"可跨越"与"可牵引"两套规则会互相矛盾
-    if (canCrossObstacle(mass, obstacle)) continue;
+// 遮挡与跨越规则保持一致：能翻过去的矮墙、能挤过去的窄门都不遮挡糖引力，
+// 否则"能过去"与"能牵引"两套规则会互相矛盾。未破坏的糖壳板与糖雾门是实体，一律遮挡。
+function pullBlockers(state) {
+  const mass = state.player.mass;
+  return [
+    ...LEVEL.obstacles.filter((obstacle) => !canCrossObstacle(mass, obstacle)),
+    ...(LEVEL.gates ?? []).filter((gate) => !canPassGate(mass, gate)),
+    ...state.structures.filter((structure) => structure.active),
+  ];
+}
+
+function lineBlocked(from, to, blockers) {
+  for (const blocker of blockers) {
     const steps = 12;
     for (let index = 1; index < steps; index += 1) {
       const amount = index / steps;
       const x = from.x + (to.x - from.x) * amount;
       const z = from.z + (to.z - from.z) * amount;
-      if (Math.abs(x - obstacle.x) <= obstacle.width / 2 && Math.abs(z - obstacle.z) <= obstacle.depth / 2) return true;
+      if (Math.abs(x - blocker.x) <= blocker.width / 2 && Math.abs(z - blocker.z) <= blocker.depth / 2) return true;
     }
   }
   return false;
@@ -183,12 +192,13 @@ function lineBlocked(from, to, mass = 0) {
 
 function updateGravityObjects(state, dt) {
   const gravityActive = state.player.abilities.gravity.active;
+  const blockers = pullBlockers(state);
   for (const object of state.objects) {
     if (!object.active) continue;
     const dx = state.player.x - object.x;
     const dz = state.player.z - object.z;
     const distance = Math.hypot(dx, dz);
-    const blocked = lineBlocked(object, state.player, state.player.mass);
+    const blocked = lineBlocked(object, state.player, blockers);
     if (object.polarity === 'dark') {
       const consumeReady = object.type === 'core'
         ? state.encounter.coreUnlocked
@@ -218,7 +228,7 @@ function updateGravityObjects(state, dt) {
       }
       continue;
     }
-    if (!gravityActive || !object.gravity || distance > ABILITIES.gravity.radius || distance < 0.01 || blocked) continue;
+    if (!gravityActive || !canPull(state.player, object) || distance > ABILITIES.gravity.radius || distance < 0.01 || blocked) continue;
     const force = ABILITIES.gravity.strength * (1 - distance / ABILITIES.gravity.radius);
     object.vx += (dx / distance) * force * dt;
     object.vz += (dz / distance) * force * dt;

@@ -58,6 +58,21 @@ export function massToCross(height) {
   return required * required * MASS_PER_RADIUS;
 }
 
+// 牵引资格：目标质量不超过玩家质量的这个比例。取代早期的 gravity 白名单。
+// 0.18 的效果：质量 12 解锁牵引时只能拉动 2.2 以下的糖屑，
+// 质量 60 能拉到 10.8，质量 130 能拉到 23.4，糖心熔炉（52）始终拉不动。
+export const GRAVITY_MASS_RATIO = 0.18;
+
+export function canPull(player, object) {
+  if (!object.active) return false;
+  // 糖心熔炉是关卡主门槛，永不参与自动吸附，避免玩家在岔路口被迫升级
+  if (object.type === 'core') return false;
+  return object.mass <= player.mass * GRAVITY_MASS_RATIO;
+}
+
+// 恰好能拉动某质量目标所需的玩家质量，供文档与验证器换算。
+export const massToPull = (objectMass) => objectMass / GRAVITY_MASS_RATIO;
+
 export function isOverloadConsume(player, object) {
   return player.mass >= OVERLOAD_SAFE_MASS && object.mass > player.mass;
 }
