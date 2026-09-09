@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRandom, createRng } from '../src/game/random.js';
 import { DEFAULT_RECIPE, generateLevel, levelMetrics } from '../src/game/generator.js';
 import { validateLevel } from '../src/game/validator.js';
+import { createGame, step } from '../src/game/simulation.js';
 import { canPassGate, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS } from '../src/game/rules.js';
 
 test('the same seed always yields the same random sequence', () => {
@@ -88,6 +89,27 @@ test('gates never sit on an anchor, the core or the exit', () => {
       }
     }
   }
+});
+
+test('a generated level can actually be played, not just validated', () => {
+  const { level } = generateLevel({ seed: 6100 });
+  let state = createGame(6100, {}, level);
+  assert.equal(state.level, level, '关卡应随局保存，模拟层不再读模块级 LEVEL');
+  assert.equal(state.player.x, level.start.x);
+  assert.ok(state.maxObjectReach > 0, '触及上界应按本局关卡算出');
+
+  // 直接把玩家放到最轻的对象上：追着吃会被逃离行为干扰，这里只验证吞噬链路通
+  const lightest = state.objects.reduce((best, object) => (object.mass < best.mass ? object : best));
+  state.player.x = lightest.x;
+  state.player.z = lightest.z;
+  state = step(state, {}, 1 / 60);
+  assert.equal(state.collected, 1, '生成关卡上的对象必须能被吞噬');
+  assert.ok(state.player.mass > 0);
+
+  // 边界钳制要用生成关卡自己的 bounds，而不是首关的
+  state.player.x = level.bounds.maxX + 50;
+  state = step(state, { x: 1, z: 0 }, 1 / 60);
+  assert.ok(state.player.x <= level.bounds.maxX, `玩家应被钳制在本局边界内，实际 ${state.player.x}`);
 });
 
 test('objects ascend in mass along the corridor so the growth chain holds', () => {

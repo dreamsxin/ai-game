@@ -45,12 +45,12 @@ export function createReplayAgent() {
 
   const clearPath = () => { path = null; pathSlot = 0; pathKey = ''; };
 
-  const ensureGrid = (player) => {
+  const ensureGrid = (player, level) => {
     const radius = quantizeRadius(player);
     // 网格同时取决于半径、可跨越墙体和窄门开合，三者任一变化都要重建
-    const key = `${radius}|${crossSignature(player.mass)}|${gateSignature(player.mass)}`;
+    const key = `${radius}|${crossSignature(player.mass, level)}|${gateSignature(player.mass, level)}`;
     if (!grid || key !== gridKey) {
-      grid = createNavGrid(radius, player.mass);
+      grid = createNavGrid(radius, player.mass, level);
       gridKey = key;
       clearPath();
     }
@@ -73,6 +73,7 @@ export function createReplayAgent() {
     stats() { return { ...stats }; },
     snapshot(state) {
       if (!active || state.status !== 'playing') return {};
+      const level = state.level ?? LEVEL;
       const node = ROUTE[index];
       if (!node) { active = false; return {}; }
       let target;
@@ -83,21 +84,21 @@ export function createReplayAgent() {
         target = state.anchors.find((anchor) => anchor.id === node.id && anchor.active);
         if (!target) { index += 1; clearPath(); return this.snapshot(state); }
       } else if (node.kind === 'exit') {
-        target = LEVEL.exit;
+        target = level.exit;
       } else {
         target = node;
       }
 
       const player = state.player;
       const distance = Math.hypot(target.x - player.x, target.z - player.z);
-      const arrival = node.kind === 'exit' ? LEVEL.exit.radius : node.kind === 'anchor' ? 1.4 : 1.9;
+      const arrival = node.kind === 'exit' ? level.exit.radius : node.kind === 'anchor' ? 1.4 : 1.9;
       if (distance <= arrival && node.kind === 'point') {
         index += 1;
         clearPath();
         return this.snapshot(state);
       }
 
-      const navGrid = ensureGrid(player);
+      const navGrid = ensureGrid(player, level);
       const key = `${index}|${node.kind}|${node.id ?? `${target.x},${target.z}`}`;
       sinceReplan += 1;
       const stale = key !== pathKey || !path || pathSlot >= path.length || sinceReplan >= REPLAN_INTERVAL;

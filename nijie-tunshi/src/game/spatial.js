@@ -9,8 +9,8 @@ import { LEVEL } from './level.js';
 
 export const SPATIAL_CELL_SIZE = 4;
 
-export function createSpatialIndex(objects, cellSize = SPATIAL_CELL_SIZE) {
-  const { minX, maxX, minZ, maxZ } = LEVEL.bounds;
+export function createSpatialIndex(objects, level = LEVEL, cellSize = SPATIAL_CELL_SIZE) {
+  const { minX, maxX, minZ, maxZ } = level.bounds;
   const cols = Math.max(1, Math.ceil((maxX - minX) / cellSize));
   const rows = Math.max(1, Math.ceil((maxZ - minZ) / cellSize));
   const buckets = new Map();

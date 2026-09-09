@@ -23,9 +23,10 @@ const COMBO_WINDOW = 2.7;
 // 因此这条约束在当前关卡不改变行为，是为程序生成留的护栏。
 export const MAX_PULLS_PER_STEP = 12;
 // 吞噬接触判定的最大附加触及距离，用来算空间查询半径，不能漏判。
-const MAX_OBJECT_REACH = Math.max(...LEVEL.objects.map((object) => object.size)) * 0.72;
+// 随关卡而变，因此在建局时算一次存进 state，而不是模块级常量。
+const maxObjectReach = (level) => Math.max(...level.objects.map((object) => object.size)) * 0.72;
 
-const cloneLevelObjects = (universeDefinition) => LEVEL.objects.map((object) => {
+const cloneLevelObjects = (universeDefinition, level) => level.objects.map((object) => {
   const polarity = universeDefinition.id === 'antimatter' && object.fuel
     ? universeDefinition.darkFuelIds?.includes(object.id) ? 'dark' : 'light'
     : 'neutral';
@@ -39,33 +40,36 @@ const cloneLevelObjects = (universeDefinition) => LEVEL.objects.map((object) => 
     active: true,
   };
 });
-const cloneStructures = () => LEVEL.structures.map((structure) => ({ ...structure, active: true }));
-const cloneAnchors = () => LEVEL.anchors.map((anchor) => ({ ...anchor, integrity: 2, active: true }));
+const cloneStructures = (level) => (level.structures ?? []).map((structure) => ({ ...structure, active: true }));
+const cloneAnchors = (level) => level.anchors.map((anchor) => ({ ...anchor, integrity: 2, active: true }));
 const navigationRadius = (player) => Math.min(player.radius, MAX_NAVIGATION_RADIUS);
 
 export { radiusForMass };
 
-export function createGame(seed = LEVEL.seed, universeProgress = {}) {
+export function createGame(seed = LEVEL.seed, universeProgress = {}, level = LEVEL) {
   const universe = createUniverseProgress(universeProgress);
   const universeDefinition = universeForIndex(universe.index);
-  const objects = cloneLevelObjects(universeDefinition);
+  const objects = cloneLevelObjects(universeDefinition, level);
   return {
     seed,
     universe,
+    // 关卡随局保存，模拟层不再直接读模块级 LEVEL，生成关卡才能进入实际游玩
+    level,
+    maxObjectReach: maxObjectReach(level),
     status: 'playing',
     elapsed: 0,
     ascensionElapsed: 0,
     ascensionLevel: 1,
     player: {
-      x: LEVEL.start.x, z: LEVEL.start.z, vx: 0, vz: -0.8, mass: 0, radius: INITIAL_RADIUS,
+      x: level.start.x, z: level.start.z, vx: 0, vz: -0.8, mass: 0, radius: INITIAL_RADIUS,
       integrity: 100, fuel: 0, stability: STABILITY_MAX, ignited: false, ignitionAttempts: 0,
       stabilityPenaltyCooldown: 0, stabilityRecoveryDelay: 0,
       fuelCollected: 0, stabilityLowest: STABILITY_MAX,
       abilities: createAbilityState(), combo: 0, comboRemaining: 0, highestCombo: 0,
     },
     objects,
-    structures: cloneStructures(),
-    anchors: cloneAnchors(),
+    structures: cloneStructures(level),
+    anchors: cloneAnchors(level),
     encounter: createEncounterState(),
     collected: 0,
     totalMass: objects.reduce((sum, object) => sum + object.mass, 0),
@@ -78,12 +82,12 @@ export function createGame(seed = LEVEL.seed, universeProgress = {}) {
   };
 }
 
-export function resetGame(seed = LEVEL.seed, universeProgress) {
-  return createGame(seed, universeProgress);
+export function resetGame(seed = LEVEL.seed, universeProgress, level = LEVEL) {
+  return createGame(seed, universeProgress, level);
 }
 
 export function restartCurrentUniverse(state) {
-  return createGame(state.seed, state.universe);
+  return createGame(state.seed, state.universe, state.level ?? LEVEL);
 }
 
 export function enterNextUniverse(state) {
@@ -98,7 +102,7 @@ export function enterNextUniverse(state) {
     bestCombo: Math.max(state.universe.bestCombo, state.result.highestCombo ?? 0),
     completedRuns: state.universe.completedRuns + 1,
     discoveredRules: [...state.universe.discoveredRules, nextDefinition.rule],
-  });
+  }, state.level ?? LEVEL);
 }
 
 function pushEvent(state, collection, event) {
@@ -153,15 +157,16 @@ function pushObjectOutOfRect(object, rect) {
 }
 
 function confineObject(state, object) {
-  for (const obstacle of LEVEL.obstacles) pushObjectOutOfRect(object, obstacle);
+  const level = state.level;
+  for (const obstacle of level.obstacles) pushObjectOutOfRect(object, obstacle);
   // 糖果怪没有玩家的跨越能力，窄门与所有墙体对它们一律有效
-  for (const gate of LEVEL.gates ?? []) pushObjectOutOfRect(object, gate);
+  for (const gate of level.gates ?? []) pushObjectOutOfRect(object, gate);
   for (const structure of state.structures) {
     if (structure.active) pushObjectOutOfRect(object, structure);
   }
   const radius = object.size * 0.5;
-  object.x = Math.max(LEVEL.bounds.minX + radius, Math.min(LEVEL.bounds.maxX - radius, object.x));
-  object.z = Math.max(LEVEL.bounds.minZ + radius, Math.min(LEVEL.bounds.maxZ - radius, object.z));
+  object.x = Math.max(level.bounds.minX + radius, Math.min(level.bounds.maxX - radius, object.x));
+  object.z = Math.max(level.bounds.minZ + radius, Math.min(level.bounds.maxZ - radius, object.z));
 }
 
 function stageIndexForMass(mass, ignited = false) {
@@ -178,8 +183,8 @@ function stageIndexForMass(mass, ignited = false) {
 function pullBlockers(state) {
   const mass = state.player.mass;
   return [
-    ...LEVEL.obstacles.filter((obstacle) => !canCrossObstacle(mass, obstacle)),
-    ...(LEVEL.gates ?? []).filter((gate) => !canPassGate(mass, gate)),
+    ...state.level.obstacles.filter((obstacle) => !canCrossObstacle(mass, obstacle)),
+    ...(state.level.gates ?? []).filter((gate) => !canPassGate(mass, gate)),
     ...state.structures.filter((structure) => structure.active),
   ];
 }
@@ -328,7 +333,7 @@ function collectObjects(state, index) {
   const player = state.player;
   const previousStage = stageIndexForMass(player.mass);
   // 触及距离最大为 半径 + 最大 size × 0.72，按此半径查询邻域不会漏判
-  const reach = player.radius + MAX_OBJECT_REACH;
+  const reach = player.radius + state.maxObjectReach;
   const nearby = queryRadius(index, player.x, player.z, reach);
   let collectedThisStep = 0;
   for (const slot of nearby) {
@@ -380,8 +385,9 @@ export function isAscensionUnlocked(state) {
 }
 
 export function canEnterExit(state) {
-  const distance = Math.hypot(state.player.x - LEVEL.exit.x, state.player.z - LEVEL.exit.z);
-  return isAscensionUnlocked(state) && distance <= LEVEL.exit.radius + state.player.radius * 0.35;
+  const exit = state.level.exit;
+  const distance = Math.hypot(state.player.x - exit.x, state.player.z - exit.z);
+  return isAscensionUnlocked(state) && distance <= exit.radius + state.player.radius * 0.35;
 }
 
 export function step(state, input = {}, dt = STEP) {
@@ -439,12 +445,12 @@ export function step(state, input = {}, dt = STEP) {
   player.x += player.vx * dt;
   player.z += player.vz * dt;
   let blocked = false;
-  for (const obstacle of LEVEL.obstacles) {
+  for (const obstacle of next.level.obstacles) {
     // 体型足够高就直接从矮墙上滚过，这条规则是"成长解锁路线"的载体
     if (canCrossObstacle(player.mass, obstacle)) continue;
     if (resolveRect(player, obstacle)) blocked = true;
   }
-  for (const gate of LEVEL.gates ?? []) {
+  for (const gate of next.level.gates ?? []) {
     // 窄门相反：体型越大越过不去，超过上限即永久关闭
     if (canPassGate(player.mass, gate)) continue;
     if (resolveRect(player, gate)) blocked = true;
@@ -466,14 +472,14 @@ export function step(state, input = {}, dt = STEP) {
   recoverStability(player, dt);
   player.stabilityLowest = Math.min(player.stabilityLowest, player.stability);
   const collisionRadius = navigationRadius(player);
-  player.x = Math.max(LEVEL.bounds.minX + collisionRadius, Math.min(LEVEL.bounds.maxX - collisionRadius, player.x));
-  player.z = Math.max(LEVEL.bounds.minZ + collisionRadius, Math.min(LEVEL.bounds.maxZ - collisionRadius, player.z));
+  player.x = Math.max(next.level.bounds.minX + collisionRadius, Math.min(next.level.bounds.maxX - collisionRadius, player.x));
+  player.z = Math.max(next.level.bounds.minZ + collisionRadius, Math.min(next.level.bounds.maxZ - collisionRadius, player.z));
   // 索引在移动阶段之后重建一次：牵引与逃离都会改变对象位置，
   // 吞噬判定必须用最新位置查询，否则刚被拉近的糖屑会漏吃一帧。
-  updateGravityObjects(next, dt, createSpatialIndex(next.objects));
+  updateGravityObjects(next, dt, createSpatialIndex(next.objects, next.level));
   updateAnchors(next, dt);
-  updateCreatures(next, dt, createSpatialIndex(next.objects));
-  collectObjects(next, createSpatialIndex(next.objects));
+  updateCreatures(next, dt, createSpatialIndex(next.objects, next.level));
+  collectObjects(next, createSpatialIndex(next.objects, next.level));
   next.elapsed += dt;
   const objective = updateEncounter(next);
   if (!next.player.ignited && stellarIgnitionReady(next)) {
