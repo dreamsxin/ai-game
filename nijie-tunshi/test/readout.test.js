@@ -4,8 +4,8 @@ import { LEVEL } from '../src/game/level.js';
 import { massToCross } from '../src/game/rules.js';
 import {
   AVAILABLE_COLOR, DARK_POLARITY_COLOR, GATE_OPEN_OPACITY, GATE_SHUT_OPACITY, LIGHT_POLARITY_COLOR,
-  LIGHT_POLARITY_DIM, UNAVAILABLE_COLOR, gateReadoutState, labelColor, moodTilt, objectLabelState,
-  obstacleLabelState,
+  LIGHT_POLARITY_DIM, UNAVAILABLE_COLOR, gateLabelText, gateReadoutState, labelColor, moodTilt,
+  objectLabelState, obstacleLabelState,
 } from '../src/scene/readout.js';
 
 test('mass labels encode polarity with a sign and availability with colour', () => {
@@ -79,6 +79,19 @@ test('mood tilt leans along the axis facing the player', () => {
   assert.ok(Number.isFinite(same.rotationX) && Number.isFinite(same.rotationZ), '重合时不应产生 NaN');
 
   assert.ok(Math.abs(moodTilt({ x: 5, z: 0 }, player, 0).rotationZ) < 1e-9, '无情绪时不应倾斜');
+});
+
+test('gate labels spell out whichever bounds exist', () => {
+  assert.equal(gateLabelText({ maxMass: 45 }), '≤45', '只有上限时写 ≤N');
+  assert.equal(gateLabelText({ minMass: 12 }), '≥12', '只有下限时写 ≥N');
+  assert.equal(gateLabelText({ minMass: 12, maxMass: 60 }), '12–60', '两侧都有时写区间');
+  assert.equal(gateLabelText({}), '·', '没有门槛时不该显示数字');
+
+  const twoSided = LEVEL.gates.find((gate) => typeof gate.minMass === 'number');
+  assert.ok(twoSided, '首关应至少有一道双侧窄门');
+  assert.equal(gateReadoutState(twoSided.minMass - 1, twoSided).open, false, '低于下限应显示为不可通过');
+  assert.equal(gateReadoutState(twoSided.minMass, twoSided).open, true);
+  assert.equal(gateReadoutState(twoSided.maxMass + 1, twoSided).open, false);
 });
 
 test('label colour has exactly two states', () => {

@@ -8,12 +8,15 @@ export const LEVEL = {
   obstacles: [
     { id: 'wall-a', x: -6, z: 3, width: 3, depth: 8, height: 1.9 },
     { id: 'wall-b', x: 8, z: 7, width: 4, depth: 9, height: 2.7 },
-    { id: 'wall-c', x: -3, z: -9, width: 11, depth: 3, height: 6, unclimbable: true },
+    { id: 'wall-c', x: -7, z: -9, width: 3, depth: 3, height: 6, unclimbable: true },
+    { id: 'wall-c-east', x: 1.25, z: -9, width: 2.5, depth: 3, height: 6, unclimbable: true },
     { id: 'wall-d', x: 16, z: -3, width: 3, depth: 8, height: 3.5 },
   ],
   gates: [
     { id: 'gate-north', x: -9.5, z: 8.5, width: 4.4, depth: 0.9, height: 2.6, maxMass: 18 },
     { id: 'gate-mid', x: 7.5, z: -6.5, width: 0.9, depth: 4.4, height: 3.1, maxMass: 45 },
+    // 贯穿南侧高墙的捷径：要先长到 12 才推得开，超过 60 就挤不过去
+    { id: 'gate-core', x: -2.75, z: -9, width: 5.5, depth: 3, height: 4, minMass: 12, maxMass: 60 },
   ],
   structures: [
     { id: 'crystal-panel', kind: 'breakable', x: -16.4, z: 13, width: 0.55, depth: 5.2, height: 2.8, integrity: 1, color: 0x58ffbf },

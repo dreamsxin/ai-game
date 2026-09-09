@@ -39,12 +39,22 @@ export const GATE_SHUT_EMISSIVE = 0xff62c7;
 export const GATE_OPEN_OPACITY = 0.32;
 export const GATE_SHUT_OPACITY = 0.85;
 
-// 窄门读数：开着时是半透明青绿，关闭后转粉红并加深，让"永久关闭"一眼可见。
+// 窄门标签要同时表达两侧门槛：只有上限写 ≤N，只有下限写 ≥N，两者都有写区间。
+export function gateLabelText(gate) {
+  const hasMin = typeof gate.minMass === 'number';
+  const hasMax = typeof gate.maxMass === 'number';
+  if (hasMin && hasMax) return `${gate.minMass}–${gate.maxMass}`;
+  if (hasMax) return `≤${gate.maxMass}`;
+  if (hasMin) return `≥${gate.minMass}`;
+  return '·';
+}
+
+// 窄门读数：能过时是半透明青绿，过不去转粉红并加深，让"此路不通"一眼可见。
 export function gateReadoutState(mass, gate) {
   const open = canPassGate(mass, gate);
   return {
     open,
-    text: `≤${gate.maxMass}`,
+    text: gateLabelText(gate),
     labelColor: labelColor(open),
     color: open ? GATE_OPEN_COLOR : GATE_SHUT_COLOR,
     emissive: open ? GATE_OPEN_EMISSIVE : GATE_SHUT_EMISSIVE,

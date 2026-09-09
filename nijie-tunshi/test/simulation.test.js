@@ -490,6 +490,33 @@ test('the scripted replay earns two stars and reports every new dimension', () =
   assert.equal(result.stars, 2);
 });
 
+test('a two sided gate needs enough mass to shove open and little enough to squeeze through', () => {
+  const gate = LEVEL.gates.find((candidate) => candidate.id === 'gate-core');
+  assert.equal(typeof gate.minMass, 'number', 'gate-core 应带下限，否则本用例无意义');
+  const northFace = gate.z + gate.depth / 2;
+
+  const runAt = (mass) => {
+    let state = createGame();
+    state.player.mass = mass;
+    state.player.radius = radiusForMass(mass);
+    state.player.x = gate.x;
+    state.player.z = northFace + 5;
+    return advance(state, { x: 0, z: -1 }, 4);
+  };
+
+  const tooSmall = runAt(gate.minMass - 6);
+  assert.ok(tooSmall.player.z > northFace, `质量不足应推不开，实际 z=${tooSmall.player.z}`);
+
+  const justRight = runAt((gate.minMass + gate.maxMass) / 2);
+  assert.ok(
+    justRight.player.z < gate.z - gate.depth / 2,
+    `处在区间内应能穿过，实际 z=${justRight.player.z}`,
+  );
+
+  const tooBig = runAt(gate.maxMass + 20);
+  assert.ok(tooBig.player.z > northFace, `体型过大应挤不过去，实际 z=${tooBig.player.z}`);
+});
+
 test('phase anchor only breaks while phase is active', () => {
   let state = createGame();
   state.player.mass = 32;

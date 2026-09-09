@@ -48,10 +48,13 @@ export function canCrossObstacle(mass, obstacle) {
   return passageHeight(mass) >= obstacle.height + CROSS_SAFE_MARGIN;
 }
 
-// 窄门只看质量上限：体型一旦超过就永久关闭，这是"成长不可逆"的载体。
+// 窄门是双侧约束：质量不足推不开，体型过大挤不过去。
+// 上限承载"成长不可逆"，下限承载"这条捷径要先长到一定程度才能用"。
 export function canPassGate(mass, gate) {
-  if (!gate || typeof gate.maxMass !== 'number') return true;
-  return mass <= gate.maxMass;
+  if (!gate) return true;
+  if (typeof gate.minMass === 'number' && mass < gate.minMass) return false;
+  if (typeof gate.maxMass === 'number' && mass > gate.maxMass) return false;
+  return true;
 }
 
 // 恰好能翻过某高度所需的质量，供关卡标注与验证器使用。

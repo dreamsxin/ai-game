@@ -8,7 +8,10 @@ test('barrier thresholds come from crossing masses and gate caps', () => {
   const thresholds = barrierThresholds();
   assert.equal(thresholds[0], 0, '必须从质量 0 开始采样');
   for (const gate of LEVEL.gates) {
-    assert.ok(thresholds.includes(gate.maxMass), `缺少窄门阈值 ${gate.id}`);
+    for (const bound of [gate.minMass, gate.maxMass]) {
+      if (typeof bound !== 'number') continue;
+      assert.ok(thresholds.includes(bound), `缺少窄门阈值 ${gate.id} @ ${bound}`);
+    }
   }
   const crossable = LEVEL.obstacles.filter((obstacle) => massToCross(obstacle.height) <= STELLAR_IGNITION_MASS);
   for (const obstacle of crossable) {

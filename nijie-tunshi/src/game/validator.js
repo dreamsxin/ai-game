@@ -1,4 +1,4 @@
-﻿import { ABILITIES } from './abilities.js';
+import { ABILITIES } from './abilities.js';
 import { LEVEL } from './level.js';
 import { createNavGrid, isBlocked, reachableFrom, targetReachable } from './navigation.js';
 import {
@@ -22,7 +22,10 @@ export function barrierThresholds() {
     if (mass > 0 && mass <= MAX_SAMPLE_MASS) points.add(Number(mass.toFixed(4)));
   }
   for (const gate of LEVEL.gates ?? []) {
-    if (gate.maxMass >= 0 && gate.maxMass <= MAX_SAMPLE_MASS) points.add(gate.maxMass);
+    // 两侧门槛都会改变网格：下限决定何时推得开，上限决定何时挤不过去
+    for (const bound of [gate.minMass, gate.maxMass]) {
+      if (typeof bound === 'number' && bound >= 0 && bound <= MAX_SAMPLE_MASS) points.add(bound);
+    }
   }
   return [...points].sort((left, right) => left - right);
 }
