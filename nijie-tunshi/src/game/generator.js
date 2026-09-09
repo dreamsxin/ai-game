@@ -51,21 +51,71 @@ const corridorDistance = (point, corridor) => {
   return best;
 };
 
-// 走廊：从出生点到出口的折线，中间点由 seed 抖动，但始终留出边界余量。
+const clampToBounds = (bounds, margin, point) => ({
+  x: Math.max(bounds.minX + margin, Math.min(bounds.maxX - margin, point.x)),
+  z: Math.max(bounds.minZ + margin, Math.min(bounds.maxZ - margin, point.z)),
+});
+
+// 三种布局模板，各自只负责生成中间折点：起点与出口由配方固定，因此
+// "对象沿走廊按质量升序分布"、"墙体离走廊足够远"、"窄门只设下限"这三条
+// 不变量在三种模板下都照样成立。
+export const LAYOUTS = {
+  // 走廊型：起点直奔出口，中段侧向摆动制造回廊感。
+  corridor(rng, recipe, amount) {
+    const { start, exit } = recipe;
+    const sway = Math.sin(amount * Math.PI) * rng.float(-9, 9);
+    return {
+      x: start.x + (exit.x - start.x) * amount + sway,
+      z: start.z + (exit.z - start.z) * amount - sway * 0.5,
+    };
+  },
+  // 折返型：横向来回摆到两侧极限，纵向单调推进。绕行距离远大于直线距离，
+  // 捷径窄门在这种图上才真的是捷径。
+  switchback(rng, recipe, amount, index) {
+    const { bounds, start, exit } = recipe;
+    const center = (bounds.minX + bounds.maxX) / 2;
+    const reach = (bounds.maxX - bounds.minX) * 0.34 * Math.sin(amount * Math.PI) + 3;
+    const side = index % 2 === 0 ? -1 : 1;
+    return {
+      x: center + side * reach + rng.float(-2, 2),
+      z: start.z + (exit.z - start.z) * amount + rng.float(-2.5, 2.5),
+    };
+  },
+  // 螺旋型：绕地图中心由外向内盘 1.5 圈，最后一段接到出口。
+  spiral(rng, recipe, amount) {
+    const { bounds } = recipe;
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+    const turns = 1.5;
+    const angle = rng.float(-0.3, 0.3) + amount * Math.PI * 2 * turns;
+    const outer = Math.min(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) * 0.42;
+    const radius = outer - (outer - 5) * amount;
+    return {
+      x: centerX + Math.cos(angle) * radius,
+      z: centerZ + Math.sin(angle) * radius * 0.78,
+    };
+  },
+};
+
+export const LAYOUT_NAMES = Object.keys(LAYOUTS);
+
+// 墙体离走廊的余量按模板给。折返型的走廊来回扫过整张图，用走廊型那套 6
+// 单位余量就几乎没地方放墙了（实测 8 个种子平均只放下 0.6 道墙），"再吃一个
+// 就能翻过去"这条反馈在那种图上等于不存在。余量下限受寻路半径约束：
+// MAX_NAVIGATION_RADIUS 是 2.35，取 3.5 仍留 1.15 的富余。
+export const LAYOUT_CLEARANCE = { corridor: 6, spiral: 5, switchback: 3.5 };
+
+export const LAYOUT_LABELS = { corridor: '走廊', switchback: '折返', spiral: '螺旋' };
+
+// 走廊：从出生点到出口的折线，中间点由 seed 与模板决定，但始终留出边界余量。
 function buildCorridor(rng, recipe) {
   const { bounds, start, exit, waypoints } = recipe;
+  const shape = LAYOUTS[recipe.layout] ?? LAYOUTS.corridor;
   const margin = 4;
   const corridor = [{ x: start.x, z: start.z }];
   for (let index = 1; index < waypoints - 1; index += 1) {
     const amount = index / (waypoints - 1);
-    const baseX = start.x + (exit.x - start.x) * amount;
-    const baseZ = start.z + (exit.z - start.z) * amount;
-    // 侧向抖动制造回廊感，幅度随中段增大再收回
-    const sway = Math.sin(amount * Math.PI) * rng.float(-9, 9);
-    corridor.push({
-      x: Math.max(bounds.minX + margin, Math.min(bounds.maxX - margin, baseX + sway)),
-      z: Math.max(bounds.minZ + margin, Math.min(bounds.maxZ - margin, baseZ - sway * 0.5)),
-    });
+    corridor.push(clampToBounds(bounds, margin, shape(rng, recipe, amount, index)));
   }
   corridor.push({ x: exit.x, z: exit.z });
   return corridor;
@@ -252,8 +302,11 @@ function buildEndgame(rng, recipe, corridor, objects) {
   return { anchors };
 }
 
-function buildLevel(recipe) {
-  const rng = createRng(recipe.seed);
+function buildLevel(baseRecipe) {
+  const rng = createRng(baseRecipe.seed);
+  // 模板由 seed 决定，因此换图会换骨架而不只是换墙位与配色
+  const layout = baseRecipe.layout ?? rng.pick(LAYOUT_NAMES);
+  const recipe = { ...baseRecipe, layout, corridorClearance: LAYOUT_CLEARANCE[layout] ?? baseRecipe.corridorClearance };
   const corridor = buildCorridor(rng, recipe);
   const walls = buildWalls(rng, recipe, corridor);
   const objects = buildObjects(rng, recipe, corridor);
@@ -264,6 +317,7 @@ function buildLevel(recipe) {
   const gates = buildGates(rng, recipe, corridor, keepClear, objects);
   return {
     seed: recipe.seed,
+    layout,
     bounds: { ...recipe.bounds },
     start: { ...recipe.start },
     exit: { ...recipe.exit },
@@ -300,6 +354,7 @@ export function levelMetrics(level) {
   const richest = fuelSources.reduce((best, object) => Math.max(best, object.fuel), 0);
   const crossable = level.obstacles.filter((obstacle) => !obstacle.unclimbable);
   return {
+    layout: level.layout,
     objectCount: level.objects.length,
     totalMass: Number(totalMass.toFixed(1)),
     massHeadroom: Number((totalMass - STELLAR_IGNITION_MASS).toFixed(1)),
@@ -326,7 +381,7 @@ export function nextMapSlot(slot = HANDMADE_SLOT, stride = SHUFFLE_STRIDE) {
   const seed = (slot?.seed ?? LEVEL_SEED) + stride;
   const { level, attempts } = generateLevel({ seed });
   if (!level) return { ...slot, error: `种子 ${seed} 附近没生成出可用关卡` };
-  return { level, seed: level.seed, generated: true, attempts, label: `种子 ${level.seed}` };
+  return { level, seed: level.seed, generated: true, attempts, label: `${LAYOUT_LABELS[level.layout] ?? level.layout}型 · 种子 ${level.seed}` };
 }
 
 

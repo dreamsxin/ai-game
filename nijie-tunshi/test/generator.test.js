@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRandom, createRng } from '../src/game/random.js';
-import { DEFAULT_RECIPE, generateLevel, HANDMADE_SLOT, levelMetrics, nextMapSlot, SHUFFLE_STRIDE } from '../src/game/generator.js';
+import { DEFAULT_RECIPE, generateLevel, HANDMADE_SLOT, LAYOUT_NAMES, levelMetrics, nextMapSlot, SHUFFLE_STRIDE } from '../src/game/generator.js';
 import { validateLevel } from '../src/game/validator.js';
 import { createNavGrid, reachableFrom, targetReachable } from '../src/game/navigation.js';
 import { createReplayAgent, deriveRoute } from '../src/game/replayAgent.js';
@@ -192,6 +192,48 @@ test('the handmade slot is always reachable again and shuffling is reproducible'
   assert.notEqual(first.level, HANDMADE_SLOT.level);
   // 回手工关就是回到那张手工表，不是重新生成一张
   assert.equal(HANDMADE_SLOT.level.objects.some((object) => object.id === 'orb-1'), true);
+});
+
+// 三种布局模板必须真的给出不同的骨架，否则"多模板"只是三个名字。
+test('every layout template produces a playable level with its own shape', () => {
+  const pathLength = (corridor) => {
+    let total = 0;
+    for (let index = 0; index < corridor.length - 1; index += 1) {
+      total += Math.hypot(corridor[index + 1].x - corridor[index].x, corridor[index + 1].z - corridor[index].z);
+    }
+    return total;
+  };
+  const detour = {};
+  assert.deepEqual(LAYOUT_NAMES, ['corridor', 'switchback', 'spiral']);
+  for (const layout of LAYOUT_NAMES) {
+    let sum = 0;
+    for (let seed = 8600; seed < 8606; seed += 1) {
+      const { level } = generateLevel({ seed, layout });
+      assert.ok(level, `${layout} 在 seed ${seed} 上没生成出关卡`);
+      assert.equal(level.layout, layout, '关卡应记下自己用的是哪个模板');
+      assert.equal(levelMetrics(level).layout, layout);
+      assert.equal(validateLevel(level).ok, true, `${layout} seed ${seed} 未通过验证`);
+      const straight = Math.hypot(level.exit.x - level.start.x, level.exit.z - level.start.z);
+      sum += pathLength(level.corridor) / straight;
+    }
+    detour[layout] = sum / 6;
+  }
+  // 折返型绕行最远，走廊型最短：这是三种模板在结构上真的不同的凭据
+  assert.ok(detour.corridor < 1.6, `走廊型绕行倍数应接近直线，实际 ${detour.corridor.toFixed(2)}`);
+  assert.ok(detour.spiral > detour.corridor + 0.5, `螺旋型应明显绕，实际 ${detour.spiral.toFixed(2)}`);
+  assert.ok(detour.switchback > detour.spiral, `折返型应绕得比螺旋型更远，实际 ${detour.switchback.toFixed(2)}`);
+});
+
+test('layout choice follows the seed so shuffling changes the skeleton', () => {
+  const seen = new Set();
+  for (let seed = 8700; seed < 8730; seed += 1) {
+    const { level } = generateLevel({ seed });
+    assert.ok(LAYOUT_NAMES.includes(level.layout), `未知模板 ${level.layout}`);
+    seen.add(level.layout);
+  }
+  assert.equal(seen.size, LAYOUT_NAMES.length, `30 个种子应覆盖全部模板，实际只出现 ${[...seen].join(',')}`);
+  // 同 seed 仍要给同一个模板
+  assert.equal(generateLevel({ seed: 8700 }).level.layout, generateLevel({ seed: 8700 }).level.layout);
 });
 
 test('the derived route eats light to heavy, then anchors, core and exit', () => {
