@@ -11,17 +11,17 @@ import {
 // 输入是 LEVEL 基础数据（宇宙质量倍率为 1），这是最保守的情形。
 
 const navRadius = (mass) => Math.min(radiusForMass(mass), MAX_NAVIGATION_RADIUS);
-const gridFor = (mass) => createNavGrid(navRadius(mass), mass);
+const gridFor = (mass, level) => createNavGrid(navRadius(mass), mass, level);
 const MAX_SAMPLE_MASS = STELLAR_IGNITION_MASS + 40;
 
-// 网格只在这些质量点发生变化：矮墙变为可跨越、窄门变为关闭。
-export function barrierThresholds() {
+// 网格只在这些质量点发生变化：矮墙变为可跨越、窄门变为开或关。
+export function barrierThresholds(level = LEVEL) {
   const points = new Set([0]);
-  for (const obstacle of LEVEL.obstacles) {
+  for (const obstacle of level.obstacles) {
     const mass = massToCross(obstacle.height);
     if (mass > 0 && mass <= MAX_SAMPLE_MASS) points.add(Number(mass.toFixed(4)));
   }
-  for (const gate of LEVEL.gates ?? []) {
+  for (const gate of level.gates ?? []) {
     // 两侧门槛都会改变网格：下限决定何时推得开，上限决定何时挤不过去
     for (const bound of [gate.minMass, gate.maxMass]) {
       if (typeof bound === 'number' && bound >= 0 && bound <= MAX_SAMPLE_MASS) points.add(bound);
@@ -31,20 +31,20 @@ export function barrierThresholds() {
 }
 
 // 每个阈值刚跨过的那一侧才是新状态，取阈值 + 0.5 作为采样点。
-export function barrierSamples() {
-  const samples = barrierThresholds().map((threshold) => (threshold === 0 ? 0 : threshold + 0.5));
+export function barrierSamples(level = LEVEL) {
+  const samples = barrierThresholds(level).map((threshold) => (threshold === 0 ? 0 : threshold + 0.5));
   samples.push(MAX_SAMPLE_MASS);
   return [...new Set(samples)].sort((left, right) => left - right);
 }
 
-function checkMandatoryReachable(issues) {
-  const mass = STELLAR_IGNITION_MASS;
-  const grid = gridFor(mass);
-  const reach = reachableFrom(grid, LEVEL.start);
+function checkMandatoryReachable(issues, level) {
+  const grid = gridFor(STELLAR_IGNITION_MASS, level);
+  const reach = reachableFrom(grid, level.start);
+  const core = level.objects.find((object) => object.id === 'core');
   const mandatory = [
-    ...LEVEL.anchors.map((anchor) => ({ id: anchor.id, kind: '锚点', x: anchor.x, z: anchor.z })),
-    { id: 'core', kind: '核心', x: LEVEL.objects.find((object) => object.id === 'core').x, z: LEVEL.objects.find((object) => object.id === 'core').z },
-    { id: 'exit', kind: '裂隙出口', x: LEVEL.exit.x, z: LEVEL.exit.z },
+    ...level.anchors.map((anchor) => ({ id: anchor.id, kind: '锚点', x: anchor.x, z: anchor.z })),
+    ...(core ? [{ id: 'core', kind: '核心', x: core.x, z: core.z }] : []),
+    { id: 'exit', kind: '裂隙出口', x: level.exit.x, z: level.exit.z },
   ];
   for (const target of mandatory) {
     if (!targetReachable(grid, reach, target)) {
@@ -55,15 +55,15 @@ function checkMandatoryReachable(issues) {
 
 // 核心检查：玩家在某个体型下能走到的每一格，长大之后必须仍能回到出口。
 // 否则"穿过窄门再长大"就会把自己永久关在里面。
-function checkNoGrowthTrap(issues) {
-  const samples = barrierSamples();
+function checkNoGrowthTrap(issues, level) {
+  const samples = barrierSamples(level);
   for (let index = 0; index < samples.length - 1; index += 1) {
     const before = samples[index];
     const after = samples[index + 1];
-    const gridBefore = gridFor(before);
-    const gridAfter = gridFor(after);
-    const roaming = reachableFrom(gridBefore, LEVEL.start);
-    const exitSide = reachableFrom(gridAfter, LEVEL.exit);
+    const gridBefore = gridFor(before, level);
+    const gridAfter = gridFor(after, level);
+    const roaming = reachableFrom(gridBefore, level.start);
+    const exitSide = reachableFrom(gridAfter, level.exit);
     let trapped = 0;
     let sample = null;
     for (let cell = 0; cell < roaming.length; cell += 1) {
@@ -91,16 +91,16 @@ function checkNoGrowthTrap(issues) {
 }
 
 // 贪心见证：每步吃掉可达且吃得下的最轻目标，证明至少存在一条能完成点火的顺序。
-export function greedyWitness() {
+export function greedyWitness(level = LEVEL) {
   let mass = 0;
   let fuel = 0;
   const consumed = new Set();
   const cleared = new Set();
   const order = [];
-  for (let guard = 0; guard < LEVEL.objects.length + LEVEL.anchors.length + 4; guard += 1) {
-    const grid = gridFor(mass);
-    const reach = reachableFrom(grid, LEVEL.start);
-    for (const anchor of LEVEL.anchors) {
+  for (let guard = 0; guard < level.objects.length + level.anchors.length + 4; guard += 1) {
+    const grid = gridFor(mass, level);
+    const reach = reachableFrom(grid, level.start);
+    for (const anchor of level.anchors) {
       if (cleared.has(anchor.id)) continue;
       if (mass < ABILITIES[anchor.ability].unlockMass) continue;
       if (!targetReachable(grid, reach, anchor)) continue;
@@ -108,7 +108,7 @@ export function greedyWitness() {
       order.push(`解除锚点 ${anchor.id}`);
     }
     const coreUnlocked = cleared.has('north') && cleared.has('south');
-    const candidates = LEVEL.objects
+    const candidates = level.objects
       .filter((object) => !consumed.has(object.id))
       .filter((object) => canConsume({ mass }, { ...object, active: true }, { coreUnlocked }))
       .filter((object) => targetReachable(grid, reach, object))
@@ -120,24 +120,24 @@ export function greedyWitness() {
     fuel = Math.min(STELLAR_FUEL_TARGET, fuel + (target.fuel ?? 0));
     order.push(`吞噬 ${target.id}`);
   }
-  const finalGrid = gridFor(mass);
-  const finalReach = reachableFrom(finalGrid, LEVEL.start);
+  const finalGrid = gridFor(mass, level);
+  const finalReach = reachableFrom(finalGrid, level.start);
   return {
     mass,
     fuel,
     order,
-    anchorsCleared: cleared.size === LEVEL.anchors.length,
+    anchorsCleared: cleared.size === level.anchors.length,
     coreConsumed: consumed.has('core'),
-    exitReachable: targetReachable(finalGrid, finalReach, LEVEL.exit),
+    exitReachable: targetReachable(finalGrid, finalReach, level.exit),
     ignitable: mass >= STELLAR_IGNITION_MASS
       && fuel >= STELLAR_FUEL_TARGET
-      && cleared.size === LEVEL.anchors.length
+      && cleared.size === level.anchors.length
       && consumed.has('core'),
   };
 }
 
-function checkGreedyWitness(issues) {
-  const witness = greedyWitness();
+function checkGreedyWitness(issues, level) {
+  const witness = greedyWitness(level);
   if (!witness.ignitable) {
     issues.push(
       `贪心顺序无法完成点火：质量 ${witness.mass.toFixed(1)}/${STELLAR_IGNITION_MASS}、`
@@ -149,10 +149,10 @@ function checkGreedyWitness(issues) {
   return witness;
 }
 
-export function validateLevel() {
+export function validateLevel(level = LEVEL) {
   const issues = [];
-  checkMandatoryReachable(issues);
-  checkNoGrowthTrap(issues);
-  const witness = checkGreedyWitness(issues);
-  return { ok: issues.length === 0, issues, witness, samples: barrierSamples() };
+  checkMandatoryReachable(issues, level);
+  checkNoGrowthTrap(issues, level);
+  const witness = checkGreedyWitness(issues, level);
+  return { ok: issues.length === 0, issues, witness, samples: barrierSamples(level) };
 }

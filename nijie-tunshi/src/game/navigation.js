@@ -9,16 +9,16 @@ export const NAV_CELL_SIZE = 1;
 
 const cellIndex = (grid, col, row) => col + grid.cols * row;
 
-export function createNavGrid(radius = MAX_NAVIGATION_RADIUS, mass = 0, cellSize = NAV_CELL_SIZE) {
-  const { minX, maxX, minZ, maxZ } = LEVEL.bounds;
+export function createNavGrid(radius = MAX_NAVIGATION_RADIUS, mass = 0, level = LEVEL, cellSize = NAV_CELL_SIZE) {
+  const { minX, maxX, minZ, maxZ } = level.bounds;
   const cols = Math.ceil((maxX - minX) / cellSize);
   const rows = Math.ceil((maxZ - minZ) / cellSize);
   const blocked = new Uint8Array(cols * rows);
-  const grid = { cols, rows, cellSize, minX, minZ, radius, mass, blocked };
+  const grid = { cols, rows, cellSize, minX, minZ, radius, mass, level, blocked };
   // 只有当前体型跨不过去的墙才计入障碍
-  const walls = LEVEL.obstacles.filter((obstacle) => !canCrossObstacle(mass, obstacle));
+  const walls = level.obstacles.filter((obstacle) => !canCrossObstacle(mass, obstacle));
   // 只有当前体型挤不过去的窄门才计入障碍
-  const gates = (LEVEL.gates ?? []).filter((gate) => !canPassGate(mass, gate));
+  const gates = (level.gates ?? []).filter((gate) => !canPassGate(mass, gate));
   const barriers = [...walls, ...gates];
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
@@ -38,12 +38,12 @@ export function createNavGrid(radius = MAX_NAVIGATION_RADIUS, mass = 0, cellSize
 }
 
 // 当前体型下窄门的开合状态，用于给网格缓存做键。
-export const gateSignature = (mass) => (LEVEL.gates ?? [])
+export const gateSignature = (mass, level = LEVEL) => (level.gates ?? [])
   .map((gate) => (canPassGate(mass, gate) ? '1' : '0'))
   .join('');
 
 // 当前体型下可跨越墙体的状态，同样参与缓存键。
-export const crossSignature = (mass) => LEVEL.obstacles
+export const crossSignature = (mass, level = LEVEL) => level.obstacles
   .map((obstacle) => (canCrossObstacle(mass, obstacle) ? '1' : '0'))
   .join('');
 

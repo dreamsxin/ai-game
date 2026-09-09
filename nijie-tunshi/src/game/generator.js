@@ -1,0 +1,303 @@
+import { createRng } from './random.js';
+import { LEVEL_SEED } from './level.js';
+import { massToCross, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS } from './rules.js';
+import { validateLevel } from './validator.js';
+
+// 种子关卡生成器。核心思路不是"随机撒点再靠验证器筛"，而是让结构本身
+// 排除掉最难修的失败模式：
+//
+// 1. 先铺一条从出生点到出口的开放走廊，全程不放窄门 —— 主干永远连通。
+// 2. 墙体只放在离走廊足够远的位置，绝不横断主干。
+// 3. 窄门只架在"走廊上相距很远、但空间上很近"的两点之间，因此它永远
+//    只是捷径。关掉任何窄门都不会切断通路，成长陷阱在结构上不可能出现。
+// 4. 对象沿走廊按质量升序分布，成长链天然成立。
+//
+// 验证器仍然要跑，但它的角色是护栏而非筛子。
+
+export const DEFAULT_RECIPE = {
+  seed: LEVEL_SEED,
+  bounds: { minX: -26, maxX: 26, minZ: -18, maxZ: 22 },
+  start: { x: -19, z: 13 },
+  exit: { x: 20, z: -13, radius: 2.4 },
+  waypoints: 7,
+  objectCount: 20,
+  wallCount: 4,
+  gateCount: 2,
+  // 质量与燃料留足余量：点火要 130 与 100，余量吸收玩家的漏吃
+  massBudget: STELLAR_IGNITION_MASS * 1.8,
+  fuelBudget: STELLAR_FUEL_TARGET * 1.5,
+  fuelSources: 6,
+  corridorClearance: 6,
+  palette: [0x58ffbf, 0xff9df2, 0x7df3ff, 0xffb257, 0xff6e9f, 0xb8ff5c, 0xffdf6d, 0xff62c7],
+};
+
+const TYPE_BY_TIER = ['orb', 'orb', 'cylinder', 'cube', 'prism', 'crystal'];
+
+const distanceToSegment = (point, from, to) => {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  const lengthSquared = dx * dx + dz * dz;
+  if (lengthSquared < 1e-9) return Math.hypot(point.x - from.x, point.z - from.z);
+  let t = ((point.x - from.x) * dx + (point.z - from.z) * dz) / lengthSquared;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(point.x - (from.x + dx * t), point.z - (from.z + dz * t));
+};
+
+const corridorDistance = (point, corridor) => {
+  let best = Infinity;
+  for (let index = 0; index < corridor.length - 1; index += 1) {
+    best = Math.min(best, distanceToSegment(point, corridor[index], corridor[index + 1]));
+  }
+  return best;
+};
+
+// 走廊：从出生点到出口的折线，中间点由 seed 抖动，但始终留出边界余量。
+function buildCorridor(rng, recipe) {
+  const { bounds, start, exit, waypoints } = recipe;
+  const margin = 4;
+  const corridor = [{ x: start.x, z: start.z }];
+  for (let index = 1; index < waypoints - 1; index += 1) {
+    const amount = index / (waypoints - 1);
+    const baseX = start.x + (exit.x - start.x) * amount;
+    const baseZ = start.z + (exit.z - start.z) * amount;
+    // 侧向抖动制造回廊感，幅度随中段增大再收回
+    const sway = Math.sin(amount * Math.PI) * rng.float(-9, 9);
+    corridor.push({
+      x: Math.max(bounds.minX + margin, Math.min(bounds.maxX - margin, baseX + sway)),
+      z: Math.max(bounds.minZ + margin, Math.min(bounds.maxZ - margin, baseZ - sway * 0.5)),
+    });
+  }
+  corridor.push({ x: exit.x, z: exit.z });
+  return corridor;
+}
+
+// 沿走廊按弧长均匀取点，用于放置对象、锚点与核心。
+function sampleCorridor(corridor, amount) {
+  const lengths = [];
+  let total = 0;
+  for (let index = 0; index < corridor.length - 1; index += 1) {
+    const length = Math.hypot(
+      corridor[index + 1].x - corridor[index].x,
+      corridor[index + 1].z - corridor[index].z,
+    );
+    lengths.push(length);
+    total += length;
+  }
+  let target = Math.max(0, Math.min(1, amount)) * total;
+  for (let index = 0; index < lengths.length; index += 1) {
+    if (target <= lengths[index] || index === lengths.length - 1) {
+      const t = lengths[index] < 1e-9 ? 0 : target / lengths[index];
+      return {
+        x: corridor[index].x + (corridor[index + 1].x - corridor[index].x) * t,
+        z: corridor[index].z + (corridor[index + 1].z - corridor[index].z) * t,
+      };
+    }
+    target -= lengths[index];
+  }
+  return { ...corridor[corridor.length - 1] };
+}
+
+// 墙体只放在离走廊足够远的位置，绝不横断主干。高度取自成长阈值阶梯，
+// 因此"再吃一个就能翻过去"这件事在生成图里同样成立。
+function buildWalls(rng, recipe, corridor) {
+  const heights = [1.9, 2.7, 3.5];
+  const walls = [];
+  for (let attempt = 0; attempt < recipe.wallCount * 40 && walls.length < recipe.wallCount; attempt += 1) {
+    const x = rng.float(recipe.bounds.minX + 6, recipe.bounds.maxX - 6);
+    const z = rng.float(recipe.bounds.minZ + 6, recipe.bounds.maxZ - 6);
+    const width = rng.float(3, 7);
+    const depth = rng.float(3, 7);
+    const unclimbable = rng.chance(0.25);
+    const height = unclimbable ? 6 : rng.pick(heights);
+    // 半对角线加余量：保证整块墙体都在走廊之外
+    const clearance = Math.hypot(width, depth) / 2 + recipe.corridorClearance;
+    if (corridorDistance({ x, z }, corridor) < clearance) continue;
+    if (walls.some((wall) => Math.hypot(wall.x - x, wall.z - z) < 8)) continue;
+    walls.push({
+      id: `wall-${walls.length + 1}`,
+      x: Number(x.toFixed(2)),
+      z: Number(z.toFixed(2)),
+      width: Number(width.toFixed(2)),
+      depth: Number(depth.toFixed(2)),
+      height,
+      ...(unclimbable ? { unclimbable: true } : {}),
+    });
+  }
+  return walls;
+}
+
+// 窄门只架在"走廊上相距很远、空间上很近"的两点之间，因此永远只是捷径。
+// 这是成长陷阱在结构上不可能出现的原因。
+function buildGates(rng, recipe, corridor, keepClear) {
+  const gates = [];
+  const pairs = [];
+  for (let left = 0; left < corridor.length; left += 1) {
+    for (let right = left + 2; right < corridor.length; right += 1) {
+      const span = Math.hypot(corridor[right].x - corridor[left].x, corridor[right].z - corridor[left].z);
+      if (span > 30) continue;
+      pairs.push({ left, right, span });
+    }
+  }
+  // 优先取"走廊上绕得最远、空间上却很近"的组合，那才是真正的捷径
+  const ordered = rng.shuffle(pairs)
+    .sort((a, b) => ((b.right - b.left) - (a.right - a.left)) || (a.span - b.span));
+  for (const pair of ordered) {
+    if (gates.length >= recipe.gateCount) break;
+    const from = corridor[pair.left];
+    const to = corridor[pair.right];
+    const midpoint = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
+    if (gates.some((gate) => Math.hypot(gate.x - midpoint.x, gate.z - midpoint.z) < 7)) continue;
+    // 开口必须宽于两倍导航半径，否则膨胀本身就把通道封死
+    const width = rng.float(5.5, 7);
+    const depth = rng.float(5.5, 7);
+    // 点火质量下所有窄门都是关着的（maxMass 远低于 130）。若窄门压在锚点、
+    // 核心或出口上，那个目标就永久不可达 —— 这是早期实测里 12/30 个种子
+    // 失败的唯一原因，必须显式让位。
+    const footprint = Math.hypot(width, depth) / 2 + 4;
+    if (keepClear.some((point) => Math.hypot(point.x - midpoint.x, point.z - midpoint.z) < footprint)) continue;
+    const maxMass = rng.int(20, 70);
+    const hasMin = rng.chance(0.45);
+    gates.push({
+      id: `gate-${gates.length + 1}`,
+      x: Number(midpoint.x.toFixed(2)),
+      z: Number(midpoint.z.toFixed(2)),
+      width: Number(width.toFixed(2)),
+      depth: Number(depth.toFixed(2)),
+      height: 3.2,
+      ...(hasMin ? { minMass: rng.int(6, 14) } : {}),
+      maxMass,
+    });
+  }
+  return gates;
+}
+
+// 对象沿走廊按质量升序分布：走得越远，能吃的越大，成长链天然成立。
+function buildObjects(rng, recipe, corridor) {
+  const count = Math.max(8, recipe.objectCount);
+  // 曲线陡缓与总预算都随 seed 浮动，否则每张图的成长阶梯完全一样，
+  // "程序生成"就只剩换墙位和换配色
+  const curve = rng.float(1.5, 2.4);
+  const massBudget = recipe.massBudget * rng.float(0.9, 1.25);
+  const fuelBudget = recipe.fuelBudget * rng.float(0.92, 1.2);
+  const weights = [];
+  for (let index = 0; index < count; index += 1) {
+    weights.push((index + 1) ** curve);
+  }
+  const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
+  const objects = [];
+  for (let index = 0; index < count; index += 1) {
+    const amount = (index + 0.5) / count;
+    const spot = sampleCorridor(corridor, amount);
+    const mass = Math.max(1, Number(((weights[index] / weightTotal) * massBudget).toFixed(2)));
+    const tier = Math.min(TYPE_BY_TIER.length - 1, Math.floor(amount * TYPE_BY_TIER.length));
+    objects.push({
+      id: `obj-${index + 1}`,
+      type: TYPE_BY_TIER[tier],
+      x: Number((spot.x + rng.float(-1.6, 1.6)).toFixed(2)),
+      z: Number((spot.z + rng.float(-1.6, 1.6)).toFixed(2)),
+      size: Number((0.6 + Math.sqrt(mass) * 0.22).toFixed(2)),
+      mass,
+      color: rng.pick(recipe.palette),
+    });
+  }
+  // 燃料摊在靠后的对象上，但要跨足够多的来源，漏掉一个不至于点不了火
+  const sourceCount = Math.max(5, recipe.fuelSources + rng.int(-1, 2));
+  const fuelSlots = rng.shuffle(objects.slice(Math.floor(count * 0.35)).map((object) => object.id))
+    .slice(0, sourceCount);
+  const perSource = fuelBudget / fuelSlots.length;
+  for (const id of fuelSlots) {
+    const object = objects.find((candidate) => candidate.id === id);
+    object.fuel = Number(perSource.toFixed(1));
+  }
+  return objects;
+}
+
+// 锚点与核心排在走廊末段：三枚锚点各绑定一种能力，核心在锚点之后。
+function buildEndgame(rng, recipe, corridor, objects) {
+  const anchors = [
+    { id: 'north', ability: 'dash', at: 0.74, color: 0xffb257 },
+    { id: 'south', ability: 'gravity', at: 0.82, color: 0x58ffbf },
+    { id: 'phase', ability: 'phase', at: 0.9, color: 0xff62c7 },
+  ].map((anchor) => {
+    const spot = sampleCorridor(corridor, anchor.at);
+    return {
+      id: anchor.id,
+      ability: anchor.ability,
+      x: Number((spot.x + rng.float(-2, 2)).toFixed(2)),
+      z: Number((spot.z + rng.float(-2, 2)).toFixed(2)),
+      radius: anchor.id === 'phase' ? 1.05 : 1.15,
+      color: anchor.color,
+    };
+  });
+
+  // 核心复用走廊末段最重的那个对象位置，改名为 core 并标记 protected
+  const heaviest = objects.reduce((best, object) => (object.mass > best.mass ? object : best), objects[0]);
+  heaviest.id = 'core';
+  heaviest.type = 'core';
+  heaviest.protected = true;
+  heaviest.color = 0xffffff;
+  return { anchors };
+}
+
+function buildLevel(recipe) {
+  const rng = createRng(recipe.seed);
+  const corridor = buildCorridor(rng, recipe);
+  const walls = buildWalls(rng, recipe, corridor);
+  const objects = buildObjects(rng, recipe, corridor);
+  const { anchors } = buildEndgame(rng, recipe, corridor, objects);
+  // 窄门最后放：必须知道锚点、核心与出口在哪，才能给它们让位
+  const core = objects.find((object) => object.id === 'core');
+  const keepClear = [...anchors, core, recipe.exit].filter(Boolean);
+  const gates = buildGates(rng, recipe, corridor, keepClear);
+  return {
+    seed: recipe.seed,
+    bounds: { ...recipe.bounds },
+    start: { ...recipe.start },
+    exit: { ...recipe.exit },
+    obstacles: walls,
+    gates,
+    // 结构（可破坏糖板、糖雾门）留待后续模板扩展，当前生成图不放
+    structures: [],
+    anchors,
+    objects,
+    corridor,
+  };
+}
+
+// 生成并验证。验证器是护栏而不是筛子：结构已排除成长陷阱，
+// 因此重试主要用于兜住墙体摆放偶然堵死某个目标这类边角情况。
+export function generateLevel(overrides = {}, maxAttempts = 12) {
+  const base = { ...DEFAULT_RECIPE, ...overrides };
+  const failures = [];
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const recipe = { ...base, seed: base.seed + attempt };
+    const level = buildLevel(recipe);
+    const report = validateLevel(level);
+    if (report.ok) return { level, recipe, report, attempts: attempt + 1, failures };
+    failures.push({ seed: recipe.seed, issues: report.issues });
+  }
+  return { level: null, recipe: base, report: null, attempts: maxAttempts, failures };
+}
+
+// 给关卡算一份速览指标，供批量体检与节奏调参使用。
+export function levelMetrics(level) {
+  const totalMass = level.objects.reduce((sum, object) => sum + object.mass, 0);
+  const fuelSources = level.objects.filter((object) => object.fuel);
+  const totalFuel = fuelSources.reduce((sum, object) => sum + object.fuel, 0);
+  const richest = fuelSources.reduce((best, object) => Math.max(best, object.fuel), 0);
+  const crossable = level.obstacles.filter((obstacle) => !obstacle.unclimbable);
+  return {
+    objectCount: level.objects.length,
+    totalMass: Number(totalMass.toFixed(1)),
+    massHeadroom: Number((totalMass - STELLAR_IGNITION_MASS).toFixed(1)),
+    totalFuel: Number(totalFuel.toFixed(1)),
+    fuelSources: fuelSources.length,
+    // 漏掉最大燃料来源后是否仍能凑满
+    fuelSpareAfterMiss: Number((totalFuel - richest - STELLAR_FUEL_TARGET).toFixed(1)),
+    wallCount: level.obstacles.length,
+    gateCount: level.gates.length,
+    crossThresholds: crossable.map((obstacle) => Number(massToCross(obstacle.height).toFixed(1))).sort((a, b) => a - b),
+  };
+}
+
+
