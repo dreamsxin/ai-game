@@ -392,7 +392,9 @@ function updateBurst(burst, age) {
   return progress >= 1;
 }
 
-export function createScene(host) {
+// 关卡静态几何（墙体、窄门、锚点、对象、出口）在建场时一次性铺好，
+// 因此换图必须重建场景 —— level 是建场参数，不是运行时可切换的状态。
+export function createScene(host, level = LEVEL) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(CANDY_LIGHTING.background);
   scene.fog = new THREE.FogExp2(CANDY_LIGHTING.background, 0.025);
@@ -434,7 +436,7 @@ export function createScene(host) {
   scene.add(grid);
 
   const structureMeshes = new Map();
-  for (const structure of LEVEL.structures) {
+  for (const structure of level.structures) {
     const material = glowMaterial(structure.color, structure.kind === 'phaseable' ? 0.38 : 0.78);
     material.side = THREE.DoubleSide;
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(structure.width, structure.height, structure.depth), material);
@@ -450,7 +452,7 @@ export function createScene(host) {
   }
 
   const anchorMeshes = new Map();
-  for (const anchor of LEVEL.anchors) {
+  for (const anchor of level.anchors) {
     const group = new THREE.Group();
     const shell = new THREE.Mesh(voxelGeometry('octahedron', 7), voxelGlowMaterial(anchor.color));
     shell.scale.setScalar(anchor.radius);
@@ -472,7 +474,7 @@ export function createScene(host) {
   const objectMeshes = new Map();
   const ambientSwarms = new Map();
   const labels = new Map();
-  for (const object of LEVEL.objects) {
+  for (const object of level.objects) {
     const mesh = voxelMesh(object.type, object.size, voxelGlowMaterial(object.color));
     mesh.position.set(object.x, object.size * 0.72, object.z);
     mesh.castShadow = true;
@@ -492,7 +494,7 @@ export function createScene(host) {
   }
 
   const obstacleLabels = new Map();
-  for (const obstacle of LEVEL.obstacles) {
+  for (const obstacle of level.obstacles) {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(obstacle.width, obstacle.height, obstacle.depth),
       new THREE.MeshStandardMaterial({ color: 0x3a1732, emissive: 0x6d244f, emissiveIntensity: 0.65, roughness: 0.42 }),
@@ -511,7 +513,7 @@ export function createScene(host) {
 
   const gateMeshes = new Map();
   const gateLabels = new Map();
-  for (const gate of LEVEL.gates ?? []) {
+  for (const gate of level.gates ?? []) {
     const initial = gateReadoutState(0, gate);
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(gate.width, gate.height, gate.depth),
@@ -532,18 +534,18 @@ export function createScene(host) {
 
   const exit = new THREE.Group();
   const exitRing = new THREE.Mesh(
-    new THREE.TorusGeometry(LEVEL.exit.radius, 0.18, 12, 48),
+    new THREE.TorusGeometry(level.exit.radius, 0.18, 12, 48),
     glowMaterial(0xff5f8f, 0.65),
   );
   exitRing.rotation.x = Math.PI / 2;
   exit.add(exitRing);
   const exitBeam = new THREE.Mesh(
-    new THREE.CylinderGeometry(LEVEL.exit.radius * 0.72, LEVEL.exit.radius * 1.1, 5.5, 24, 1, true),
+    new THREE.CylinderGeometry(level.exit.radius * 0.72, level.exit.radius * 1.1, 5.5, 24, 1, true),
     glowMaterial(0xff5f8f, 0.1),
   );
   exitBeam.position.y = 2.75;
   exit.add(exitBeam);
-  exit.position.set(LEVEL.exit.x, 0.1, LEVEL.exit.z);
+  exit.position.set(level.exit.x, 0.1, level.exit.z);
   scene.add(exit);
 
   const player = new THREE.Group();
@@ -672,7 +674,7 @@ export function createScene(host) {
   observer.observe(host);
   resize();
 
-  let previous = { x: LEVEL.start.x, z: LEVEL.start.z };
+  let previous = { x: level.start.x, z: level.start.z };
   return {
     render(state, time) {
       spawnCollectionBursts(state.collectionEvents, time);
@@ -784,7 +786,7 @@ export function createScene(host) {
       shell.rotation.y += 0.003 + stage.energy * 0.006;
       previous = { x: playerState.x, z: playerState.z };
       // 标签与窄门状态全部由 readout.js 的纯函数派生，便于单独测试
-      for (const obstacle of LEVEL.obstacles) {
+      for (const obstacle of level.obstacles) {
         const label = obstacleLabels.get(obstacle.id);
         if (!label) continue;
         const readout = obstacleLabelState(playerState.mass, obstacle);
@@ -794,7 +796,7 @@ export function createScene(host) {
           label.material.needsUpdate = true;
         }
       }
-      for (const gate of LEVEL.gates ?? []) {
+      for (const gate of level.gates ?? []) {
         const mesh = gateMeshes.get(gate.id);
         const label = gateLabels.get(gate.id);
         const readout = gateReadoutState(playerState.mass, gate);

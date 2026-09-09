@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRandom, createRng } from '../src/game/random.js';
-import { DEFAULT_RECIPE, generateLevel, levelMetrics } from '../src/game/generator.js';
+import { DEFAULT_RECIPE, generateLevel, HANDMADE_SLOT, levelMetrics, nextMapSlot, SHUFFLE_STRIDE } from '../src/game/generator.js';
 import { validateLevel } from '../src/game/validator.js';
 import { createGame, step } from '../src/game/simulation.js';
 import { canPassGate, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS } from '../src/game/rules.js';
@@ -124,3 +124,39 @@ test('objects ascend in mass along the corridor so the growth chain holds', () =
   assert.ok(level.objects.some((object) => object.id === 'core'), '必须有糖心熔炉');
   assert.equal(DEFAULT_RECIPE.objectCount, 20);
 });
+
+// UI 的"换一张图"没有自动化覆盖，但换图的判定本身是纯函数，必须能单独验证。
+test('shuffling maps walks the seed forward and keeps every slot playable', () => {
+  assert.equal(HANDMADE_SLOT.generated, false, '初始槽位应是手工关');
+  let slot = HANDMADE_SLOT;
+  const seeds = new Set();
+  const layouts = new Set();
+  for (let round = 0; round < 6; round += 1) {
+    const before = slot;
+    slot = nextMapSlot(slot);
+    assert.ok(!slot.error, `第 ${round} 次换图失败: ${slot.error}`);
+    assert.equal(slot.generated, true);
+    // 生成器可能重试若干次，所以落点是 stride 之后而不是正好等于
+    assert.ok(slot.seed >= before.seed + SHUFFLE_STRIDE, `种子必须往前走，${before.seed} -> ${slot.seed}`);
+    assert.equal(validateLevel(slot.level).ok, true, `种子 ${slot.seed} 的关卡没通过验证`);
+    seeds.add(slot.seed);
+    layouts.add(JSON.stringify(slot.level.corridor));
+    // 换到的图必须真能建局并吞噬，否则 UI 换过去就是一张死图
+    const state = createGame(slot.seed, {}, slot.level);
+    assert.equal(state.level, slot.level);
+    assert.equal(state.objects.length, slot.level.objects.length);
+  }
+  assert.equal(seeds.size, 6, '每次换图都应是新种子');
+  assert.equal(layouts.size, 6, `走廊布局应各不相同，实际只有 ${layouts.size} 种`);
+});
+
+test('the handmade slot is always reachable again and shuffling is reproducible', () => {
+  const first = nextMapSlot(HANDMADE_SLOT);
+  const again = nextMapSlot(HANDMADE_SLOT);
+  assert.equal(first.seed, again.seed, '同一槽位换图必须可复现');
+  assert.equal(JSON.stringify(first.level), JSON.stringify(again.level));
+  assert.notEqual(first.level, HANDMADE_SLOT.level);
+  // 回手工关就是回到那张手工表，不是重新生成一张
+  assert.equal(HANDMADE_SLOT.level.objects.some((object) => object.id === 'orb-1'), true);
+});
+

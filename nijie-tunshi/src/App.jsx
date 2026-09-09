@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Atom, CirclePause, Gauge, Magnet, Play, RotateCcw, Sparkles, Zap } from 'lucide-react';
+import { Atom, CirclePause, Dices, Gauge, Magnet, Play, RotateCcw, Sparkles, Zap } from 'lucide-react';
 import { ABILITIES, abilityUnlocked } from './game/abilities.js';
+import { HANDMADE_SLOT, nextMapSlot } from './game/generator.js';
 import { createInput } from './game/input.js';
 import { createReplayAgent } from './game/replayAgent.js';
 import { stageChargeProgress } from './game/progression.js';
@@ -69,7 +70,9 @@ export default function App() {
   const sceneRef = useRef(null);
   const inputRef = useRef(null);
   const replayRef = useRef(createReplayAgent());
-  const gameRef = useRef(createGame());
+  const [slot, setSlot] = useState(HANDMADE_SLOT);
+  const gameRef = useRef(null);
+  if (!gameRef.current) gameRef.current = createGame(slot.seed, {}, slot.level);
   const [view, setView] = useState(gameRef.current);
 
   const commit = useCallback((next) => {
@@ -78,7 +81,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const scene = createScene(hostRef.current);
+    const scene = createScene(hostRef.current, slot.level);
     const input = createInput(() => {
       gameRef.current = togglePause(gameRef.current);
       input.clear();
@@ -121,7 +124,8 @@ export default function App() {
       sceneRef.current = null;
       inputRef.current = null;
     };
-  }, []);
+    // 关卡几何在建场时铺好，换图只能整场重建
+  }, [slot.level]);
 
   const restart = () => {
     replayRef.current?.stop();
@@ -133,6 +137,19 @@ export default function App() {
     inputRef.current?.clear();
     commit(enterNextUniverse(gameRef.current));
   };
+  const swapLevel = (target) => {
+    replayRef.current?.stop();
+    inputRef.current?.clear();
+    if (target.error) {
+      setSlot({ ...slot, error: target.error });
+      return;
+    }
+    gameRef.current = createGame(target.seed, {}, target.level);
+    setSlot(target);
+    setView(gameRef.current);
+  };
+  const shuffleLevel = () => swapLevel(nextMapSlot(slot));
+  const backToHandmade = () => swapLevel(HANDMADE_SLOT);
   const toggleReplay = () => {
     if (replayRef.current?.isActive()) {
       replayRef.current.stop();
@@ -161,9 +178,11 @@ export default function App() {
     <main className={`game-shell is-${view.status}`}>
       <div ref={hostRef} className="scene" aria-label="糖怪吞噬三维游戏场景" />
       <header className="topbar">
-        <div className="brand"><Sparkles size={18} /><strong>糖怪吞噬</strong><span>U{String(view.universe.index).padStart(2, '0')} · {view.universe.name} · {view.universe.rule}</span></div>
+        <div className="brand"><Sparkles size={18} /><strong>糖怪吞噬</strong><span>U{String(view.universe.index).padStart(2, '0')} · {view.universe.name} · {view.universe.rule} · {slot.label}</span></div>
         <div className="top-actions">
-          <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} title="自动演示完整通关流程">{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
+          <button className={`route-button ${slot.generated ? 'is-active' : ''}`} onClick={shuffleLevel} title="用新种子生成一张关卡"><Dices size={15} />换一张图</button>
+          {slot.generated && <button className="route-button" onClick={backToHandmade} title="回到手工关">回手工关</button>}
+          <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} disabled={slot.generated} title={slot.generated ? '演示路线是为手工关编排的，生成关卡上无效' : '自动演示完整通关流程'}>{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
           <span className="timer">{formatTime(view.elapsed)}</span>
           <button className="icon-button" onClick={() => commit(togglePause(gameRef.current))} title={view.status === 'paused' ? '继续' : '暂停'}>
             {view.status === 'paused' ? <Play size={19} /> : <CirclePause size={19} />}
@@ -198,7 +217,7 @@ export default function App() {
       </section>
 
       {view.player.combo > 1 && <div className="combo"><span>RESONANCE</span><strong>×{view.player.combo}</strong><i style={{ width: `${(view.player.comboRemaining / 2.7) * 100}%` }} /></div>}
-      <section className="status-line"><Gauge size={15} /><span>{view.message}</span></section>
+      <section className="status-line"><Gauge size={15} /><span>{slot.error ?? view.message}</span></section>
 
       <VirtualStick input={inputRef} />
       <div className="mobile-actions">

@@ -1,5 +1,5 @@
 import { createRng } from './random.js';
-import { LEVEL_SEED } from './level.js';
+import { LEVEL, LEVEL_SEED } from './level.js';
 import { massToCross, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS } from './rules.js';
 import { validateLevel } from './validator.js';
 
@@ -299,5 +299,22 @@ export function levelMetrics(level) {
     crossThresholds: crossable.map((obstacle) => Number(massToCross(obstacle.height).toFixed(1))).sort((a, b) => a - b),
   };
 }
+
+// 换图槽位。UI 只需要在两个槽位之间切换：手工关与当前生成关。
+// 这里做成纯函数，是因为渲染层拿不到自动化覆盖，换图的判定逻辑
+// 至少要能被单独验证。
+export const SHUFFLE_STRIDE = 977;
+
+export const HANDMADE_SLOT = { level: LEVEL, seed: LEVEL.seed, generated: false, label: '手工关' };
+
+// 生成失败时保留当前槽位并挂上 error：宁可玩家继续玩当前这张图，
+// 也不能把关卡置空让场景炸掉。
+export function nextMapSlot(slot = HANDMADE_SLOT, stride = SHUFFLE_STRIDE) {
+  const seed = (slot?.seed ?? LEVEL_SEED) + stride;
+  const { level, attempts } = generateLevel({ seed });
+  if (!level) return { ...slot, error: `种子 ${seed} 附近没生成出可用关卡` };
+  return { level, seed: level.seed, generated: true, attempts, label: `种子 ${level.seed}` };
+}
+
 
 
