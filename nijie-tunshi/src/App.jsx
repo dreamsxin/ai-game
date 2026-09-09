@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Atom, CirclePause, Dices, Gauge, Magnet, Play, RotateCcw, Sparkles, Zap } from 'lucide-react';
+import { CalendarDays, Atom, CirclePause, Dices, Gauge, Magnet, Play, RotateCcw, Sparkles, Zap } from 'lucide-react';
 import { ABILITIES, abilityUnlocked } from './game/abilities.js';
-import { HANDMADE_SLOT, nextMapSlot } from './game/generator.js';
+import { dailySlot, dateKeyOf, HANDMADE_SLOT, nextMapSlot } from './game/generator.js';
 import { createInput } from './game/input.js';
 import { createReplayAgent } from './game/replayAgent.js';
 import { stageChargeProgress } from './game/progression.js';
@@ -149,6 +149,8 @@ export default function App() {
     setView(gameRef.current);
   };
   const shuffleLevel = () => swapLevel(nextMapSlot(slot));
+  // 读时钟只发生在这里：dailySlot 本身只吃日期字符串
+  const loadDaily = () => swapLevel(dailySlot(dateKeyOf(new Date())));
   const backToHandmade = () => swapLevel(HANDMADE_SLOT);
   const toggleReplay = () => {
     if (replayRef.current?.isActive()) {
@@ -180,7 +182,8 @@ export default function App() {
       <header className="topbar">
         <div className="brand"><Sparkles size={18} /><strong>糖怪吞噬</strong><span>U{String(view.universe.index).padStart(2, '0')} · {view.universe.name} · {view.universe.rule} · {slot.label}</span></div>
         <div className="top-actions">
-          <button className={`route-button ${slot.generated ? 'is-active' : ''}`} onClick={shuffleLevel} title="用新种子生成一张关卡"><Dices size={15} />换一张图</button>
+          <button className={`route-button ${slot.daily ? 'is-active' : ''}`} onClick={loadDaily} title="载入今天的每日关卡，同一天所有人玩同一张图"><CalendarDays size={15} />每日</button>
+          <button className={`route-button ${slot.generated && !slot.daily ? 'is-active' : ''}`} onClick={shuffleLevel} title="用新种子生成一张关卡"><Dices size={15} />换一张图</button>
           {slot.generated && <button className="route-button" onClick={backToHandmade} title="回到手工关">回手工关</button>}
           <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} title="自动演示完整通关流程">{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
           <span className="timer">{formatTime(view.elapsed)}</span>

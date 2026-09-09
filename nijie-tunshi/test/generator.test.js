@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRandom, createRng } from '../src/game/random.js';
-import { DEFAULT_RECIPE, generateLevel, HANDMADE_SLOT, LAYOUT_NAMES, levelMetrics, nextMapSlot, SHUFFLE_STRIDE } from '../src/game/generator.js';
+import { DEFAULT_RECIPE, dailySeed, dailySlot, dateKeyOf, generateLevel, HANDMADE_SLOT, LAYOUT_NAMES, levelMetrics, nextMapSlot, SHUFFLE_STRIDE } from '../src/game/generator.js';
 import { validateLevel } from '../src/game/validator.js';
 import { createNavGrid, findPath, reachableFrom, targetReachable } from '../src/game/navigation.js';
 import { createReplayAgent, deriveRoute } from '../src/game/replayAgent.js';
@@ -274,6 +274,49 @@ test('layout choice follows the seed so shuffling changes the skeleton', () => {
   assert.equal(seen.size, LAYOUT_NAMES.length, `30 个种子应覆盖全部模板，实际只出现 ${[...seen].join(',')}`);
   // 同 seed 仍要给同一个模板
   assert.equal(generateLevel({ seed: 8700 }).level.layout, generateLevel({ seed: 8700 }).level.layout);
+});
+
+// 每日关卡唯一需要保证的性质就是"同一天同一张图"，所以纯函数只吃日期串。
+test('the daily map is fixed per date and different across dates', () => {
+  assert.equal(dateKeyOf(new Date(2026, 8, 9)), '2026-09-09');
+  assert.equal(dateKeyOf(new Date(2026, 0, 1)), '2026-01-01', '月和日都要补零');
+  assert.equal(dailySeed('2026-09-09'), dailySeed('2026-09-09'));
+  assert.notEqual(dailySeed('2026-09-09'), dailySeed('2026-09-10'));
+
+  const today = dailySlot('2026-09-09');
+  const again = dailySlot('2026-09-09');
+  assert.ok(!today.error, today.error);
+  assert.equal(today.daily, '2026-09-09');
+  assert.equal(today.generated, true);
+  assert.equal(JSON.stringify(today.level), JSON.stringify(again.level), '同一天必须给同一张图');
+  assert.match(today.label, /^每日 2026-09-09 · .+型$/);
+
+  const tomorrow = dailySlot('2026-09-10');
+  assert.notEqual(JSON.stringify(today.level.corridor), JSON.stringify(tomorrow.level.corridor));
+});
+
+test('every daily map in a two month window is generated and reachable', () => {
+  const seeds = new Set();
+  const corridors = new Set();
+  const layouts = new Set();
+  const start = new Date(2026, 8, 1);
+  for (let offset = 0; offset < 60; offset += 1) {
+    const key = dateKeyOf(new Date(start.getFullYear(), start.getMonth(), start.getDate() + offset));
+    const slot = dailySlot(key);
+    assert.ok(!slot.error, `${key} 没生成出关卡：${slot.error}`);
+    assert.equal(validateLevel(slot.level).ok, true, `${key} 的关卡未通过验证`);
+    seeds.add(slot.seed);
+    corridors.add(JSON.stringify(slot.level.corridor));
+    layouts.add(slot.level.layout);
+
+    const grid = createNavGrid(0.9, STELLAR_IGNITION_MASS, slot.level);
+    const visited = reachableFrom(grid, slot.level.start);
+    const missing = slot.level.objects.filter((object) => !targetReachable(grid, visited, object));
+    assert.equal(missing.length, 0, `${key} 点火质量下有 ${missing.length} 个对象够不到`);
+  }
+  assert.equal(seeds.size, 60, '60 天应给出 60 个不同种子');
+  assert.equal(corridors.size, 60, '60 天应给出 60 条不同走廊');
+  assert.equal(layouts.size, LAYOUT_NAMES.length, `每日关卡应覆盖全部模板，实际 ${[...layouts].join(',')}`);
 });
 
 test('the derived route eats light to heavy, then anchors, core and exit', () => {

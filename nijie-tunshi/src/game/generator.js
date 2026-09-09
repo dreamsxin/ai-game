@@ -438,5 +438,44 @@ export function nextMapSlot(slot = HANDMADE_SLOT, stride = SHUFFLE_STRIDE) {
   return { level, seed: level.seed, generated: true, attempts, label: `${LAYOUT_LABELS[level.layout] ?? level.layout}型 · 种子 ${level.seed}` };
 }
 
+// 每日种子。同一天开出同一张图，配上已有的星级结算就是一个每日挑战。
+//
+// 日期字符串由调用方传入，纯函数里不读时钟 —— 否则这段逻辑就没法测，
+// 而"同一天必须给同一张图"恰恰是唯一需要保证的性质。
+export const dateKeyOf = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-');
+
+// FNV-1a：把日期串散成 uint32。
+//
+// 一开始我以为这是必需的 —— 相邻日期只差 1，直接当种子会给出相邻序列。
+// 实测不成立：把 20260901 到 20260928 直接当种子，28 天里有 27 条不同
+// 走廊，mulberry32 自己就把相邻种子打散了。留着散列的真实理由只有一条：
+// 日期串的格式从此是自由的，不用把 "2026-09-09" 解析成数字。
+export function dailySeed(dateKey) {
+  let hash = 2166136261;
+  for (let index = 0; index < dateKey.length; index += 1) {
+    hash ^= dateKey.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function dailySlot(dateKey) {
+  const seed = dailySeed(dateKey);
+  const { level, attempts } = generateLevel({ seed });
+  if (!level) return { ...HANDMADE_SLOT, error: `${dateKey} 的每日关卡没生成出来` };
+  return {
+    level,
+    seed: level.seed,
+    generated: true,
+    daily: dateKey,
+    attempts,
+    label: `每日 ${dateKey} · ${LAYOUT_LABELS[level.layout] ?? level.layout}型`,
+  };
+}
+
 
 
