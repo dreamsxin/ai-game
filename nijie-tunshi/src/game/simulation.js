@@ -1,8 +1,9 @@
 import { ABILITIES, createAbilityState, dashActive, phaseActive, updateAbilities } from './abilities.js';
 import { createEncounterState, updateEncounter } from './encounters.js';
-import { creatureMotion } from './creatures.js';
+import { creatureMotion, CREATURE_BEHAVIOR } from './creatures.js';
 import { LEVEL } from './level.js';
 import { PLAYER_STAGES } from './progression.js';
+import { createSpatialIndex, queryRadius } from './spatial.js';
 import { createUniverseProgress, POLARITY_FLIP_DURATION, universeForIndex } from './universes.js';
 import {
   ASCENSION_MASS, applyStabilityPenalty, canConsume, canCrossObstacle, canPassGate, canPull,
@@ -18,6 +19,11 @@ const MAX_SPEED = 11;
 const ACCELERATION = 28;
 const DAMPING = 0.86;
 const COMBO_WINDOW = 2.7;
+// 每帧最多同时牵引多少个对象。首关只有 3 块糖屑够格，远低于上限，
+// 因此这条约束在当前关卡不改变行为，是为程序生成留的护栏。
+export const MAX_PULLS_PER_STEP = 12;
+// 吞噬接触判定的最大附加触及距离，用来算空间查询半径，不能漏判。
+const MAX_OBJECT_REACH = Math.max(...LEVEL.objects.map((object) => object.size)) * 0.72;
 
 const cloneLevelObjects = (universeDefinition) => LEVEL.objects.map((object) => {
   const polarity = universeDefinition.id === 'antimatter' && object.fuel
@@ -191,10 +197,22 @@ function lineBlocked(from, to, blockers) {
   return false;
 }
 
-function updateGravityObjects(state, dt) {
+function updateGravityObjects(state, dt, index) {
   const gravityActive = state.player.abilities.gravity.active;
   const blockers = pullBlockers(state);
-  for (const object of state.objects) {
+  const nearby = queryRadius(index, state.player.x, state.player.z, ABILITIES.gravity.radius);
+  const nearbySlots = new Set(nearby);
+  // 邻域之外的暗极性对象只需回落充能，是纯算术；昂贵的遮挡采样留给邻域。
+  // 先把远处对象按原本的 else 分支处理，邻域循环才能逐字保持原逻辑。
+  for (let slot = 0; slot < state.objects.length; slot += 1) {
+    if (nearbySlots.has(slot)) continue;
+    const object = state.objects[slot];
+    if (!object.active || object.polarity !== 'dark') continue;
+    object.polarityCharge = Math.max(0, object.polarityCharge - dt * 0.5);
+  }
+  let pulls = 0;
+  for (const slot of nearby) {
+    const object = state.objects[slot];
     if (!object.active) continue;
     const dx = state.player.x - object.x;
     const dz = state.player.z - object.z;
@@ -230,6 +248,10 @@ function updateGravityObjects(state, dt) {
       continue;
     }
     if (!gravityActive || !canPull(state.player, object) || distance > ABILITIES.gravity.radius || distance < 0.01 || blocked) continue;
+    // 每帧吸附上限：防止程序生成地图里几十个糖屑同时被拉动拖垮帧率。
+    // 邻域按原下标序遍历，因此被截断的总是同一批，仍然确定。
+    if (pulls >= MAX_PULLS_PER_STEP) continue;
+    pulls += 1;
     const force = ABILITIES.gravity.strength * (1 - distance / ABILITIES.gravity.radius);
     object.vx += (dx / distance) * force * dt;
     object.vz += (dz / distance) * force * dt;
@@ -288,8 +310,10 @@ function updateAnchors(state, dt) {
   }
 }
 
-function updateCreatures(state, dt) {
-  for (const object of state.objects) {
+function updateCreatures(state, dt, index) {
+  // 感知半径之外 creatureMotion 本就返回零位移，因此只遍历邻域与全表等价
+  for (const slot of queryRadius(index, state.player.x, state.player.z, CREATURE_BEHAVIOR.senseRadius)) {
+    const object = state.objects[slot];
     const motion = creatureMotion(object, state.player, state.encounter, dt);
     if (motion.x === 0 && motion.z === 0) continue;
     object.x += motion.x;
@@ -300,13 +324,16 @@ function updateCreatures(state, dt) {
   }
 }
 
-function collectObjects(state) {
+function collectObjects(state, index) {
   const player = state.player;
   const previousStage = stageIndexForMass(player.mass);
-  const eligible = new Set(state.objects.filter((object) => canConsume(player, object, state.encounter)).map((object) => object.id));
+  // 触及距离最大为 半径 + 最大 size × 0.72，按此半径查询邻域不会漏判
+  const reach = player.radius + MAX_OBJECT_REACH;
+  const nearby = queryRadius(index, player.x, player.z, reach);
   let collectedThisStep = 0;
-  for (const object of state.objects) {
-    if (!eligible.has(object.id)) continue;
+  for (const slot of nearby) {
+    const object = state.objects[slot];
+    if (!canConsume(player, object, state.encounter)) continue;
     const distance = Math.hypot(player.x - object.x, player.z - object.z);
     if (distance > player.radius + object.size * 0.72) continue;
     const overload = isOverloadConsume(player, object);
@@ -441,10 +468,12 @@ export function step(state, input = {}, dt = STEP) {
   const collisionRadius = navigationRadius(player);
   player.x = Math.max(LEVEL.bounds.minX + collisionRadius, Math.min(LEVEL.bounds.maxX - collisionRadius, player.x));
   player.z = Math.max(LEVEL.bounds.minZ + collisionRadius, Math.min(LEVEL.bounds.maxZ - collisionRadius, player.z));
-  updateGravityObjects(next, dt);
+  // 索引在移动阶段之后重建一次：牵引与逃离都会改变对象位置，
+  // 吞噬判定必须用最新位置查询，否则刚被拉近的糖屑会漏吃一帧。
+  updateGravityObjects(next, dt, createSpatialIndex(next.objects));
   updateAnchors(next, dt);
-  updateCreatures(next, dt);
-  collectObjects(next);
+  updateCreatures(next, dt, createSpatialIndex(next.objects));
+  collectObjects(next, createSpatialIndex(next.objects));
   next.elapsed += dt;
   const objective = updateEncounter(next);
   if (!next.player.ignited && stellarIgnitionReady(next)) {
