@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRandom, createRng } from '../src/game/random.js';
 import { DEFAULT_RECIPE, generateLevel, HANDMADE_SLOT, LAYOUT_NAMES, levelMetrics, nextMapSlot, SHUFFLE_STRIDE } from '../src/game/generator.js';
 import { validateLevel } from '../src/game/validator.js';
-import { createNavGrid, reachableFrom, targetReachable } from '../src/game/navigation.js';
+import { createNavGrid, findPath, reachableFrom, targetReachable } from '../src/game/navigation.js';
 import { createReplayAgent, deriveRoute } from '../src/game/replayAgent.js';
 import { createGame, step } from '../src/game/simulation.js';
 import { canPassGate, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS } from '../src/game/rules.js';
@@ -194,7 +194,47 @@ test('the handmade slot is always reachable again and shuffling is reproducible'
   assert.equal(HANDMADE_SLOT.level.objects.some((object) => object.id === 'orb-1'), true);
 });
 
-// 三种布局模板必须真的给出不同的骨架，否则"多模板"只是三个名字。
+// 窄门必须真的构成一道门，而不是一只可以绕开的盒子。上一版把窄门放在
+// 走廊弦的中点，实测走廊型 12 张图的 116 条候选弦里，中点离走廊最远只有
+// 1.0 单位 —— 压在走廊上的门一关就切断主干，不压在走廊上的门玩家绕开
+// 就是了。现在窄门填在两道墙之间的门洞上。
+test('a gate is a real door: closing it forces a detour but never cuts the map', () => {
+  const pathLength = (path) => {
+    if (!path) return Infinity;
+    let total = 0;
+    for (let index = 0; index < path.length - 1; index += 1) {
+      total += Math.hypot(path[index + 1].x - path[index].x, path[index + 1].z - path[index].z);
+    }
+    return total;
+  };
+  let checked = 0;
+  for (const layout of ['corridor', 'spiral']) {
+    for (let seed = 8800; seed < 8808; seed += 1) {
+      const { level } = generateLevel({ seed, layout });
+      assert.ok(level, `${layout} seed ${seed} 未能生成关卡`);
+      for (const gate of level.gates) {
+        // 门必须夹在两道墙之间：门洞两侧各要有一道紧贴的墙
+        const flanking = level.obstacles.filter((wall) => (
+          Math.hypot(wall.x - gate.x, wall.z - gate.z)
+          < Math.hypot(gate.width, gate.depth) / 2 + Math.hypot(wall.width, wall.depth) / 2 + 1.5
+        ));
+        assert.ok(flanking.length >= 2, `${layout} seed ${seed} 的 ${gate.id} 只贴着 ${flanking.length} 道墙`);
+
+        // 屏障沿 gate.axis 延伸，因此穿门方向是另一条轴
+        const offset = (gate.axis === 'x' ? gate.depth : gate.width) / 2 + 2.2;
+        const near = gate.axis === 'x' ? { x: gate.x, z: gate.z - offset } : { x: gate.x - offset, z: gate.z };
+        const far = gate.axis === 'x' ? { x: gate.x, z: gate.z + offset } : { x: gate.x + offset, z: gate.z };
+        const open = pathLength(findPath(createNavGrid(0.9, gate.minMass + 2, level), near, far));
+        const closed = pathLength(findPath(createNavGrid(0.9, Math.max(0, gate.minMass - 2), level), near, far));
+        assert.ok(Number.isFinite(open), `${gate.id} 开着时两侧应直接连通`);
+        assert.ok(closed > open * 1.5, `${gate.id} 关着时应被迫绕路，实际 ${closed.toFixed(1)} vs ${open.toFixed(1)}`);
+        checked += 1;
+      }
+    }
+  }
+  assert.ok(checked >= 8, `样本太少，只检查到 ${checked} 道窄门`);
+});
+
 test('every layout template produces a playable level with its own shape', () => {
   const pathLength = (corridor) => {
     let total = 0;

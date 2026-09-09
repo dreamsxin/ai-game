@@ -186,48 +186,102 @@ function buildWalls(rng, recipe, corridor) {
 //
 // 只留 minMass 后，可达范围随质量单调增长，封死在结构上不可能发生。
 // 双侧约束（maxMass）留给手工关那种"窄门开在实墙上"的布局。
-function buildGates(rng, recipe, corridor, keepClear, objects) {
+// 走廊上离某点最近处的弧长比例，用来判断"玩家走到这附近时大概多重"。
+function corridorFraction(point, corridor) {
+  const lengths = [];
+  let total = 0;
+  for (let index = 0; index < corridor.length - 1; index += 1) {
+    const length = Math.hypot(
+      corridor[index + 1].x - corridor[index].x,
+      corridor[index + 1].z - corridor[index].z,
+    );
+    lengths.push(length);
+    total += length;
+  }
+  let best = Infinity;
+  let bestAt = 0;
+  let travelled = 0;
+  for (let index = 0; index < corridor.length - 1; index += 1) {
+    const from = corridor[index];
+    const to = corridor[index + 1];
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const lengthSquared = dx * dx + dz * dz;
+    let t = lengthSquared < 1e-9 ? 0 : ((point.x - from.x) * dx + (point.z - from.z) * dz) / lengthSquared;
+    t = Math.max(0, Math.min(1, t));
+    const distance = Math.hypot(point.x - (from.x + dx * t), point.z - (from.z + dz * t));
+    if (distance < best) {
+      best = distance;
+      bestAt = travelled + lengths[index] * t;
+    }
+    travelled += lengths[index];
+  }
+  return total < 1e-9 ? 0 : bestAt / total;
+}
+
+// 窄门开在两道墙之间的门洞上，而不是孤零零立在空地里。
+//
+// 上一版把窄门放在"走廊上绕得远、空间上很近"的两点连线中点。实测下来那
+// 根本不构成选择：走廊型 12 张图的 116 条候选弦，中点离走廊最远只有 1.0
+// 单位 —— 弦全都压在走廊上。压在走廊上的窄门一关就切断主干（那是上一轮
+// 修掉的封死缺陷），不压在走廊上的又只是一只可以绕开的盒子。
+//
+// 现在改为在墙对之间找门洞：两道墙之间 3 到 11 单位的缺口，缺口中心离
+// 走廊至少 4 单位。窄门填满这个缺口，于是"墙—门—墙"连成一道真障碍，
+// 关着的时候必须绕过整组墙，开着的时候是一条捷径。缺口离走廊足够远，
+// 因此关门永远不会切断主干。
+//
+// 窄门仍然只设 minMass：长大后开、永不再关，可达范围随质量单调增长。
+function buildGates(rng, recipe, corridor, keepClear, objects, walls) {
   const gates = [];
-  const pairs = [];
-  for (let left = 0; left < corridor.length; left += 1) {
-    for (let right = left + 2; right < corridor.length; right += 1) {
-      const span = Math.hypot(corridor[right].x - corridor[left].x, corridor[right].z - corridor[left].z);
-      if (span > 30) continue;
-      pairs.push({ left, right, span });
+  const doorways = [];
+  for (let left = 0; left < walls.length; left += 1) {
+    for (let right = left + 1; right < walls.length; right += 1) {
+      const a = walls[left];
+      const b = walls[right];
+      const alongX = Math.abs(a.x - b.x) >= Math.abs(a.z - b.z);
+      // 缺口是两道墙相对面之间的净距
+      const gap = alongX
+        ? Math.abs(a.x - b.x) - (a.width + b.width) / 2
+        : Math.abs(a.z - b.z) - (a.depth + b.depth) / 2;
+      // 太窄会被导航膨胀直接封死，太宽就不成门洞
+      if (gap < 3 || gap > 11) continue;
+      const midpoint = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+      if (corridorDistance(midpoint, corridor) < 4) continue;
+      doorways.push({ a, b, alongX, gap, midpoint });
     }
   }
-  // 优先取"走廊上绕得最远、空间上却很近"的组合，那才是真正的捷径
-  const ordered = rng.shuffle(pairs)
-    .sort((a, b) => ((b.right - b.left) - (a.right - a.left)) || (a.span - b.span));
-  for (const pair of ordered) {
+  // 缺口越窄越像门，优先用
+  const ordered = rng.shuffle(doorways).sort((left, right) => left.gap - right.gap);
+  for (const doorway of ordered) {
     if (gates.length >= recipe.gateCount) break;
-    const from = corridor[pair.left];
-    const to = corridor[pair.right];
-    const midpoint = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
+    const { a, b, alongX, gap, midpoint } = doorway;
+    // 门稍微咬进两侧墙体，避免留出可以擦过去的缝
+    const width = alongX ? gap + 0.8 : Math.min(a.width, b.width);
+    const depth = alongX ? Math.min(a.depth, b.depth) : gap + 0.8;
     if (gates.some((gate) => Math.hypot(gate.x - midpoint.x, gate.z - midpoint.z) < 7)) continue;
-    // 开口必须宽于两倍导航半径，否则膨胀本身就把通道封死
-    const width = rng.float(5.5, 7);
-    const depth = rng.float(5.5, 7);
-    // 低质量下窄门是关着的。若窄门压在锚点、核心或出口上，早期就够不到
-    // 那个目标 —— 这是早期实测里 12/30 个种子失败的唯一原因，必须让位。
-    const footprint = Math.hypot(width, depth) / 2 + 4;
+    const footprint = Math.hypot(width, depth) / 2 + 3;
+    // 压在锚点、核心、出口或某个对象上，那个目标早期就够不到
     if (keepClear.some((point) => Math.hypot(point.x - midpoint.x, point.z - midpoint.z) < footprint)) continue;
-    // 门槛必须付得起：只算走廊上排在捷径近端之前的那些对象。若把门槛设成
-    // 一个"必须吃到门后面的东西才够"的值，那就是成长陷阱 —— 实测 40 个种子
-    // 里有 3 个因此完全生成不出关卡（贪心在质量 5 上下就走不动了）。
-    const reach = pair.left / (corridor.length - 1);
+    if (objects.some((object) => Math.hypot(object.x - midpoint.x, object.z - midpoint.z) < footprint)) continue;
+    // 门槛必须付得起：只算走廊上排在门洞之前的那些对象。把门槛设成"必须
+    // 吃到门后面的东西才够"就是成长陷阱 —— 实测 40 个种子里有 3 个因此
+    // 完全生成不出关卡（贪心在质量 5 上下就走不动了）。
+    const reach = corridorFraction(midpoint, corridor);
     const affordable = objects
       .filter((object, order) => object.id !== 'core' && (order + 0.5) / objects.length <= reach)
       .reduce((sum, object) => sum + object.mass, 0);
     if (affordable < 8) continue;
     gates.push({
       id: `gate-${gates.length + 1}`,
+      // 屏障延伸的轴向。不能靠 width 与 depth 谁大来反推：缺口 3–11、墙深
+      // 3–7，两者区间重叠，反推会猜错，穿门方向也就跟着错。
+      axis: alongX ? 'x' : 'z',
       x: Number(midpoint.x.toFixed(2)),
       z: Number(midpoint.z.toFixed(2)),
       width: Number(width.toFixed(2)),
       depth: Number(depth.toFixed(2)),
       height: 3.2,
-      // 只设下限：长大后开、且永不再关
       minMass: Math.max(6, Math.round(affordable * rng.float(0.4, 0.75))),
     });
   }
@@ -314,7 +368,7 @@ function buildLevel(baseRecipe) {
   // 窄门最后放：必须知道锚点、核心与出口在哪，才能给它们让位
   const core = objects.find((object) => object.id === 'core');
   const keepClear = [...anchors, core, recipe.exit].filter(Boolean);
-  const gates = buildGates(rng, recipe, corridor, keepClear, objects);
+  const gates = buildGates(rng, recipe, corridor, keepClear, objects, walls);
   return {
     seed: recipe.seed,
     layout,
