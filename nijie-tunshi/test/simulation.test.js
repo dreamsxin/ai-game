@@ -7,8 +7,10 @@ import {
   restartCurrentUniverse, step, togglePause,
 } from '../src/game/simulation.js';
 import {
-  canPull, massToCross, massToPull, OVERLOAD_STABILITY_COST, STABILITY_MAX, STELLAR_FUEL_TARGET,
-  STELLAR_IGNITION_MASS, STELLAR_STABILITY_TARGET, stellarIgnitionReady,
+  canPull, flawlessIgnition, fuelPurity, massToCross, massToPull, OVERLOAD_STABILITY_COST,
+  resultStars, STABILITY_MAX, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS,
+  STELLAR_STABILITY_TARGET, stellarIgnitionReady, THREE_STAR_COMBO, THREE_STAR_SECONDS,
+  TWO_STAR_COMBO, TWO_STAR_SECONDS,
 } from '../src/game/rules.js';
 import { createReplayAgent } from './helpers/replayAgent.js';
 
@@ -426,6 +428,66 @@ test('an unbroken candy panel blocks the pull line until it is smashed', () => {
     pulled.x > openRun.startX + 0.1,
     `糖壳板破除后应被拉向玩家，实际位移 ${pulled.x - openRun.startX}`,
   );
+});
+
+test('fuel purity measures how much of what was eaten actually counted', () => {
+  assert.equal(fuelPurity({ fuel: 100, fuelCollected: 100 }), 1, '不浪费时纯度为满');
+  assert.equal(fuelPurity({ fuel: 100, fuelCollected: 200 }), 0.5, '吃两倍只用一半时纯度减半');
+  assert.equal(fuelPurity({ fuel: 0, fuelCollected: 0 }), 0, '没吃过燃料时纯度为 0');
+  assert.equal(fuelPurity(undefined), 0);
+  assert.equal(fuelPurity({ fuel: 120, fuelCollected: 100 }), 1, '纯度不应超过 1');
+});
+
+test('three stars need speed, combo, the phase shortcut and a flawless core together', () => {
+  const perfect = {
+    elapsed: THREE_STAR_SECONDS,
+    highestCombo: THREE_STAR_COMBO,
+    phaseShortcut: true,
+    stabilityLowest: STABILITY_MAX,
+    fuel: 100,
+    fuelCollected: 100,
+  };
+  assert.equal(resultStars(perfect), 3);
+
+  assert.equal(resultStars({ ...perfect, elapsed: THREE_STAR_SECONDS + 1 }), 2, '超时应掉到二星');
+  assert.equal(resultStars({ ...perfect, highestCombo: THREE_STAR_COMBO - 1 }), 2, '连击不足应掉到二星');
+  assert.equal(resultStars({ ...perfect, phaseShortcut: false }), 2, '没走相位捷径应掉到二星');
+  assert.equal(
+    resultStars({ ...perfect, stabilityLowest: STABILITY_MAX - 1 }),
+    2,
+    '哪怕只掉过一点稳定度也拿不到三星',
+  );
+});
+
+test('two stars can be earned by route precision alone', () => {
+  const slow = {
+    elapsed: TWO_STAR_SECONDS + 60,
+    highestCombo: TWO_STAR_COMBO - 1,
+    phaseShortcut: false,
+    stabilityLowest: 40,
+  };
+  assert.equal(resultStars({ ...slow, fuel: 100, fuelCollected: 100 }), 2, '纯度达标应给二星');
+  assert.equal(resultStars({ ...slow, fuel: 100, fuelCollected: 400 }), 1, '慢、连击低、浪费燃料只有一星');
+  assert.equal(resultStars(null), 0);
+});
+
+test('the scripted replay earns two stars and reports every new dimension', () => {
+  let state = createGame();
+  const agent = createReplayAgent();
+  agent.start();
+  for (let index = 0; index < 60000 && state.status !== 'won'; index += 1) {
+    state = step(state, agent.snapshot(state), 1 / 60);
+  }
+  assert.equal(state.status, 'won');
+  const result = state.result;
+  assert.equal(result.fuel, STELLAR_FUEL_TARGET);
+  assert.ok(result.fuelCollected >= result.fuel, '未截断的累计量不应小于计入量');
+  assert.ok(fuelPurity(result) > 0.9, `参考路线燃料纯度应很高，实际 ${fuelPurity(result)}`);
+  assert.equal(result.stabilityLowest, STABILITY_MAX, '参考路线不该掉稳定度');
+  assert.equal(flawlessIgnition(result), true);
+  // 参考路线又快又干净，但没走相位捷径、连击只有 5，因此止步二星
+  assert.equal(result.phaseShortcut, false);
+  assert.equal(result.stars, 2);
 });
 
 test('phase anchor only breaks while phase is active', () => {

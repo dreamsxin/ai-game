@@ -54,6 +54,7 @@ export function createGame(seed = LEVEL.seed, universeProgress = {}) {
       x: LEVEL.start.x, z: LEVEL.start.z, vx: 0, vz: -0.8, mass: 0, radius: INITIAL_RADIUS,
       integrity: 100, fuel: 0, stability: STABILITY_MAX, ignited: false, ignitionAttempts: 0,
       stabilityPenaltyCooldown: 0, stabilityRecoveryDelay: 0,
+      fuelCollected: 0, stabilityLowest: STABILITY_MAX,
       abilities: createAbilityState(), combo: 0, comboRemaining: 0, highestCombo: 0,
     },
     objects,
@@ -312,6 +313,8 @@ function collectObjects(state) {
     object.active = false;
     player.mass += object.mass;
     player.fuel = Math.min(STELLAR_FUEL_TARGET, player.fuel + (object.fuel ?? 0));
+    // 未截断的累计量：用于结算的燃料纯度，衡量吃了多少却没用上
+    player.fuelCollected += object.fuel ?? 0;
     player.radius = radiusForMass(player.mass);
     player.abilities.resonance = Math.min(100, player.abilities.resonance + 10);
     player.combo = player.comboRemaining > 0 ? player.combo + 1 : 1;
@@ -366,6 +369,10 @@ export function step(state, input = {}, dt = STEP) {
         highestCombo: next.player.highestCombo,
         route: next.encounter.route ?? 'steady',
         phaseShortcut: next.encounter.phaseShortcut,
+        fuel: next.player.fuel,
+        fuelCollected: next.player.fuelCollected,
+        stabilityLowest: next.player.stabilityLowest,
+        ignitionAttempts: next.player.ignitionAttempts,
       };
       next.result.stars = resultStars(next.result);
       next.message = `糖洞跃迁完成 · ${next.result.stars} 星评价`;
@@ -430,6 +437,7 @@ export function step(state, input = {}, dt = STEP) {
     }
   }
   recoverStability(player, dt);
+  player.stabilityLowest = Math.min(player.stabilityLowest, player.stability);
   const collisionRadius = navigationRadius(player);
   player.x = Math.max(LEVEL.bounds.minX + collisionRadius, Math.min(LEVEL.bounds.maxX - collisionRadius, player.x));
   player.z = Math.max(LEVEL.bounds.minZ + collisionRadius, Math.min(LEVEL.bounds.maxZ - collisionRadius, player.z));

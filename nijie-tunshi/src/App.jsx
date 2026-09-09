@@ -9,8 +9,8 @@ import {
   step, STEP, togglePause,
 } from './game/simulation.js';
 import {
-  ASCENSION_MASS, passageHeight, RING_COMPLETION_MASS, STABILITY_MAX, STELLAR_FUEL_TARGET,
-  STELLAR_STABILITY_TARGET,
+  ASCENSION_MASS, fuelPurity, passageHeight, RING_COMPLETION_MASS, STABILITY_MAX,
+  STELLAR_FUEL_TARGET, STELLAR_STABILITY_TARGET,
 } from './game/rules.js';
 import { createScene } from './scene/createScene.js';
 
@@ -219,7 +219,7 @@ export default function App() {
         <section className="overlay results">
           <p className="eyebrow">糖星诞生 · {view.universe.name}</p>
           <h2>{'★'.repeat(view.result?.stars ?? 1)}</h2>
-          <div className="result-grid"><span>用时<strong>{formatTime(view.result?.elapsed ?? 0)}</strong></span><span>最高连击<strong>×{view.result?.highestCombo ?? 0}</strong></span><span>累计星级<strong>{view.universe.cumulativeStars + (view.result?.stars ?? 0)}</strong></span><span>下一宇宙<strong>{view.universe.index + 1}</strong></span></div>
+          <div className="result-grid"><span>用时<strong>{formatTime(view.result?.elapsed ?? 0)}</strong></span><span>最高连击<strong>×{view.result?.highestCombo ?? 0}</strong></span><span>燃料纯度<strong>{Math.round(fuelPurity(view.result) * 100)}%</strong></span><span>最低稳定<strong>{Math.floor(view.result?.stabilityLowest ?? STABILITY_MAX)}%</strong></span><span>累计星级<strong>{view.universe.cumulativeStars + (view.result?.stars ?? 0)}</strong></span><span>下一宇宙<strong>{view.universe.index + 1}</strong></span></div>
           <div className="result-actions"><button className="secondary" onClick={restart}><RotateCcw size={17} />重试本宇宙</button><button className="primary" data-testid="next-universe" onClick={continueUniverse}><Sparkles size={17} />进入下一宇宙</button></div>
         </section>
       )}

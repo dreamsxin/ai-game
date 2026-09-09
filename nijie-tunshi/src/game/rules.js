@@ -113,9 +113,34 @@ export function stellarIgnitionReady(state) {
     && coreConsumed;
 }
 
+// 星级门槛。三星要求四项同时成立，二星给出三条独立路径。
+export const THREE_STAR_SECONDS = 150;
+export const THREE_STAR_COMBO = 6;
+export const TWO_STAR_SECONDS = 195;
+export const TWO_STAR_COMBO = 4;
+export const TWO_STAR_PURITY = 0.8;
+
+// 燃料纯度：真正计入的燃料占吃下去的燃料总量的比例。
+// 燃料在 100 处截断，而全关有 160，所以多吃的部分是浪费。
+// 纯度衡量路线精度：只吃够用的燃料体，纯度接近 1。
+export function fuelPurity(result) {
+  const collected = result?.fuelCollected ?? 0;
+  if (collected <= 0) return 0;
+  return Math.min(1, (result.fuel ?? 0) / collected);
+}
+
+// 零失稳：全程稳定度从未跌破满值。稳定度是唯一会因操作失误倒退的资源，
+// 因此它是"这一局打得干净"最直接的证据。
+export const flawlessIgnition = (result) => (result?.stabilityLowest ?? STABILITY_MAX) >= STABILITY_MAX;
+
 export function resultStars(result) {
   if (!result) return 0;
-  if (result.elapsed <= 150 && result.highestCombo >= 6 && result.phaseShortcut) return 3;
-  if (result.elapsed <= 195 || result.highestCombo >= 4) return 2;
+  if (result.elapsed <= THREE_STAR_SECONDS
+    && result.highestCombo >= THREE_STAR_COMBO
+    && result.phaseShortcut
+    && flawlessIgnition(result)) return 3;
+  if (result.elapsed <= TWO_STAR_SECONDS
+    || result.highestCombo >= TWO_STAR_COMBO
+    || fuelPurity(result) >= TWO_STAR_PURITY) return 2;
   return 1;
 }
