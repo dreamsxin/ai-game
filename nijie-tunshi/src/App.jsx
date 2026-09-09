@@ -182,7 +182,7 @@ export default function App() {
         <div className="top-actions">
           <button className={`route-button ${slot.generated ? 'is-active' : ''}`} onClick={shuffleLevel} title="用新种子生成一张关卡"><Dices size={15} />换一张图</button>
           {slot.generated && <button className="route-button" onClick={backToHandmade} title="回到手工关">回手工关</button>}
-          <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} disabled={slot.generated} title={slot.generated ? '演示路线是为手工关编排的，生成关卡上无效' : '自动演示完整通关流程'}>{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
+          <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} title="自动演示完整通关流程">{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
           <span className="timer">{formatTime(view.elapsed)}</span>
           <button className="icon-button" onClick={() => commit(togglePause(gameRef.current))} title={view.status === 'paused' ? '继续' : '暂停'}>
             {view.status === 'paused' ? <Play size={19} /> : <CirclePause size={19} />}

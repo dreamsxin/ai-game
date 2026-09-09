@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createRandom, createRng } from '../src/game/random.js';
 import { DEFAULT_RECIPE, generateLevel, HANDMADE_SLOT, levelMetrics, nextMapSlot, SHUFFLE_STRIDE } from '../src/game/generator.js';
 import { validateLevel } from '../src/game/validator.js';
+import { createNavGrid, reachableFrom, targetReachable } from '../src/game/navigation.js';
+import { createReplayAgent, deriveRoute } from '../src/game/replayAgent.js';
 import { createGame, step } from '../src/game/simulation.js';
 import { canPassGate, STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS } from '../src/game/rules.js';
 
@@ -71,15 +73,17 @@ test('every generated level leaves headroom on mass and fuel', () => {
 });
 
 // 早期实测里 12/30 个种子失败，唯一原因就是窄门压在锚点上：
-// 点火质量下所有窄门都是关着的，压住谁谁就永久不可达。
+// 低质量下窄门是关着的，压住谁谁就早期够不到。
 test('gates never sit on an anchor, the core or the exit', () => {
   for (let seed = 4000; seed < 4016; seed += 1) {
     const { level } = generateLevel({ seed });
     const core = level.objects.find((object) => object.id === 'core');
     const protectedPoints = [...level.anchors, core, level.exit];
     for (const gate of level.gates) {
-      // 点火质量下窄门必然关闭，因此它的占位等同于实墙
-      assert.equal(canPassGate(STELLAR_IGNITION_MASS, gate), false, `${gate.id} 在点火质量下不应还开着`);
+      // 生成关卡的窄门只设下限：出生质量下关着，长大后开且永不再关
+      assert.equal(canPassGate(0, gate), false, `${gate.id} 在出生质量下不应是开着的`);
+      assert.equal(canPassGate(STELLAR_IGNITION_MASS, gate), true, `${gate.id} 在点火质量下必须已经打开`);
+      assert.equal(gate.maxMass, undefined, `${gate.id} 不应有上限，否则长大后会把走廊封死`);
       for (const point of protectedPoints) {
         const clearance = Math.hypot(gate.width, gate.depth) / 2;
         assert.ok(
@@ -90,6 +94,36 @@ test('gates never sit on an anchor, the core or the exit', () => {
     }
   }
 });
+
+// 这条是实测逼出来的：带 maxMass 的窄门几乎必然压在主干走廊上（40 个种子的
+// 73 道窄门，73 道都压在走廊上），一关就把那段走廊上的对象永久封死 ——
+// 40 个种子全都有 2 到 8 个对象在点火质量下不可达，而验证器只查必经目标，
+// 完全没报警。
+test('no object is ever sealed off as the player grows', () => {
+  for (let seed = 8000; seed < 8016; seed += 1) {
+    const { level } = generateLevel({ seed });
+    assert.ok(level, `seed ${seed} 未能生成关卡`);
+    let previous = -1;
+    for (const mass of [0, 20, 45, 90, STELLAR_IGNITION_MASS]) {
+      const grid = createNavGrid(0.9, mass, level);
+      const visited = reachableFrom(grid, level.start);
+      const reachable = level.objects.filter((object) => targetReachable(grid, visited, object));
+      // 可达范围只能随质量增长，绝不能缩小
+      assert.ok(
+        reachable.length >= previous,
+        `seed ${seed} 在质量 ${mass} 时可达对象从 ${previous} 掉到 ${reachable.length}`,
+      );
+      previous = reachable.length;
+      if (mass >= STELLAR_IGNITION_MASS) {
+        assert.equal(
+          reachable.length, level.objects.length,
+          `seed ${seed} 点火质量下仍有 ${level.objects.length - reachable.length} 个对象够不到`,
+        );
+      }
+    }
+  }
+});
+
 
 test('a generated level can actually be played, not just validated', () => {
   const { level } = generateLevel({ seed: 6100 });
@@ -159,4 +193,39 @@ test('the handmade slot is always reachable again and shuffling is reproducible'
   // 回手工关就是回到那张手工表，不是重新生成一张
   assert.equal(HANDMADE_SLOT.level.objects.some((object) => object.id === 'orb-1'), true);
 });
+
+test('the derived route eats light to heavy, then anchors, core and exit', () => {
+  const { level } = generateLevel({ seed: 8200 });
+  const route = deriveRoute(level);
+  const eating = route.filter((node) => node.kind === 'object' && node.id !== 'core');
+  assert.equal(eating.length, level.objects.length - 1, '除核心外每个对象都该在路线上');
+  const masses = eating.map((node) => level.objects.find((object) => object.id === node.id).mass);
+  for (let index = 1; index < masses.length; index += 1) {
+    assert.ok(masses[index] >= masses[index - 1], `第 ${index} 个目标比前一个轻，路线不是升序`);
+  }
+  assert.deepEqual(
+    route.slice(-5).map((node) => node.kind),
+    ['anchor', 'anchor', 'anchor', 'object', 'exit'],
+    '三枚锚点、核心、出口应压在路线末尾',
+  );
+  assert.deepEqual(JSON.stringify(deriveRoute(level)), JSON.stringify(route), '同一关卡派生的路线必须一致');
+});
+
+// 验证器说"存在合法吞噬顺序"，模拟层能不能真跑通是另一回事。这条用例
+// 让自动演示在生成关卡上真打一局，是唯一的端到端证明。
+test('the auto demo actually finishes generated levels', () => {
+  for (const seed of [8300, 8400, 8500]) {
+    const { level } = generateLevel({ seed });
+    let state = createGame(level.seed, {}, level);
+    const agent = createReplayAgent();
+    agent.start();
+    for (let tick = 0; tick < 60000 && state.status === 'playing'; tick += 1) {
+      state = step(state, agent.snapshot(state), 1 / 60);
+    }
+    assert.equal(state.status, 'ascending', `seed ${seed} 没能点火，卡在质量 ${state.player.mass.toFixed(1)}`);
+    assert.equal(state.player.ignited, true);
+    assert.equal(agent.stats().failedPlans, 0, `seed ${seed} 出现寻路失败`);
+  }
+});
+
 

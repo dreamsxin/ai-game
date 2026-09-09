@@ -126,9 +126,17 @@ function buildWalls(rng, recipe, corridor) {
   return walls;
 }
 
-// 窄门只架在"走廊上相距很远、空间上很近"的两点之间，因此永远只是捷径。
-// 这是成长陷阱在结构上不可能出现的原因。
-function buildGates(rng, recipe, corridor, keepClear) {
+// 窄门只架在"走廊上相距很远、空间上很近"的两点之间，作为捷径。
+//
+// 生成关卡上的窄门只有 minMass，没有 maxMass —— 这是实测逼出来的结论。
+// 带 maxMass 的窄门会随玩家长大而关闭，而这些窄门的落点几乎必然压在主干
+// 走廊上（实测 40 个种子的 73 道窄门，73 道都压在走廊上），一关就把那段
+// 走廊上的对象永久封死：40 个种子全部出现 2–8 个对象在点火质量下不可达。
+// 验证器没抓到，因为它只检查锚点、核心与出口这些必经目标。
+//
+// 只留 minMass 后，可达范围随质量单调增长，封死在结构上不可能发生。
+// 双侧约束（maxMass）留给手工关那种"窄门开在实墙上"的布局。
+function buildGates(rng, recipe, corridor, keepClear, objects) {
   const gates = [];
   const pairs = [];
   for (let left = 0; left < corridor.length; left += 1) {
@@ -150,13 +158,18 @@ function buildGates(rng, recipe, corridor, keepClear) {
     // 开口必须宽于两倍导航半径，否则膨胀本身就把通道封死
     const width = rng.float(5.5, 7);
     const depth = rng.float(5.5, 7);
-    // 点火质量下所有窄门都是关着的（maxMass 远低于 130）。若窄门压在锚点、
-    // 核心或出口上，那个目标就永久不可达 —— 这是早期实测里 12/30 个种子
-    // 失败的唯一原因，必须显式让位。
+    // 低质量下窄门是关着的。若窄门压在锚点、核心或出口上，早期就够不到
+    // 那个目标 —— 这是早期实测里 12/30 个种子失败的唯一原因，必须让位。
     const footprint = Math.hypot(width, depth) / 2 + 4;
     if (keepClear.some((point) => Math.hypot(point.x - midpoint.x, point.z - midpoint.z) < footprint)) continue;
-    const maxMass = rng.int(20, 70);
-    const hasMin = rng.chance(0.45);
+    // 门槛必须付得起：只算走廊上排在捷径近端之前的那些对象。若把门槛设成
+    // 一个"必须吃到门后面的东西才够"的值，那就是成长陷阱 —— 实测 40 个种子
+    // 里有 3 个因此完全生成不出关卡（贪心在质量 5 上下就走不动了）。
+    const reach = pair.left / (corridor.length - 1);
+    const affordable = objects
+      .filter((object, order) => object.id !== 'core' && (order + 0.5) / objects.length <= reach)
+      .reduce((sum, object) => sum + object.mass, 0);
+    if (affordable < 8) continue;
     gates.push({
       id: `gate-${gates.length + 1}`,
       x: Number(midpoint.x.toFixed(2)),
@@ -164,8 +177,8 @@ function buildGates(rng, recipe, corridor, keepClear) {
       width: Number(width.toFixed(2)),
       depth: Number(depth.toFixed(2)),
       height: 3.2,
-      ...(hasMin ? { minMass: rng.int(6, 14) } : {}),
-      maxMass,
+      // 只设下限：长大后开、且永不再关
+      minMass: Math.max(6, Math.round(affordable * rng.float(0.4, 0.75))),
     });
   }
   return gates;
@@ -248,7 +261,7 @@ function buildLevel(recipe) {
   // 窄门最后放：必须知道锚点、核心与出口在哪，才能给它们让位
   const core = objects.find((object) => object.id === 'core');
   const keepClear = [...anchors, core, recipe.exit].filter(Boolean);
-  const gates = buildGates(rng, recipe, corridor, keepClear);
+  const gates = buildGates(rng, recipe, corridor, keepClear, objects);
   return {
     seed: recipe.seed,
     bounds: { ...recipe.bounds },
