@@ -8,7 +8,7 @@ export const LEVEL = {
   obstacles: [
     { id: 'wall-a', x: -6, z: 3, width: 3, depth: 8, height: 1.9 },
     { id: 'wall-b', x: 8, z: 7, width: 4, depth: 9, height: 2.7 },
-    { id: 'wall-c', x: -3, z: -9, width: 11, depth: 3, height: 6 },
+    { id: 'wall-c', x: -3, z: -9, width: 11, depth: 3, height: 6, unclimbable: true },
     { id: 'wall-d', x: 16, z: -3, width: 3, depth: 8, height: 3.5 },
   ],
   gates: [

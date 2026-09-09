@@ -5,7 +5,10 @@ import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitSt
 import { POLARITY_FLIP_DURATION } from '../game/universes.js';
 import { CANDY_LIGHTING, lightingState } from '../game/lighting.js';
 import { creatureMoodPose } from '../game/moods.js';
-import { canConsume, canCrossObstacle, canPassGate } from '../game/rules.js';
+import { canConsume } from '../game/rules.js';
+import {
+  gateReadoutState, labelColor, moodTilt, objectLabelState, obstacleLabelState,
+} from './readout.js';
 import { voxelProfileFor, voxelSurface } from './voxel.js';
 
 // 体素几何按“形状 + 分辨率”缓存，缩放交给 mesh.scale，避免每个对象重复构网格。
@@ -165,13 +168,6 @@ const addCandyGlints = (mesh, object) => {
   }
   mesh.add(glints);
   return glints;
-};
-
-const labelColor = (available) => available ? '#fff1a8' : '#7b5a68';
-const objectLabelState = (object, available) => {
-  if (object.polarity === 'dark') return { text: `-${Math.round(object.mass)}`, color: '#ff8bdc' };
-  if (object.polarity === 'light') return { text: `+${Math.round(object.mass)}`, color: available ? '#ffe36e' : '#9a7651' };
-  return { text: String(Math.round(object.mass)), color: labelColor(available) };
 };
 
 const ringEuler = new THREE.Euler();
@@ -516,17 +512,18 @@ export function createScene(host) {
   const gateMeshes = new Map();
   const gateLabels = new Map();
   for (const gate of LEVEL.gates ?? []) {
+    const initial = gateReadoutState(0, gate);
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(gate.width, gate.height, gate.depth),
       new THREE.MeshStandardMaterial({
-        color: 0x7df3ff, emissive: 0x58ffbf, emissiveIntensity: 0.9,
-        roughness: 0.3, transparent: true, opacity: 0.32,
+        color: initial.color, emissive: initial.emissive, emissiveIntensity: 0.9,
+        roughness: 0.3, transparent: true, opacity: initial.opacity,
       }),
     );
     mesh.position.set(gate.x, gate.height / 2, gate.z);
     scene.add(mesh);
     gateMeshes.set(gate.id, mesh);
-    const label = createLabel(`≤${gate.maxMass}`, labelColor(true));
+    const label = createLabel(initial.text, initial.labelColor);
     label.position.set(gate.x, gate.height + 0.9, gate.z);
     label.scale.set(2, 1, 1);
     scene.add(label);
@@ -786,12 +783,12 @@ export function createScene(host) {
       body.rotation.z -= dx / Math.max(playerState.radius, 0.1);
       shell.rotation.y += 0.003 + stage.energy * 0.006;
       previous = { x: playerState.x, z: playerState.z };
-      // 高度标注与窄门状态：全部由权威质量推导，玩家不暂停也能读出门槛
+      // 标签与窄门状态全部由 readout.js 的纯函数派生，便于单独测试
       for (const obstacle of LEVEL.obstacles) {
         const label = obstacleLabels.get(obstacle.id);
         if (!label) continue;
-        const crossable = canCrossObstacle(playerState.mass, obstacle);
-        const texture = labelTexture(`H${obstacle.height.toFixed(1)}`, labelColor(crossable));
+        const readout = obstacleLabelState(playerState.mass, obstacle);
+        const texture = labelTexture(readout.text, readout.color);
         if (label.material.map !== texture) {
           label.material.map = texture;
           label.material.needsUpdate = true;
@@ -800,14 +797,14 @@ export function createScene(host) {
       for (const gate of LEVEL.gates ?? []) {
         const mesh = gateMeshes.get(gate.id);
         const label = gateLabels.get(gate.id);
-        const open = canPassGate(playerState.mass, gate);
+        const readout = gateReadoutState(playerState.mass, gate);
         if (mesh) {
-          mesh.material.opacity += ((open ? 0.32 : 0.85) - mesh.material.opacity) * 0.1;
-          mesh.material.color.lerp(cssColor(open ? 0x7df3ff : 0xff6e9f), 0.1);
-          mesh.material.emissive.lerp(cssColor(open ? 0x58ffbf : 0xff62c7), 0.1);
+          mesh.material.opacity += (readout.opacity - mesh.material.opacity) * 0.1;
+          mesh.material.color.lerp(cssColor(readout.color), 0.1);
+          mesh.material.emissive.lerp(cssColor(readout.emissive), 0.1);
         }
         if (label) {
-          const texture = labelTexture(`≤${gate.maxMass}`, labelColor(open));
+          const texture = labelTexture(readout.text, readout.labelColor);
           if (label.material.map !== texture) {
             label.material.map = texture;
             label.material.needsUpdate = true;
@@ -828,11 +825,9 @@ export function createScene(host) {
           mesh.rotation.y += 0.003 + object.mass * 0.00005;
           // 情绪姿态由权威模拟状态推导，场景层不自行判断吞噬资格。
           const pose = creatureMoodPose(object, playerState, state.encounter, time);
-          const toPlayer = Math.hypot(object.x - playerState.x, object.z - playerState.z) || 1;
-          const leanX = (object.z - playerState.z) / toPlayer;
-          const leanZ = (object.x - playerState.x) / toPlayer;
-          mesh.rotation.x += (pose.lean * leanX - mesh.rotation.x) * 0.16;
-          mesh.rotation.z += (-pose.lean * leanZ - mesh.rotation.z) * 0.16;
+          const tilt = moodTilt(object, playerState, pose.lean);
+          mesh.rotation.x += (tilt.rotationX - mesh.rotation.x) * 0.16;
+          mesh.rotation.z += (tilt.rotationZ - mesh.rotation.z) * 0.16;
           mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12 + pose.bob;
           swarm.position.y = mesh.position.y;
           updateAmbientSwarm(swarm, time, object.polarity);

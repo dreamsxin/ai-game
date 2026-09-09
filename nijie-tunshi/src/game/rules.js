@@ -42,6 +42,9 @@ export const CROSS_SAFE_MARGIN = 0.6;
 
 export function canCrossObstacle(mass, obstacle) {
   if (!obstacle || typeof obstacle.height !== 'number') return false;
+  // 高墙的"不可跨越"必须显式声明。只靠高度数值是靠不住的：质量没有上限，
+  // 玩家吃到足够大时通行高度会超过任何有限高度。
+  if (obstacle.unclimbable) return false;
   return passageHeight(mass) >= obstacle.height + CROSS_SAFE_MARGIN;
 }
 
