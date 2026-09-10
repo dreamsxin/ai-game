@@ -7,6 +7,7 @@
 - `wuqizi`：五子棋，支持分级 AI、积分、自动升阶和对局交流。
 - `xiaoyuanmian`：校园谜案《回声画廊：消失的原作》，支持现场调查、角色询问、证据对质和最终指控。
 - `nijie-tunshi`：3D 滚动吞噬游戏《霓界吞噬》，在荧光几何世界中成长并开启共鸣出口。
+- `migong-chuansuo`：3D 体素风推移解谜《迷宫穿越》，整行整列推动带门的方砖对齐路线，跨层靠跃迁垫，六关递进。
 - `guxing-maoxian`：手机触屏横版跳跃《菇星冒险》，跑跳踩敌、顶砖块出道具、蘑菇变大与星星无敌，三关连打。
 - `xiaoxiaole`：手机触屏三消《甜果消消乐》，8x8 交换匹配、连锁下落、直线爆果与彩虹果，五关递进。
 
@@ -35,6 +36,12 @@ npm run dev:xiaoyuanmian
 
 ```bash
 npm run dev:nijie-tunshi
+```
+
+迷宫穿越默认运行在 `http://127.0.0.1:4180`：
+
+```bash
+npm run dev:migong-chuansuo
 ```
 
 菇星冒险默认运行在 `http://127.0.0.1:4178`：
@@ -76,6 +83,8 @@ npm run test:xiaoyuanmian
 npm run build:xiaoyuanmian
 npm run test:nijie-tunshi
 npm run build:nijie-tunshi
+npm run test:migong-chuansuo
+npm run build:migong-chuansuo
 npm run test:guxing-maoxian
 npm run build:guxing-maoxian
 npm run test:xiaoxiaole

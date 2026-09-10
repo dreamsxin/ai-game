@@ -1,0 +1,128 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { AXIS_COL, AXIS_ROW, LEVELS } from '../src/game/rules.js';
+import {
+  TUTORIAL_STEPS,
+  cameraDistance,
+  coachLine,
+  effectMessage,
+  hintLabel,
+  layerLabel,
+  levelLabel,
+  levelName,
+  lineLabel,
+  parLabel,
+  pushLabel,
+  shiftLabel,
+  sizeLabel,
+  starLabel,
+  statusLabel,
+  undoLabel,
+  winComment,
+} from '../src/scene/readout.js';
+
+test('关卡标题带关号和关名', () => {
+  assert.equal(levelLabel(0), `第 1 关 · ${LEVELS[0].name}`);
+  assert.equal(levelLabel(LEVELS.length - 1), `第 ${LEVELS.length} 关 · ${LEVELS.at(-1).name}`);
+});
+
+test('越界的关号被夹回表内，不会渲染出 undefined', () => {
+  assert.equal(levelName(-3), LEVELS[0].name);
+  assert.equal(levelName(99), LEVELS.at(-1).name);
+});
+
+test('步数和标准步数都露出来', () => {
+  assert.equal(shiftLabel(3, 5), '3 / 5');
+  assert.equal(parLabel(5), '标准 5 步');
+});
+
+test('单层不写层数，多层才写', () => {
+  assert.equal(sizeLabel({ cols: 4, rows: 4, layers: 1 }), '4×4');
+  assert.equal(sizeLabel({ cols: 5, rows: 4, layers: 3 }), '5×4 × 3 层');
+  assert.equal(layerLabel(0, 1), '单层');
+  assert.equal(layerLabel(1, 3), '第 2 / 3 层');
+});
+
+test('星级用实心和空心凑满三颗', () => {
+  assert.equal(starLabel(3), '★★★');
+  assert.equal(starLabel(1), '★☆☆');
+  assert.equal(starLabel(0), '☆☆☆');
+  assert.equal(starLabel(-1), '☆☆☆');
+});
+
+test('通关评语按超出标准的幅度给，不在玩家赢了时挑刺', () => {
+  assert.match(winComment(3, 5), /少 2 步/);
+  assert.match(winComment(5, 5), /正好/);
+  assert.match(winComment(8, 5), /多用了 3 步/);
+});
+
+test('状态文案只有两种', () => {
+  assert.equal(statusLabel('playing'), '穿越中');
+  assert.equal(statusLabel('won'), '已穿越');
+});
+
+test('通关时不再弹路况提示，避免和结算面板抢话', () => {
+  assert.equal(effectMessage([{ type: 'open' }, { type: 'won' }]), null);
+});
+
+test('路通了和推不动各有各的提示，撤销也有回执', () => {
+  assert.match(effectMessage([{ type: 'open' }]), /出口通了/);
+  assert.match(effectMessage([{ type: 'blocked' }]), /还没门/);
+  assert.match(effectMessage([{ type: 'undo' }]), /撤回/);
+  assert.equal(effectMessage([]), null);
+  assert.equal(effectMessage([{ type: 'shift' }]), null);
+});
+
+test('提示文案把行列号换成从 1 开始的说法', () => {
+  assert.equal(hintLabel({ move: { axis: AXIS_ROW, index: 0, dir: 1 } }), '推第 1 行往右');
+  assert.equal(hintLabel({ move: { axis: AXIS_ROW, index: 2, dir: -1 } }), '推第 3 行往左');
+  assert.equal(hintLabel({ move: { axis: AXIS_COL, index: 1, dir: 1 } }), '推第 2 列往下');
+  assert.equal(hintLabel({ move: { axis: AXIS_COL, index: 1, dir: -1 } }), '推第 2 列往上');
+});
+
+test('给不出提示时把原因照实说出来', () => {
+  assert.equal(hintLabel({ move: null, reason: '两步内没有解，再多推几下' }), '两步内没有解，再多推几下');
+  assert.equal(hintLabel(null), '提示');
+  assert.equal(hintLabel({ move: null }), '提示');
+});
+
+test('撤销按钮带上可撤销的步数', () => {
+  assert.equal(undoLabel(0), '撤销');
+  assert.equal(undoLabel(3), '撤销 3');
+});
+
+test('棋盘越大相机拉得越远，层数越多抬得越高', () => {
+  const small = cameraDistance(3, 3, 1);
+  const large = cameraDistance(5, 5, 1);
+  assert.ok(large.height > small.height);
+  assert.ok(large.back > small.back);
+  assert.ok(cameraDistance(4, 4, 3).height > cameraDistance(4, 4, 1).height);
+});
+
+test('作用行列的文案从 1 开始数，和十字键上写的一致', () => {
+  assert.equal(lineLabel({ layer: 0, col: 0, row: 0 }), '行 1 · 列 1');
+  assert.equal(lineLabel({ layer: 1, col: 3, row: 2 }), '行 3 · 列 4');
+});
+
+test('推移方向的说法和屏幕方向对得上', () => {
+  assert.equal(pushLabel(AXIS_ROW, 1), '整行右移');
+  assert.equal(pushLabel(AXIS_ROW, -1), '整行左移');
+  assert.equal(pushLabel(AXIS_COL, 1), '整列下移');
+  assert.equal(pushLabel(AXIS_COL, -1), '整列上移');
+});
+
+test('新手引导四步讲完，每步都有标题和说明', () => {
+  assert.equal(TUTORIAL_STEPS.length, 4);
+  for (const step of TUTORIAL_STEPS) {
+    assert.ok(step.title.length > 0);
+    assert.ok(step.detail.length > 8, `「${step.title}」的说明太短`);
+  }
+});
+
+test('新手提示只在第一关且还没推过的时候出现', () => {
+  const start = { status: 'playing', levelIndex: 0, shifts: 0 };
+  assert.match(coachLine(start), /横滑/);
+  assert.equal(coachLine({ ...start, shifts: 1 }), null, '推过一步就不该再教了');
+  assert.equal(coachLine({ ...start, levelIndex: 1 }), null, '第二关不该再教');
+  assert.equal(coachLine({ ...start, status: 'won' }), null);
+});
