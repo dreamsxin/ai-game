@@ -8,6 +8,7 @@
 - `xiaoyuanmian`：校园谜案《回声画廊：消失的原作》，支持现场调查、角色询问、证据对质和最终指控。
 - `nijie-tunshi`：3D 滚动吞噬游戏《霓界吞噬》，在荧光几何世界中成长并开启共鸣出口。
 - `guxing-maoxian`：手机触屏横版跳跃《菇星冒险》，跑跳踩敌、顶砖块出道具、蘑菇变大与星星无敌，三关连打。
+- `xiaoxiaole`：手机触屏三消《甜果消消乐》，8x8 交换匹配、连锁下落、直线爆果与彩虹果，五关递进。
 
 ## 本地运行
 
@@ -42,6 +43,12 @@ npm run dev:nijie-tunshi
 npm run dev:guxing-maoxian
 ```
 
+甜果消消乐默认运行在 `http://127.0.0.1:4179`：
+
+```bash
+npm run dev:xiaoxiaole
+```
+
 五子棋和校园谜案的 MCP Streamable HTTP 端点都是各自服务下的 `/mcp`。霓界吞噬当前为无需服务端的固定种子核心原型，完整规划见 `nijie-tunshi/docs/game-design.md`。
 
 ## DeepSeek 配置
@@ -71,4 +78,6 @@ npm run test:nijie-tunshi
 npm run build:nijie-tunshi
 npm run test:guxing-maoxian
 npm run build:guxing-maoxian
+npm run test:xiaoxiaole
+npm run build:xiaoxiaole
 ```
