@@ -1,0 +1,439 @@
+:root {
+  color-scheme: dark;
+  --ink: #eef3ff;
+  --muted: rgba(238, 243, 255, 0.6);
+  --panel: rgba(8, 14, 28, 0.84);
+  --edge: rgba(255, 255, 255, 0.14);
+  --accent: #6ce0c0;
+  --coin: #ffd166;
+  --alert: #ff7b7b;
+  --win: #8dff6a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #081020;
+  color: var(--ink);
+  font-family: 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.scene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hud-top {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(6px);
+}
+
+.stat-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stat-money .stat-value {
+  font-size: 20px;
+  color: var(--coin);
+}
+
+.stat-best {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-side {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 62px);
+  left: max(12px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+
+/* 缺电是唯一会让全城停摆的状态，配色上要跳出来。 */
+.chip-alert {
+  color: var(--alert);
+  border-color: rgba(255, 123, 123, 0.5);
+}
+
+.chip-star {
+  color: var(--coin);
+  letter-spacing: 2px;
+}
+
+/* hud-side 整列不接收指针事件，这个按钮要自己把它要回来。 */
+.chip-help {
+  pointer-events: auto;
+  color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.hud-camera {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 62px);
+  right: max(12px, env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: repeat(2, 40px);
+  gap: 6px;
+}
+
+.pad-key {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--edge);
+  background: rgba(8, 14, 28, 0.6);
+  color: var(--ink);
+  backdrop-filter: blur(6px);
+  touch-action: manipulation;
+}
+
+.pad-key:active {
+  background: rgba(108, 224, 192, 0.3);
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 148px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  max-width: min(88vw, 420px);
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  pointer-events: none;
+}
+
+.toast-coach {
+  border-color: rgba(108, 224, 192, 0.5);
+  color: var(--accent);
+}
+
+.clock {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 96px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+
+.clock-key {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: rgba(8, 14, 28, 0.6);
+  color: var(--ink);
+  touch-action: manipulation;
+}
+
+.clock-key-on {
+  border-color: var(--accent);
+  background: rgba(108, 224, 192, 0.22);
+}
+
+.clock-x {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.clock-label {
+  min-width: 52px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 工具栏横向铺开，窄屏可以滑动，不挤成两行。 */
+.palette {
+  position: absolute;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+}
+
+.palette::-webkit-scrollbar {
+  display: none;
+}
+
+.tool {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  width: 58px;
+  padding: 6px 4px;
+  border-radius: 14px;
+  border: 1px solid var(--edge);
+  background: rgba(8, 14, 28, 0.7);
+  color: var(--ink);
+  font-family: inherit;
+  backdrop-filter: blur(6px);
+  touch-action: manipulation;
+}
+
+.tool-on {
+  border-color: var(--accent);
+  background: rgba(108, 224, 192, 0.22);
+}
+
+/* 买不起的工具压暗但不禁用：玩家还能点开看数值，只是知道现在钱不够。 */
+.tool-poor {
+  opacity: 0.45;
+}
+
+.tool-name {
+  font-size: 11px;
+}
+
+.tool-cost {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--coin);
+  font-variant-numeric: tabular-nums;
+}
+
+.palette-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 70px);
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 6, 14, 0.66);
+  backdrop-filter: blur(4px);
+}
+
+.panel {
+  width: min(340px, 100%);
+  padding: 22px;
+  border-radius: 20px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  text-align: center;
+}
+
+.panel h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 2px;
+}
+
+.panel-status {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-stars {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: 5px;
+  color: var(--coin);
+}
+
+.panel-score {
+  margin: 6px 0 0;
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--win);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-detail {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.panel-steps {
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-steps li {
+  counter-increment: step;
+  padding-left: 26px;
+  position: relative;
+  line-height: 1.5;
+}
+
+.panel-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(108, 224, 192, 0.18);
+  border: 1px solid rgba(108, 224, 192, 0.45);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.panel-steps b {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.panel-action {
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #04231b;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.panel-link {
+  margin-top: 8px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-family: inherit;
+  text-decoration: underline;
+}
+
+@media (min-width: 820px) {
+  .palette {
+    max-width: 560px;
+    margin: 0 auto;
+  }
+}
+
+
+
+
+
+
+
+

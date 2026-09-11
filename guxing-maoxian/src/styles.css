@@ -1,0 +1,276 @@
+:root {
+  color-scheme: dark;
+  --ink: #f6f4ee;
+  --muted: rgba(246, 244, 238, 0.62);
+  --panel: rgba(12, 18, 38, 0.84);
+  --edge: rgba(255, 255, 255, 0.14);
+  --accent: #ffd447;
+  --warm: #ff5470;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0a1226;
+  color: var(--ink);
+  font-family: 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  gap: 10px;
+  overflow: hidden;
+}
+
+.hud-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+
+.stat-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stat-score .stat-value {
+  font-size: 24px;
+  color: var(--accent);
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+}
+
+/* 画布挂在这个空容器里，React 不会去动它的子节点；手势也只在这块区域生效。 */
+.stage-host {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.stage-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.banner {
+  position: absolute;
+  top: 10%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.progress {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.pad-key {
+  display: grid;
+  place-items: center;
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid var(--edge);
+  background: rgba(12, 18, 38, 0.6);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.pad-key:active {
+  background: rgba(255, 212, 71, 0.28);
+}
+
+.pad-key-run {
+  color: #4de1ff;
+}
+
+.pad-key-jump {
+  color: var(--warm);
+  border-color: rgba(255, 84, 112, 0.5);
+}
+
+.pause-key {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 68px);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 8, 20, 0.68);
+  backdrop-filter: blur(4px);
+}
+
+.panel {
+  width: min(380px, 100%);
+  padding: 22px;
+  border-radius: 20px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  text-align: center;
+}
+
+.panel h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: 2px;
+}
+
+.panel-status {
+  margin: 4px 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-tips {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.panel-score {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-stars {
+  margin: 2px 0 6px;
+  font-size: 20px;
+  letter-spacing: 4px;
+  color: var(--accent);
+}
+
+.panel-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-action {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #2b1c00;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+@media (min-width: 820px) {
+  .stage,
+  .pad {
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+
