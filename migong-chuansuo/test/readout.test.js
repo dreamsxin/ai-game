@@ -11,8 +11,12 @@ import {
   levelLabel,
   levelName,
   lineLabel,
+  muteLabel,
   parLabel,
+  progressLabel,
   pushLabel,
+  recordLabel,
+  rewardLabel,
   shiftLabel,
   sizeLabel,
   starLabel,
@@ -20,6 +24,7 @@ import {
   undoLabel,
   winComment,
 } from '../src/scene/readout.js';
+
 
 test('关卡标题带关号和关名', () => {
   assert.equal(levelLabel(0), `第 1 关 · ${LEVELS[0].name}`);
@@ -90,6 +95,30 @@ test('撤销按钮带上可撤销的步数', () => {
   assert.equal(undoLabel(0), '撤销');
   assert.equal(undoLabel(3), '撤销 3');
 });
+
+test('只有真刷掉旧成绩才报新纪录', () => {
+  assert.equal(recordLabel(true), '新纪录');
+  assert.equal(recordLabel(false), null);
+});
+
+test('总星进度带分母，玩家才知道还剩多少可拿', () => {
+  assert.equal(progressLabel(0), `0 / ${LEVELS.length * 3}`);
+  assert.equal(progressLabel(LEVELS.length * 3), `${LEVELS.length * 3} / ${LEVELS.length * 3}`);
+});
+
+test('星级点评按拿到几颗给，一星也不说难听话', () => {
+  assert.match(rewardLabel(3), /满星/);
+  assert.match(rewardLabel(2), /满星/);
+  assert.notEqual(rewardLabel(2), rewardLabel(3));
+  assert.ok(rewardLabel(1).length > 0);
+  assert.equal(rewardLabel(0), rewardLabel(1), '零星只会在异常态出现，按一星说法兜住');
+});
+
+test('音效开关的文案把当前状态说清楚', () => {
+  assert.equal(muteLabel(true), '音效已关');
+  assert.equal(muteLabel(false), '音效已开');
+});
+
 
 test('棋盘越大相机拉得越远，层数越多抬得越高', () => {
   const small = cameraDistance(3, 3, 1);

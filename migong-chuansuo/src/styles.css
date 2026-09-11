@@ -198,6 +198,7 @@ body {
 
 .pad-key,
 .dpad-key {
+  position: relative;
   display: grid;
   place-items: center;
   width: 46px;
@@ -214,6 +215,39 @@ body {
 .dpad-key:active {
   background: rgba(92, 225, 255, 0.3);
 }
+
+/* 撤销没得撤的时候压暗，省掉一次「点了没反应」的困惑。 */
+.pad-key:disabled {
+  opacity: 0.35;
+}
+
+/* 还能撤几步直接标在按钮角上，玩家才敢放心乱推。 */
+.pad-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #04141b;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 键盘操作也要看得见焦点，否则按 Tab 就等于瞎点。 */
+.pad-key:focus-visible,
+.dpad-key:focus-visible,
+.layer-key:focus-visible,
+.chip-help:focus-visible,
+.panel-action:focus-visible,
+.panel-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 
 /* 十字键正中写着当前推的是哪一行哪一列，和场景里的琥珀光带说的是同一条。 */
 .dpad {
@@ -293,6 +327,69 @@ body {
   letter-spacing: 5px;
   color: #ffd447;
 }
+
+/* 星星逐颗弹出：animationDelay 由 JSX 按序号给，这里只管弹的姿态。 */
+.panel-stars i {
+  display: inline-block;
+  font-style: normal;
+  animation: star-pop 0.42s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.panel-stars .star-off {
+  color: rgba(238, 243, 255, 0.22);
+}
+
+@keyframes star-pop {
+  from {
+    transform: scale(0.2) rotate(-25deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* 破纪录只在真刷掉旧成绩时出现，所以值得一条会发光的横幅。 */
+.panel-badge {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(255, 212, 71, 0.16);
+  border: 1px solid rgba(255, 212, 71, 0.55);
+  color: #ffd447;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  animation: badge-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes badge-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(255, 212, 71, 0);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(255, 212, 71, 0.45);
+  }
+}
+
+.panel-win {
+  animation: panel-rise 0.3s ease-out;
+}
+
+@keyframes panel-rise {
+  from {
+    transform: translateY(14px) scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
 
 .panel-score {
   margin: 6px 0 0;
@@ -377,12 +474,42 @@ body {
   text-decoration: underline;
 }
 
+/* 路通了那一声要看得见：绿色描边比换一句文案更抢眼。 */
+.toast-open {
+  border-color: rgba(141, 255, 106, 0.55);
+  color: var(--win);
+  animation: toast-pop 0.34s ease-out;
+}
+
+@keyframes toast-pop {
+  from {
+    transform: translateX(-50%) scale(0.9);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
 @media (min-width: 820px) {
   .pad {
     max-width: 520px;
     margin: 0 auto;
   }
 }
+
+/* 关掉动效的人是真的不想看动效，庆祝动画也不例外——内容本身一条都不少。 */
+@media (prefers-reduced-motion: reduce) {
+  .toast-open,
+  .panel-win,
+  .panel-badge,
+  .panel-stars i {
+    animation: none;
+  }
+}
+
+
 
 
 

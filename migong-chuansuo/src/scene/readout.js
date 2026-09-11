@@ -40,6 +40,22 @@ export const effectMessage = (effects) => {
 
 export const undoLabel = (count) => (count > 0 ? `撤销 ${count}` : '撤销');
 
+// 通关奖励：只有真的刷掉旧纪录才说「新纪录」，否则重刷同一关每次都报喜就不值钱了。
+export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);
+
+// 总星进度要给出分母，玩家才知道还剩多少可拿。
+export const progressLabel = (total) => `${total} / ${LEVEL_COUNT * 3}`;
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+// 星级奖励的一句话点评：按拿到几颗给，和 winComment 的「步数账」分开说。
+export const rewardLabel = (stars) => {
+  if (stars >= 3) return '满星穿越';
+  if (stars === 2) return '再省几步就是满星';
+  return '通了就算过，下次少推几下';
+};
+
+
 // 行列号对玩家一律从 1 开始数，内部索引不外露。
 export const lineLabel = (anchor) => `行 ${anchor.row + 1} · 列 ${anchor.col + 1}`;
 

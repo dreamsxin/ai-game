@@ -65,14 +65,15 @@ export const exitReachable = (state) => canReach(state.board, state.player, stat
 export function setLayer(state, layer) {
   if (state.status !== 'playing') return state;
   if (layer < 0 || layer >= state.board.layers || layer === state.activeLayer) return state;
-  return commit(state, { activeLayer: layer, selection: null });
+  return commit(state, { activeLayer: layer, selection: null }, [{ type: 'layer', layer }]);
 }
 
 export function selectCell(state, cell) {
   if (state.status !== 'playing' || !cell) return state;
-  if (sameCell(state.selection, cell)) return commit(state, { selection: null });
-  return commit(state, { selection: toCell(cell) });
+  if (sameCell(state.selection, cell)) return commit(state, { selection: null }, [{ type: 'deselect' }]);
+  return commit(state, { selection: toCell(cell) }, [{ type: 'select', cell: toCell(cell) }]);
 }
+
 
 /** 推移一整行或一整列。玩家站在这条线上就跟着走，这一步也是他唯一的免费位移。 */
 export function shift(state, axis, index, dir) {

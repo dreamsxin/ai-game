@@ -208,6 +208,8 @@ export function createScene(host) {
   let lastLevel = null;
   let cachedView = null;
   let cachedViewTick = -1;
+  let exitOpen = false;
+  let exitOpenTick = -1;
 
   // 派生视图每步只算一次：可达集合是 BFS，没必要每帧重跑。
   const viewFor = (state) => {
@@ -218,13 +220,25 @@ export function createScene(host) {
     return cachedView;
   };
 
+  // 「出口这会儿走得到吗」也按步缓存：门拱要靠它决定跳不跳。
+  const exitIsOpen = (state) => {
+    if (exitOpenTick !== state.tick) {
+      exitOpenTick = state.tick;
+      exitOpen = viewFor(state).some((cell) => cell.isExit && cell.reachable);
+    }
+    return exitOpen;
+  };
+
+
   // 靠 tick 判断这批特效是不是新的：state 在两次动作之间是同一个对象，不能每帧重放。
   const consume = (state, time) => {
     if (state.level !== lastLevel) {
       lastLevel = state.level;
       lastTick = state.tick;
       cachedViewTick = -1;
+      exitOpenTick = -1;
       animation = null;
+
       focusY = state.activeLayer * LAYER_HEIGHT;
       return;
     }
@@ -340,7 +354,15 @@ export function createScene(host) {
     exitMesh.rotation.y = time * 0.7;
     // 通关后把门拱抬起来一点，作为「成了」的收尾反馈。
     exitMesh.position.y += state.status === 'won' ? Math.abs(Math.sin(time * 2)) * 0.12 : 0;
+    // 路一通就让门拱转快些、微微起伏：HUD 那行字会自己消失，这个反馈一直在。
+    const open = state.status === 'playing' && exitIsOpen(state);
+    if (open) {
+      exitMesh.rotation.y = time * 1.9;
+      exitMesh.position.y += Math.abs(Math.sin(time * 3.2)) * 0.08;
+    }
+    exitMesh.scale.setScalar(open ? 1 + Math.sin(time * 5) * 0.05 : 1);
   };
+
   // 光带 + 棋盘外的箭头：推移动画期间只留正在动的那条并提亮，
   // 平时标出「方向键会推的那一行一列」。
   const writeBands = (state, focus) => {

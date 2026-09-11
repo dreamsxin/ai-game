@@ -21,6 +21,21 @@ import {
 
 const fresh = (index = 1, seed = 42) => createGame(index, seed);
 
+test('选中、取消选中、切层都留下回执，反馈层才有东西可播', () => {
+  const state = fresh();
+  const cell = { layer: state.activeLayer, col: 0, row: 0 };
+  const picked = selectCell(state, cell);
+  assert.equal(picked.effects[0].type, 'select');
+  assert.deepEqual(picked.effects[0].cell, cell);
+  assert.equal(selectCell(picked, cell).effects[0].type, 'deselect');
+
+  const stacked = fresh(2, 42);
+  const moved = setLayer(stacked, stacked.activeLayer === 0 ? 1 : 0);
+  assert.equal(moved.effects[0].type, 'layer');
+  assert.equal(moved.effects[0].layer, moved.activeLayer);
+});
+
+
 test('开局站在起点、零步、未通关', () => {
   const state = fresh();
   assert.equal(state.status, 'playing');
