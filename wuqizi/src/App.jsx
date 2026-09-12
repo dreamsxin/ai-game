@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, ChevronRight, CircleHelp, Flag, RotateCcw, Send, Sparkles, Swords, Trophy } from 'lucide-react';
+import { Bot, ChevronRight, CircleHelp, Flag, RotateCcw, Send, Sparkles, Swords, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { AI, EMPTY, HUMAN, LEVELS, SIZE, checkWin, createBoard } from './game';
+import { createAudio } from './audio';
+
 import { requestAiMove, requestChatMessage } from './aiService';
 import { QUICK_CHAT_MESSAGES, recentAutoComments, shouldAppendAutoComment } from './chat';
 
@@ -31,6 +33,12 @@ export default function App() {
   const aiRequest = useRef(null);
   const chatRequest = useRef(null);
   const chatList = useRef(null);
+  const audioRef = useRef(null);
+  if (!audioRef.current) audioRef.current = createAudio({ muted: true });
+  const [muted, setMuted] = useState(true);
+  const toggleMute = () => setMuted(audioRef.current.setMuted(!muted));
+  useEffect(() => () => audioRef.current?.dispose(), []);
+
 
   const levelIndex = useMemo(() => {
     let result = 0;
@@ -94,9 +102,15 @@ export default function App() {
           kind: 'move-comment',
           content: move.comment,
         }] : items);
-        if (checkWin(copy, move.row, move.col, AI)) finish('lost');
-        else if (copy.every(row => row.every(Boolean))) finish('draw');
+        const aiWon = checkWin(copy, move.row, move.col, AI);
+        const aiDraw = !aiWon && copy.every(row => row.every(Boolean));
+        // board 是这一轮开始时的棋盘，AI 还没落子 —— 正是 analyzeMoveSituation 要的那一份。
+        audioRef.current?.move(board, move, AI, aiWon ? 'lost' : aiDraw ? 'draw' : 'playing');
+        if (aiWon) finish('lost');
+        else if (aiDraw) finish('draw');
         else setTurn(HUMAN);
+
+
       })
       .catch(error => {
         if (!controller.signal.aborted) console.error('AI turn failed:', error);
@@ -124,15 +138,24 @@ export default function App() {
   }
 
   function place(row, col) {
-    if (turn !== HUMAN || status !== 'playing' || board[row][col] !== EMPTY || thinking) return;
+    if (turn !== HUMAN || status !== 'playing' || board[row][col] !== EMPTY || thinking) {
+      // 原来这里是静默 return，玩家分不清「没点中」和「现在不能下」。
+      audioRef.current?.play('deny');
+      return;
+    }
     const copy = board.map(line => [...line]);
     copy[row][col] = HUMAN;
     setBoard(copy); setLastMove({ row, col, player: HUMAN });
     setHistory(h => [...h, { row, col, player: HUMAN }]);
-    if (checkWin(copy, row, col, HUMAN)) finish('won');
-    else if (copy.every(line => line.every(Boolean))) finish('draw');
+    const won = checkWin(copy, row, col, HUMAN);
+    const draw = !won && copy.every(line => line.every(Boolean));
+    // 棋盘传 board 而不是 copy：analyzeMoveSituation 要自己试摆，落子后那一格已经不空了。
+    audioRef.current?.move(board, { row, col }, HUMAN, won ? 'won' : draw ? 'draw' : 'playing');
+    if (won) finish('won');
+    else if (draw) finish('draw');
     else setTurn(AI);
   }
+
 
   function restart() {
     aiRequest.current?.abort();
@@ -142,10 +165,16 @@ export default function App() {
     gameId.current++; setBoard(createBoard()); setTurn(HUMAN); setStatus('playing');
     setLastMove(null); setHistory([]); setThinking(false);
     setMessages(initialMessages); setDraft(''); setChatStatus('idle'); setChatError('');
+    audioRef.current?.play('restart');
   }
 
   function undo() {
-    if (status !== 'playing' || thinking || history.length < 2 || turn !== HUMAN) return;
+    if (status !== 'playing' || thinking || history.length < 2 || turn !== HUMAN) {
+      audioRef.current?.play('deny');
+      return;
+    }
+    audioRef.current?.play('undo');
+
     const removed = history.slice(-2); const copy = board.map(row => [...row]);
     removed.forEach(m => { copy[m.row][m.col] = EMPTY; });
     const nextHistory = history.slice(0, -2);
@@ -234,6 +263,10 @@ export default function App() {
           <div className="board-actions">
             <button onClick={undo} disabled={history.length < 2 || thinking || turn !== HUMAN}><RotateCcw size={17}/>悔棋</button>
             <button onClick={restart}><Flag size={17}/>重新开始</button>
+            <button onClick={toggleMute} title={muted ? '开音效：成四和被挡都有专门的声音' : '静音'}>
+              {muted ? <VolumeX size={17}/> : <Volume2 size={17}/>}{muted ? '开音效' : '静音'}
+            </button>
+
           </div>
         </div>
 
