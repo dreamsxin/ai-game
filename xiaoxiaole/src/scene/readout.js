@@ -46,3 +46,17 @@ export const remainLabel = (score, target) => {
   const remain = Math.max(0, target - score);
   return remain ? `还差 ${formatScore(remain)} 分` : '目标已达成';
 };
+
+// 只有真刷掉旧的最高分才报新纪录，否则每局都报喜就不值钱了。
+export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+// 星级点评按拿到几颗给，和上面那行「分数账」分开说。通关本身不该被挑刺。
+export const rewardLabel = (stars) => {
+  if (stars >= 3) return '满星过关';
+  if (stars === 2) return '再多连一环就是满星';
+  if (stars === 1) return '过关了，下次多攒连锁';
+  return '差一点点，再来一次';
+};
+
