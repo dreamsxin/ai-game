@@ -76,6 +76,19 @@ export function winComment(seconds, par) {
 
 export const starLabel = (stars) => '★★★'.slice(0, stars).padEnd(3, '☆');
 
+// 只有真刷掉这一趟的旧星数才报新纪录，否则重跑同一趟每次都报喜就不值钱了。
+export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+// 星级点评按拿到几颗给，和上面那行「时间账」分开说。货送到了本身不该被挑刺。
+export const rewardLabel = (stars) => {
+  if (stars >= 3) return '满星交付';
+  if (stars === 2) return '再稳一点就是满星';
+  return '货送到了，下次少陷几次';
+};
+
+
 /**
  * 每帧给 HUD 的仪表快照。全是原始数字和短字符串，React 拿去直接渲染。
  * 这里现算而不是缓存：算一次的成本远小于把它塞进模拟状态带来的耦合。

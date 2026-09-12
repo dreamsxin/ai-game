@@ -82,8 +82,11 @@ function substep(state, input, dt) {
     const pointVelocity = add(vehicle.velocity, cross(vehicle.angularVelocity, arm));
     const pull = winchTension(state.winch, origin, pointVelocity);
     if (cableSnapped(state.winch, pull.distance)) {
-      state.winch = detach();
+      // 崩断和手动脱钩在绞盘状态上看不出区别，可反馈层必须分得开：
+      // 一个是「你判断错了」，一个是「你决定收工」。留一个标记让它们分道。
+      state.winch = { ...detach(), snapped: true };
       push(state, 'winch', '钢缆崩断，脱钩了');
+
     } else if (pull.tension > 0) {
       external.push({ force: pull.force, point: origin });
       state.winch = { ...state.winch, tension: pull.tension };

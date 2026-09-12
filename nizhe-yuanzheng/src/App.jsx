@@ -10,6 +10,8 @@ import {
   RotateCcw,
   Truck,
   Video,
+  Volume2,
+  VolumeX,
   Wrench,
 } from 'lucide-react';
 import { LEVEL_COUNT } from './game/level.js';
@@ -27,10 +29,23 @@ import {
 import { createInput } from './game/input.js';
 import { createScene } from './scene/createScene.js';
 import { CAMERA_MODES } from './scene/camera.js';
-import { TUTORIAL_STEPS, gearOptions, readout, starLabel, winComment } from './scene/readout.js';
+import { createAudio, snapshot, vibrate, vibrationFor } from './scene/audio.js';
+import {
+  TUTORIAL_STEPS,
+  gearOptions,
+  muteLabel,
+  readout,
+  recordLabel,
+  rewardLabel,
+  starLabel,
+  winComment,
+} from './scene/readout.js';
+
 
 const STARS_KEY = 'nizhe-yuanzheng:stars';
 const TAUGHT_KEY = 'nizhe-yuanzheng:taught';
+const MUTE_KEY = 'nizhe-yuanzheng:muted';
+
 // HUD 不需要 60 Hz：仪表每 6 帧刷一次，眼睛看不出差别，React 却省下大半开销。
 const HUD_EVERY = 6;
 const MAX_FRAME = 1 / 20;
@@ -61,25 +76,45 @@ export default function App() {
   const modeRef = useRef('chase');
   // 教程面板开着的时候不能推进模拟：不然计时和油耗在玩家读说明的时候就开始跑了。
   const pausedRef = useRef(true);
+  // 音频引擎不参与渲染；模拟层是就地改同一个 state，所以还得自己留一份上一帧的快照。
+  const audioRef = useRef(null);
+  const snapRef = useRef(snapshot(gameRef.current));
   const [session, setSession] = useState(`${gameRef.current.levelIndex}:${gameRef.current.seed}`);
   const [view, setView] = useState(() => readout(gameRef.current));
   const [mode, setMode] = useState('chase');
   const [toast, setToast] = useState(null);
   const [stars, setStars] = useState(() => readJson(STARS_KEY, {}));
   const [guide, setGuide] = useState(() => !readJson(TAUGHT_KEY, false));
+  const [muted, setMuted] = useState(() => readJson(MUTE_KEY, false));
+  const [record, setRecord] = useState(false);
   const gears = useMemo(gearOptions, []);
 
   const load = useCallback((index, seed) => {
     gameRef.current = createGame(index, seed);
+    snapRef.current = snapshot(gameRef.current);
     setView(readout(gameRef.current));
     setToast(null);
+    setRecord(false);
     setSession(`${index}:${seed}`);
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setMuted((current) => {
+      const next = !current;
+      writeJson(MUTE_KEY, next);
+      if (audioRef.current) audioRef.current.setMuted(next);
+      return next;
+    });
   }, []);
 
   const closeGuide = useCallback(() => {
     setGuide(false);
     writeJson(TAUGHT_KEY, true);
-  }, []);
+    // 关教程是本局第一个用户手势，正好拿它把 AudioContext 解锁。
+    if (!audioRef.current) audioRef.current = createAudio({ muted });
+    audioRef.current.play('shift');
+  }, [muted]);
+
 
   const cycleCamera = useCallback(() => {
     setMode((current) => {
@@ -91,7 +126,10 @@ export default function App() {
 
   const onAction = useCallback((action) => {
     const state = gameRef.current;
+    // 键盘操作也算用户手势，顺手把引擎接上——油门是轴，不会走到这里来。
+    if (!audioRef.current) audioRef.current = createAudio({ muted });
     if (action === 'gearR') setGear(state, 'R');
+
     else if (action === 'gearN') setGear(state, 'N');
     else if (action === 'gearA') setGear(state, 'A');
     else if (action === 'gearL') setGear(state, 'L');
@@ -106,7 +144,8 @@ export default function App() {
     else if (action === 'help') setGuide((current) => !current);
     else if (action === 'restart') load(state.levelIndex, state.seed);
     setView(readout(gameRef.current));
-  }, [cycleCamera, load]);
+  }, [cycleCamera, load, muted]);
+
 
   useEffect(() => {
     const host = hostRef.current;
@@ -132,7 +171,21 @@ export default function App() {
       scene.setMode(modeRef.current);
       scene.render(game, dt);
 
+      // 引擎是一条常驻音，每帧只改参数；离散事件靠前后两份快照比出来。
+      const audio = audioRef.current;
+      if (audio) {
+        audio.updateEngine(game.vehicle, {
+          max: game.spec.engine.max,
+          running: !pausedRef.current && game.status !== 'lost',
+        });
+        const snap = snapshot(game);
+        audio.notify(snapRef.current, snap);
+        vibrate(vibrationFor(snapRef.current, snap));
+        snapRef.current = snap;
+      }
+
       counter += 1;
+
       if (counter % HUD_EVERY === 0 || game.status === 'won' || game.status === 'lost') {
         setView(readout(game));
       }
@@ -163,14 +216,23 @@ export default function App() {
   }, [toast]);
 
   useEffect(() => {
-    if (view.status !== 'won') return;
+    if (view.status !== 'won') {
+      setRecord(false);
+      return;
+    }
     const index = gameRef.current.levelIndex;
     const best = stars[index] ?? 0;
     if (view.stars <= best) return;
-    const record = { ...stars, [index]: view.stars };
-    setStars(record);
-    writeJson(STARS_KEY, record);
+    // 破纪录要在写盘之前判：写完 best 就等于新星数，再比就永远比不出来了。
+    setRecord(true);
+    const next = { ...stars, [index]: view.stars };
+    setStars(next);
+    writeJson(STARS_KEY, next);
   }, [view.status, view.stars, stars]);
+
+  // 卸载时关掉 AudioContext。浏览器对同时存在的 context 有上限，热更新时不关会攒着。
+  useEffect(() => () => audioRef.current?.dispose(), []);
+
 
   const touch = (patch) => () => Object.assign(touchRef.current, patch);
   const levelIndex = gameRef.current.levelIndex;
@@ -258,6 +320,17 @@ export default function App() {
         <button type="button" className="tool" onClick={() => setGuide(true)}>
           <HelpCircle size={16} aria-hidden="true" /> 玩法
         </button>
+        <button
+          type="button"
+          className="tool"
+          onClick={toggleMute}
+          aria-pressed={muted}
+          aria-label={muteLabel(muted)}
+        >
+          {muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}
+          {muted ? '静音' : '音效'}
+        </button>
+
         <button type="button" className="tool" onClick={() => load(levelIndex, gameRef.current.seed)}>
           <RotateCcw size={16} aria-hidden="true" /> 重开
         </button>
@@ -352,12 +425,27 @@ export default function App() {
 
       {view.status === 'won' && (
         <div className="overlay" role="dialog" aria-modal="true">
-          <div className="panel">
+          <div className="panel panel-settle">
             <h1>交付完成</h1>
             <p className="panel-status">{level.name}</p>
-            <p className="panel-stars">{starLabel(view.stars)}</p>
+            {record && <p className="panel-badge">{recordLabel(record)}</p>}
+            {/* 星星逐颗弹出来，一次性全亮就没有「攒到了」的感觉。 */}
+            <p className="panel-stars" aria-label={`获得 ${view.stars} 星`}>
+              {starLabel(view.stars).split('').map((mark, index) => (
+                <i
+                  key={index}
+                  className={mark === '★' ? 'star-on' : 'star-off'}
+                  style={{ animationDelay: `${index * 180}ms` }}
+                  aria-hidden="true"
+                >
+                  {mark}
+                </i>
+              ))}
+            </p>
             <p className="panel-score">{view.time}{view.penalty > 0 ? ` + 罚时 ${view.penalty}s` : ''}</p>
             <p className="panel-detail">{winComment(gameRef.current.elapsed + gameRef.current.penalty, level.par)}</p>
+            <p className="panel-detail">{rewardLabel(view.stars)} · 总星 {totalStars} / {LEVEL_COUNT * 3}</p>
+
             <button
               type="button"
               className="panel-action"
