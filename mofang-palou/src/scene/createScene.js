@@ -22,6 +22,7 @@ import {
   VIEW_TOP,
 } from '../game/rules.js';
 import { CAMERA_FOV, cameraFor, cellPosition } from './readout.js';
+import { GHOST_SCALE, drawModeFor, materialNameFor, poolBudget } from './frame.js';
 import {
   SHIFT_SECONDS,
   WALK_SECONDS_PER_CELL,
@@ -97,13 +98,6 @@ const MATERIALS = {
   ghost: { color: 0x1b2440, emissive: 0x0c1730 },
 };
 
-const lineHasCell = (axis, anchor, cell) => {
-  if (!anchor) return false;
-  if (axis === AXIS_ROW) return cell.layer === anchor.layer && cell.row === anchor.row;
-  if (axis === AXIS_PILLAR) return cell.col === anchor.col && cell.row === anchor.row;
-  return cell.layer === anchor.layer && cell.col === anchor.col;
-};
-
 export function createScene(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -134,7 +128,7 @@ export function createScene(canvas) {
   const ensurePool = (order) => {
     if (poolOrder === order) return;
     for (const mesh of pool) board.remove(mesh);
-    pool = Array.from({ length: order ** 3 }, () => {
+    pool = Array.from({ length: poolBudget(order) }, () => {
       const mesh = new THREE.Mesh(geometryCache[0], materials.far);
       mesh.visible = false;
       board.add(mesh);
@@ -205,39 +199,13 @@ export function createScene(canvas) {
   };
 
   /**
-   * 这一格在这个视角下怎么画。
-   *
-   * 俯视原来是「只画激活层及以下」，于是开局站在第 1 层时，出口所在的第 3 层整层都不画 ——
-   * 玩家看到的是一个悬空的绿环，既不知道它在哪一层，也看不见通向它的路。这是「看不到出口」
-   * 的根源。改成：激活层画实的，**出口那一层永远画一层暗幽灵**，其余层不画。
-   * 最多两层，六阶也读得清，又保证出口一定在画面里。
+   * 这一帧的取舍全交给 frame.js —— 那一层不碰 WebGL，所以「出口画不画」这类问题
+   * 不用开浏览器就能验。这里只负责把判断结果落到 mesh 上。
    */
-  const drawModeFor = (clip, state, cell) => {
-    if (clip === 'slice') return cell.row === state.sliceRow ? 'solid' : 'hidden';
-    if (clip === 'focus') {
-      if (cell.layer === state.activeLayer) return 'solid';
-      if (cell.layer === state.exit.layer) return 'ghost';
-      return 'hidden';
-    }
-    return 'solid';
-  };
-
   const place = (object, order, cell, progress) => {
     const slid = slideCell(cell, animation, order, progress) ?? cell;
     const [x, y, z] = cellPosition(order, slid);
     object.position.set(x, y, z);
-  };
-
-  const materialFor = (state, cell, axes, anchor, mode) => {
-    if (mode === 'ghost') return materials.ghost;
-    if (state.selection
-      && state.selection.layer === cell.layer
-      && state.selection.col === cell.col
-      && state.selection.row === cell.row) return materials.picked;
-    if (axes && (lineHasCell(axes.horizontal, anchor, cell) || lineHasCell(axes.vertical, anchor, cell))) {
-      return materials.line;
-    }
-    return cell.reachable ? materials.near : materials.far;
   };
 
   const resize = () => {
@@ -274,18 +242,26 @@ export function createScene(canvas) {
           ? { horizontal: AXIS_ROW, vertical: AXIS_PILLAR }
           : null;
       const anchor = focus ?? state.selection ?? state.player;
+      const frame = {
+        clip: shot.clip,
+        activeLayer: state.activeLayer,
+        sliceRow: state.sliceRow,
+        exitLayer: state.exit.layer,
+        selection: state.selection,
+        axes,
+        anchor,
+      };
 
       let slot = 0;
       for (const cell of cells) {
-        const mode = drawModeFor(shot.clip, state, cell);
+        const mode = drawModeFor(frame, cell);
         if (mode === 'hidden') continue;
         const mesh = pool[slot];
         slot += 1;
         mesh.visible = true;
         mesh.geometry = geometryCache[cell.tile & 63];
-        mesh.material = materialFor(state, cell, axes, anchor, mode);
-        // 幽灵层缩小一点，读起来才像「在后面」，也不会挡住实层的门。
-        mesh.scale.setScalar(mode === 'ghost' ? 0.82 : 1);
+        mesh.material = materials[materialNameFor(frame, cell, mode)];
+        mesh.scale.setScalar(mode === 'ghost' ? GHOST_SCALE : 1);
         // 幽灵层不该被点到：点它会选中一个你现在根本不在操作的面。
         mesh.userData.cell = mode === 'ghost' ? null : cell;
         place(mesh, order, cell, progress);
