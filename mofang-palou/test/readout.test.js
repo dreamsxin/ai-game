@@ -95,8 +95,8 @@ test('提示文案说清推哪条线、往哪推；柱要说清是上还是下',
   assert.match(pillar, /第 2 列第 3 排那根柱.*往上/, '柱是跨层的，不能说成第几层');
 });
 
-test('引导七步讲完，热身塔、柱和视角各占一步 —— 不讲清楚玩家会当成 bug', () => {
-  assert.equal(TUTORIAL_STEPS.length, 7);
+test('引导八步讲完，热身塔、柱、视角和怎么读砖面各占一步 —— 不讲清楚玩家会当成 bug', () => {
+  assert.equal(TUTORIAL_STEPS.length, 8);
   for (const step of TUTORIAL_STEPS) {
     assert.ok(step.title.length > 0);
     assert.ok(step.detail.length > 10, `「${step.title}」的说明太短`);
@@ -104,6 +104,19 @@ test('引导七步讲完，热身塔、柱和视角各占一步 —— 不讲清
   assert.ok(TUTORIAL_STEPS.some((step) => step.detail.includes('柱')));
   assert.ok(TUTORIAL_STEPS.some((step) => step.detail.includes('视角')));
   assert.ok(TUTORIAL_STEPS.some((step) => step.detail.includes('脚下')), '得说清第一座出口就在同层');
+  // 玩家最初的困惑是「出口被封起来了」：砖面画的是路线，得有一步专门教怎么读。
+  assert.ok(
+    TUTORIAL_STEPS.some((step) => step.detail.includes('亮线')),
+    '得说清亮线接上才算通',
+  );
+  assert.ok(
+    TUTORIAL_STEPS.some((step) => step.detail.includes('绿')),
+    '竖向连接是绿的，这是唯一能区分上下门的线索',
+  );
+  assert.ok(
+    TUTORIAL_STEPS.some((step) => step.detail.includes('走位')),
+    '只有推砖计步这件事不能漏',
+  );
 });
 
 test('前两座各贴一句针对性的话：第一座教推行列，第二座教推柱', () => {

@@ -32,44 +32,104 @@ import {
   walkPoint,
 } from './motion.js';
 
-const INNER = TILE_SPAN * 0.9;        // 砖体比格子略小，缝隙让「砖在滑动」看得出来
-const WALL_HEIGHT = TILE_SPAN * 0.5;
-const WALL_THICK = TILE_SPAN * 0.11;
+const INNER = TILE_SPAN * 0.9;          // 砖体比格子略小，缝隙让「砖在滑动」看得出来
+// 墙压到 0.34：原来 0.5 从 62° 俯角看会把砖心的路条挡住，而路条才是要读的东西。
+const WALL_HEIGHT = TILE_SPAN * 0.34;
+const WALL_THICK = TILE_SPAN * 0.1;
 const FLOOR_THICK = TILE_SPAN * 0.12;
 const FLOOR_Y = -LAYER_HEIGHT * 0.42;
-const RIM = INNER * 0.3;              // 地板留边的宽度：中间挖空就是「能往下掉」
+const FLOOR_TOP = FLOOR_Y + FLOOR_THICK / 2;
+
+// 路条：从砖心伸到边缘的一道亮条。相邻两格的路条在共享边上接上，就是一条连续的线。
+const ROUTE_W = INNER * 0.18;
+const ROUTE_H = FLOOR_THICK * 0.55;
+const ROUTE_Y = FLOOR_TOP + ROUTE_H / 2;
+const NODE = INNER * 0.28;              // 砖心节点，死路格也有，才看得出「这里是一格」
+const VENT = INNER * 0.46;              // 朝下的门画成地板上一圈亮框
+const VENT_BAR = INNER * 0.07;
+
+/**
+ * 顶点色：暗的砖体、亮的路条、偏绿的竖向连接，全烘进几何体。
+ * 材质颜色乘在它上面，所以状态染色（走得到／走不到／作用线）不会破坏砖内部的明暗关系 ——
+ * 这套 migong-chuansuo 已经验过。
+ */
+const BODY_COLOR = [0.52, 0.57, 0.74];
+const ROUTE_COLOR = [1, 1, 1];
+const VERTICAL_COLOR = [0.72, 1, 0.8];
 
 const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
 
+const paint = (geometry, [r, g, b]) => {
+  const count = geometry.getAttribute('position').count;
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i += 1) {
+    colors[i * 3] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geometry;
+};
+
 /**
- * 一块砖的几何体。门开着就留缺口，门关着就砌墙。
- * 上下两个面没法用「墙」表达，所以：朝下开门 → 地板中间挖空；朝上开门 → 四角立短柱。
+ * 一块砖的几何体。**画的是路线，不是墙。**
+ *
+ * 第一版是「门开着留缺口、门关着砌实墙」，于是画面里占主导的是墙、开口是「没有东西的地方」。
+ * 玩法是把线路连起来，视觉却在强调阻隔 —— 出口那格三面墙一个绿环，看起来就是被封死了。
+ * migong-chuansuo 的做法是反的：门框亮、地板暗，玩家直接读到开口在哪。
+ *
+ * 现在每扇开着的门都从砖心伸出一条亮路条到边缘，砖心一个亮节点。
+ * 相邻两格的路条在共享边上接上就是一条连续的亮线；没接上就是两条路条各自顶着一面墙。
+ * 「一扇门换一面墙」——所以水平门再多，方块数也不变。
+ *
+ * 上下两个方向不在水平面上，没法用路条表达，改用颜色区分：
+ * 朝上四角立柱、朝下地板一圈亮框，都是偏绿的竖向色。
  */
 function tileGeometry(mask) {
   const parts = [];
-  if (mask & DOOR_D) {
-    // 地板只剩四条边，中间是洞 —— 一眼看出这格能往下走。
-    const long = INNER;
-    const off = (INNER - RIM) / 2;
-    parts.push(box(long, FLOOR_THICK, RIM, 0, FLOOR_Y, -off));
-    parts.push(box(long, FLOOR_THICK, RIM, 0, FLOOR_Y, off));
-    parts.push(box(RIM, FLOOR_THICK, INNER - RIM * 2, -off, FLOOR_Y, 0));
-    parts.push(box(RIM, FLOOR_THICK, INNER - RIM * 2, off, FLOOR_Y, 0));
-  } else {
-    parts.push(box(INNER, FLOOR_THICK, INNER, 0, FLOOR_Y, 0));
-  }
+  parts.push(paint(box(INNER, FLOOR_THICK, INNER, 0, FLOOR_Y, 0), BODY_COLOR));
+
   const wallY = FLOOR_Y + WALL_HEIGHT / 2;
   const edge = (INNER - WALL_THICK) / 2;
-  if (!(mask & DOOR_N)) parts.push(box(INNER, WALL_HEIGHT, WALL_THICK, 0, wallY, -edge));
-  if (!(mask & DOOR_S)) parts.push(box(INNER, WALL_HEIGHT, WALL_THICK, 0, wallY, edge));
-  if (!(mask & DOOR_W)) parts.push(box(WALL_THICK, WALL_HEIGHT, INNER, -edge, wallY, 0));
-  if (!(mask & DOOR_E)) parts.push(box(WALL_THICK, WALL_HEIGHT, INNER, edge, wallY, 0));
+  const half = INNER / 4;
+  const arm = INNER / 2;
+  // 每个方向：开着就铺一条路条，关着就砌一面墙。
+  const lanes = [
+    [DOOR_N, box(ROUTE_W, ROUTE_H, arm, 0, ROUTE_Y, -half), box(INNER, WALL_HEIGHT, WALL_THICK, 0, wallY, -edge)],
+    [DOOR_S, box(ROUTE_W, ROUTE_H, arm, 0, ROUTE_Y, half), box(INNER, WALL_HEIGHT, WALL_THICK, 0, wallY, edge)],
+    [DOOR_W, box(arm, ROUTE_H, ROUTE_W, -half, ROUTE_Y, 0), box(WALL_THICK, WALL_HEIGHT, INNER, -edge, wallY, 0)],
+    [DOOR_E, box(arm, ROUTE_H, ROUTE_W, half, ROUTE_Y, 0), box(WALL_THICK, WALL_HEIGHT, INNER, edge, wallY, 0)],
+  ];
+  for (const [bit, lane, wall] of lanes) {
+    if (mask & bit) {
+      parts.push(paint(lane, ROUTE_COLOR));
+      wall.dispose();
+    } else {
+      parts.push(paint(wall, BODY_COLOR));
+      lane.dispose();
+    }
+  }
+
+  const vertical = mask & (DOOR_U | DOOR_D);
+  parts.push(paint(box(NODE, ROUTE_H, NODE, 0, ROUTE_Y, 0), vertical ? VERTICAL_COLOR : ROUTE_COLOR));
+
+  if (mask & DOOR_D) {
+    // 地板上一圈亮框：这一格能往下走。原来是把地板中间挖空，但那和砖心节点抢位置。
+    const off = (VENT - VENT_BAR) / 2;
+    parts.push(paint(box(VENT, ROUTE_H, VENT_BAR, 0, ROUTE_Y, -off), VERTICAL_COLOR));
+    parts.push(paint(box(VENT, ROUTE_H, VENT_BAR, 0, ROUTE_Y, off), VERTICAL_COLOR));
+    parts.push(paint(box(VENT_BAR, ROUTE_H, VENT - VENT_BAR * 2, -off, ROUTE_Y, 0), VERTICAL_COLOR));
+    parts.push(paint(box(VENT_BAR, ROUTE_H, VENT - VENT_BAR * 2, off, ROUTE_Y, 0), VERTICAL_COLOR));
+  }
   if (mask & DOOR_U) {
-    // 四角短柱：竖井往上开着。
-    const postY = wallY + WALL_HEIGHT * 0.55;
+    // 四角立柱：竖井往上开着。
+    const postY = wallY + WALL_HEIGHT * 0.6;
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        parts.push(box(WALL_THICK, WALL_HEIGHT * 0.7, WALL_THICK, sx * edge, postY, sz * edge));
+        parts.push(paint(
+          box(WALL_THICK, WALL_HEIGHT * 0.8, WALL_THICK, sx * edge, postY, sz * edge),
+          VERTICAL_COLOR,
+        ));
       }
     }
   }
@@ -89,13 +149,16 @@ export function buildTileGeometries() {
 
 // 砖的四种状态各一个材质，全体共享 —— 几何体是共享的，颜色只能落在材质上。
 // 走得到的亮、走不到的暗，这是玩家判断「路通没通」的唯一视觉线索，对比必须拉开。
+// 砖的五种状态各一个材质，全体共享 —— 几何体是共享的，状态只能落在材质上。
+// 这些颜色是**乘在顶点色上**的，所以调亮了不少：砖体顶点色约 0.55、路条 1.0，
+// 乘完之后路条永远比砖体亮，任何状态下都读得出「哪儿是路」。
 const MATERIALS = {
-  far: { color: 0x2b3556, emissive: 0x090d18 },
-  near: { color: 0x5f7ae0, emissive: 0x1a2450 },
-  line: { color: 0xe0a83c, emissive: 0x4a3208 },
-  picked: { color: 0xffd479, emissive: 0x5c4410 },
+  far: { color: 0x4a5a8c, emissive: 0x0a0e1a },
+  near: { color: 0x93aaff, emissive: 0x151d3e },
+  line: { color: 0xffc247, emissive: 0x3a2a06 },
+  picked: { color: 0xffe08a, emissive: 0x453309 },
   // 出口那一层在俯视里画成一层暗幽灵 —— 不画的话「出口在哪」根本看不见。
-  ghost: { color: 0x1b2440, emissive: 0x0c1730 },
+  ghost: { color: 0x2b3556, emissive: 0x080d18 },
 };
 
 export function createScene(canvas) {
@@ -116,7 +179,12 @@ export function createScene(canvas) {
   const materials = Object.fromEntries(
     Object.entries(MATERIALS).map(([name, spec]) => [
       name,
-      new THREE.MeshLambertMaterial({ color: spec.color, emissive: spec.emissive }),
+      new THREE.MeshLambertMaterial({
+        color: spec.color,
+        emissive: spec.emissive,
+        // 顶点色乘在 color 上：状态染色不破坏砖内部「路条亮、砖体暗」的关系。
+        vertexColors: true,
+      }),
     ]),
   );
 

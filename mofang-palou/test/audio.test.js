@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AXIS_COL, AXIS_PILLAR, AXIS_ROW, DOOR_D, DOOR_E, DOOR_U } from '../src/game/rules.js';
+import { AXIS_COL, AXIS_PILLAR, AXIS_ROW, DOOR_D, DOOR_E, DOOR_N, DOOR_S, DOOR_U, DOOR_W } from '../src/game/rules.js';
 import {
   MAX_PER_BATCH,
   SOUNDS,
@@ -161,6 +161,16 @@ test('没有的音色名安静地返回 false，不抛', () => {
   assert.equal(audio.play('不存在的音'), false);
 });
 
+/** 找出这份几何体里出现过的顶点色，去重后返回 "r,g,b" 的集合。 */
+const paletteOf = (geometry) => {
+  const color = geometry.getAttribute('color');
+  const seen = new Set();
+  for (let i = 0; i < color.count; i += 1) {
+    seen.add([color.getX(i), color.getY(i), color.getZ(i)].map((v) => v.toFixed(2)).join(','));
+  }
+  return seen;
+};
+
 test('六十四个门掩码变体都能拼出几何体 —— 一错就是满屏空砖', () => {
   const cache = buildTileGeometries();
   assert.equal(cache.length, 64);
@@ -169,14 +179,53 @@ test('六十四个门掩码变体都能拼出几何体 —— 一错就是满屏
     assert.ok(geometry, `掩码 ${mask} 没拼出几何体`);
     const position = geometry.getAttribute('position');
     assert.ok(position && position.count > 0, `掩码 ${mask} 没有顶点`);
+    const color = geometry.getAttribute('color');
+    assert.ok(color, `掩码 ${mask} 没有顶点色，状态染色会把路条和砖体染成一样`);
+    assert.equal(color.count, position.count);
   }
-  // 朝下开门要把地板中间挖空：地板从一整块变成四条边，顶点必然更多。
-  assert.ok(
-    cache[DOOR_D].getAttribute('position').count > cache[0].getAttribute('position').count,
-    '朝下开门的地板该是四条边，不是一整块',
-  );
-  // 朝东开门就少砌一面墙，顶点更少。
-  assert.ok(cache[DOOR_E].getAttribute('position').count < cache[0].getAttribute('position').count);
-  // 朝上开门要多立四根角柱。
-  assert.ok(cache[DOOR_U].getAttribute('position').count > cache[0].getAttribute('position').count);
 });
+
+test('一扇水平门换一面墙：门再多方块数也不变', () => {
+  const cache = buildTileGeometries();
+  const base = cache[0].getAttribute('position').count;
+  for (const mask of [DOOR_E, DOOR_E | DOOR_W, DOOR_N | DOOR_E | DOOR_S | DOOR_W]) {
+    assert.equal(
+      cache[mask].getAttribute('position').count,
+      base,
+      `掩码 ${mask}：开一扇门就该少砌一面墙、多铺一条路条，加减相抵`,
+    );
+  }
+});
+
+test('竖向的门另加几何体：朝下一圈亮框、朝上四角立柱', () => {
+  const cache = buildTileGeometries();
+  const base = cache[0].getAttribute('position').count;
+  assert.ok(cache[DOOR_D].getAttribute('position').count > base, '朝下要多一圈亮框');
+  assert.ok(cache[DOOR_U].getAttribute('position').count > base, '朝上要多四根角柱');
+});
+
+test('顶点色分档：砖体暗、路条亮、竖向连接偏绿', () => {
+  const cache = buildTileGeometries();
+  const BODY = '0.52,0.57,0.74';
+  const ROUTE = '1.00,1.00,1.00';
+  const VERTICAL = '0.72,1.00,0.80';
+
+  // 没有门的砖也有砖心节点，所以砖体色和路条色都在。
+  assert.deepEqual([...paletteOf(cache[0])].sort(), [ROUTE, BODY].sort(), '砖体 + 砖心节点两档');
+  // 开一扇水平门不引入新颜色，只是把墙换成路条。
+  assert.deepEqual([...paletteOf(cache[DOOR_E])].sort(), [ROUTE, BODY].sort());
+
+  // 只有竖向门时，整格**没有**白色横向路线 —— 这正是「唯一出路在上面」该有的读法，
+  // 砖心节点也跟着变绿。别指望这种砖上出现路条色。
+  const onlyUp = paletteOf(cache[DOOR_U]);
+  assert.deepEqual([...onlyUp].sort(), [VERTICAL, BODY].sort(), '只能往上走的砖不该有白路条');
+  assert.deepEqual([...paletteOf(cache[DOOR_D])].sort(), [VERTICAL, BODY].sort());
+
+  // 水平和竖向都有时才三档齐全 —— 这时候两种连接必须能分得开。
+  const both = paletteOf(cache[DOOR_U | DOOR_E]);
+  assert.equal(both.size, 3);
+  assert.ok(both.has(ROUTE), '水平路条是全亮的白');
+  assert.ok(both.has(VERTICAL), '竖向是偏绿的');
+});
+
+
