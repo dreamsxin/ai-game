@@ -116,7 +116,12 @@ function touchLock(state, moved) {
 function shift(state, dx) {
   const { type, rotation, x, y } = state.active;
   if (collides(state.board, type, rotation, x + dx, y)) return state;
-  const moved = { ...state, active: { ...state.active, x: x + dx }, lastAction: 'move' };
+  const moved = {
+    ...state,
+    active: { ...state.active, x: x + dx },
+    lastAction: 'move',
+    effects: [...state.effects, { type: 'move', dx }],
+  };
   return touchLock(moved, true);
 }
 
@@ -129,11 +134,14 @@ function rotate(state, direction) {
       ...state,
       active: { type, rotation: target, x: x + dx, y: y + dy },
       lastAction: 'rotate',
+      // 踢墙转和原地转手感差很多，反馈层要分得开，所以把偏移量记成一个标记。
+      effects: [...state.effects, { type: 'rotate', kicked: dx !== 0 || dy !== 0 }],
     };
     return touchLock(turned, true);
   }
   return state;
 }
+
 
 // 换手只允许一次，换回来的方块从出生点重新开始。
 function swapHold(state) {
@@ -181,6 +189,10 @@ function lockDown(state) {
     + (count > 0 ? comboScore(combo - 1, state.level) : 0);
   const effects = [...state.effects, { type: 'lock', piece: type, rows: cleared }];
   if (count > 0) effects.push({ type: 'clear', count, rows: cleared, tspin, combo });
+  // 速度等级只在锁定这一刻会变，涨了就报一声——不然玩家只看见下落突然变快。
+  const level = levelFor(lines);
+  if (level > state.level) effects.push({ type: 'level', level });
+
 
   const taken = takeNext(state.queue, state.randomState, QUEUE_SIZE);
   const active = newPiece(taken.type);
@@ -198,7 +210,8 @@ function lockDown(state) {
     lockResets: 0,
     grounded: false,
     lines,
-    level: levelFor(lines),
+    level,
+
     score,
     combo,
     backToBack: count > 0 ? isDifficultClear(count, tspin) : state.backToBack,

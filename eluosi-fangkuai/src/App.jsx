@@ -10,22 +10,29 @@ import {
   RotateCw,
   Save,
   Trophy,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { createInput, mergeInput } from './game/input.js';
 import { STEP, createGame, startGame, step, togglePause } from './game/simulation.js';
 import { createRenderer } from './scene/render.js';
+import { createAudio, vibrate, vibrationFor } from './scene/audio.js';
 import {
   clearLabel,
   formatScore,
   formatTime,
   levelLabel,
+  muteLabel,
   nextLevelLabel,
   previewCells,
+  recordLabel,
+  rewardLabel,
   starLabel,
   statusLabel,
 } from './scene/readout.js';
 
 const BEST_KEY = 'eluosi-fangkuai:best';
+const MUTE_KEY = 'eluosi-fangkuai:muted';
 const randomSeed = () => Math.floor(Math.random() * 1_000_000_000) + 1;
 
 const readBest = () => {
@@ -36,6 +43,14 @@ const readBest = () => {
   }
 };
 
+const readMuted = () => {
+  try {
+    return localStorage.getItem(MUTE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
 const writeBest = (score) => {
   try {
     localStorage.setItem(BEST_KEY, String(score));
@@ -43,6 +58,15 @@ const writeBest = (score) => {
     // 隐身模式下写不进 localStorage，不影响本局。
   }
 };
+
+const writeMuted = (muted) => {
+  try {
+    localStorage.setItem(MUTE_KEY, String(muted));
+  } catch {
+    // 同上：存不下静音偏好也不该影响这一局。
+  }
+};
+
 
 function Preview({ type, label }) {
   const { cells, width = 0, height = 0, color } = previewCells(type);
@@ -67,14 +91,32 @@ export default function App() {
   const gameRef = useRef(createGame(randomSeed()));
   const padRef = useRef(null);
   const softRef = useRef(false);
+  // 音频引擎不参与渲染，放进 state 只会白白多一轮重渲染。
+  const audioRef = useRef(null);
   const [view, setView] = useState(gameRef.current);
   const [best, setBest] = useState(readBest);
+  const [muted, setMuted] = useState(readMuted);
   const [banner, setBanner] = useState('');
+  // 最高分在游戏过程中会被实时刷新，所以「有没有破纪录」得拿开局那一刻的旧纪录比。
+  const bestAtStartRef = useRef(readBest());
 
   const restart = useCallback(() => {
+    bestAtStartRef.current = best;
     gameRef.current = startGame(randomSeed());
     setView(gameRef.current);
     setBanner('');
+    // 面板上的按钮是本局第一个用户手势，正好拿它把 AudioContext 解锁。
+    if (!audioRef.current) audioRef.current = createAudio({ muted });
+    audioRef.current.play('hold');
+  }, [best, muted]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((current) => {
+      const next = !current;
+      writeMuted(next);
+      if (audioRef.current) audioRef.current.setMuted(next);
+      return next;
+    });
   }, []);
 
   const pause = useCallback(() => {
@@ -86,6 +128,7 @@ export default function App() {
     gameRef.current = togglePause(state);
     setView(gameRef.current);
   }, [restart]);
+
 
   useEffect(() => {
     const host = hostRef.current;
@@ -113,7 +156,11 @@ export default function App() {
         if (started) gameRef.current = { ...gameRef.current, status: 'playing' };
         gameRef.current = step(gameRef.current, merged, STEP);
         renderer.notify(gameRef.current.effects);
+        // 横移、旋转、锁定、消行都从这一个出口出声，和渲染层读的是同一批 effects。
+        audioRef.current?.notify(gameRef.current.effects);
+        vibrate(vibrationFor(gameRef.current.effects));
         const clear = gameRef.current.lastClear;
+
         if (clear) setBanner(clearLabel(clear));
         accumulator -= STEP;
       }
@@ -140,12 +187,17 @@ export default function App() {
       padRef.current = null;
     };
   }, [pause]);
+
+  // 卸载时关掉 AudioContext。浏览器对同时存在的 context 有上限，热更新时不关会攒着。
+  useEffect(() => () => audioRef.current?.dispose(), []);
+
   useEffect(() => {
     if (view.status !== 'over') return;
     if (view.score <= best) return;
     setBest(view.score);
     writeBest(view.score);
   }, [view.status, view.score, best]);
+
 
   useEffect(() => {
     if (!banner) return;
@@ -170,6 +222,9 @@ export default function App() {
   const paused = view.status === 'paused';
   const over = view.status === 'over';
   const ready = view.status === 'ready';
+  // 拿开局那一刻的旧纪录比，而不是拿已经被本局刷过的 best 比。
+  const record = over && view.score > bestAtStartRef.current;
+
 
   return (
     <div className="app">
@@ -244,9 +299,20 @@ export default function App() {
         {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
       </button>
 
+      <button
+        type="button"
+        className="mute-key"
+        onClick={toggleMute}
+        aria-pressed={muted}
+        aria-label={muteLabel(muted)}
+      >
+        {muted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
+      </button>
+
+
       {(ready || paused || over) && (
         <div className="overlay" role="dialog" aria-modal="true">
-          <div className="panel">
+          <div className={`panel${over ? ' panel-settle' : ''}`}>
             <h1>方块坠塔</h1>
             <p className="panel-status">{statusLabel(view.status)}</p>
             {ready && (
@@ -254,17 +320,33 @@ export default function App() {
                 <li>棋盘上轻点旋转，左右拖动移动，向下拖住软降</li>
                 <li>快速下甩硬降，向上滑动把方块存进暂存区</li>
                 <li>一次消四行拿 TETRIS，连续困难消行有 1.5 倍加成</li>
+                <li>消行的音高跟着行数走，四行有自己的一段和弦</li>
               </ul>
             )}
             {over && (
               <>
+                {record && <p className="panel-badge">{recordLabel(record)}</p>}
                 <p className="panel-score">{formatScore(view.score)}</p>
-                <p className="panel-stars">{starLabel(view.stars)}</p>
+                {/* 星星逐颗弹出来，一次性全亮就没有「攒到了」的感觉。 */}
+                <p className="panel-stars" aria-label={`获得 ${view.stars} 星`}>
+                  {starLabel(view.stars).split('').map((mark, index) => (
+                    <i
+                      key={index}
+                      className={mark === '★' ? 'star-on' : 'star-off'}
+                      style={{ animationDelay: `${index * 180}ms` }}
+                      aria-hidden="true"
+                    >
+                      {mark}
+                    </i>
+                  ))}
+                </p>
+                <p className="panel-detail">{rewardLabel(view.stars)}</p>
                 <p className="panel-detail">
                   {levelLabel(view.lines)} · {view.lines} 行 · {formatTime(view.elapsed)}
                 </p>
               </>
             )}
+
             {!over && !ready && <p className="panel-detail">{nextLevelLabel(view.lines)}</p>}
             <button type="button" className="panel-action" onClick={over || ready ? restart : pause}>
               {over ? <RotateCcw size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}

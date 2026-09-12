@@ -35,6 +35,20 @@ export function clearLabel(clear) {
 
 export const starLabel = (stars) => '★'.repeat(stars) + '☆'.repeat(Math.max(0, 3 - stars));
 
+// 只有真刷掉旧的最高分才报新纪录，否则每局都报喜就不值钱了。
+export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+// 星级点评按拿到几颗给，和上面那行「分数账」分开说。撑到封顶本身不该被挑刺。
+export const rewardLabel = (stars) => {
+  if (stars >= 3) return '满星堆塔';
+  if (stars === 2) return '再多几次四行就是满星';
+  if (stars === 1) return '站住了，下次多攒四行';
+  return '再来一次，先把底子铺平';
+};
+
+
 // 预览面板用的格子：把方块压到左上角，DOM 端按 box 边长铺网格。
 export function previewCells(type) {
   if (!type) return { box: 0, cells: [], color: 'transparent' };
