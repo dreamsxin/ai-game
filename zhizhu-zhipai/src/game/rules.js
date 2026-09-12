@@ -12,10 +12,13 @@ export const RUN_LENGTH = RANKS;
 export const FOUNDATION_COUNT = CARD_COUNT / RUN_LENGTH;
 
 // 三档难度共用一套牌，只是花色透镜不同（见 cards.js 的 suitOf）。
+// minMoves / minSameSuit 是这一档对**开局**的最低要求，发新局时按它筛 seed：
+// 随机发牌里约一成开局能走的步数少得可怜，四花色下还有近两成一步同门的都没有，
+// 玩家碰上这种牌局只会觉得「这游戏坏了」。数字是量过分布定的（见 README）。
 export const LEVELS = [
-  { suits: 1, name: '新手', detail: '只有黑桃，先把整段搬运练熟' },
-  { suits: 2, name: '进阶', detail: '黑桃加红桃，开始要挑花色' },
-  { suits: 4, name: '标准', detail: '四门齐全，经典蜘蛛' },
+  { suits: 1, name: '新手', detail: '只有黑桃，先把整段搬运练熟', minMoves: 5, minSameSuit: 4 },
+  { suits: 2, name: '进阶', detail: '黑桃加红桃，开始要挑花色', minMoves: 4, minSameSuit: 2 },
+  { suits: 4, name: '标准', detail: '四门齐全，经典蜘蛛', minMoves: 4, minSameSuit: 1 },
 ];
 export const LEVEL_COUNT = LEVELS.length;
 export const clampLevel = (index) => Math.max(0, Math.min(LEVEL_COUNT - 1, Math.trunc(index) || 0));

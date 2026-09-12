@@ -20,6 +20,7 @@ import {
   dealsLeft,
   hint,
   moveTo,
+  pickSeed,
   restart,
   restore,
   scoreOfState,
@@ -55,6 +56,9 @@ const LEVEL_KEY = 'zhizhu-zhipai:level';
 const SAVE_KEY = 'zhizhu-zhipai:save';
 
 const randomSeed = () => Math.floor(Math.random() * 1_000_000_000) + 1;
+// 新局的 seed 不是随手一取：pickSeed 会往后挑到一个开局活得起来的。
+// 「牌摆在那儿就没得走」是这游戏最伤人的开局，玩家还以为是自己看漏了。
+const dealSeed = (level) => pickSeed(level, randomSeed());
 // 摞与摞之间的缝，px。牌宽和牌的横向位置都按它算，两处必须用同一个数。
 const CARD_GAP = 4;
 
@@ -86,7 +90,7 @@ const stackGap = (boardHeight, cardHeight, longest) => {
 // 绝不能拿一份对不上的存档去渲染——那会白屏，比丢一局严重得多。
 const openingGame = () => {
   const level = readJson(LEVEL_KEY, 0);
-  return restore(readJson(SAVE_KEY, null)) ?? createGame(level, randomSeed());
+  return restore(readJson(SAVE_KEY, null)) ?? createGame(level, dealSeed(level));
 };
 
 export default function App() {
@@ -353,7 +357,7 @@ export default function App() {
         <button
           type="button"
           className="key"
-          onClick={() => load(levelIndex, randomSeed())}
+          onClick={() => load(levelIndex, dealSeed(levelIndex))}
           aria-label="换一局"
         >
           <RotateCcw size={18} aria-hidden="true" />
@@ -379,7 +383,7 @@ export default function App() {
                   key={option.index}
                   type="button"
                   className={`level-key${option.index === levelIndex ? ' level-key-on' : ''}`}
-                  onClick={() => load(option.index, randomSeed())}
+                  onClick={() => load(option.index, dealSeed(option.index))}
                 >
                   <b>{option.suits} 花色 · {option.name}</b>
                   <i>{option.detail}</i>
@@ -423,7 +427,7 @@ export default function App() {
             <p className="panel-score">{formatScore(score)}</p>
             <p className="panel-detail">{movesLabel(game.moves)} · {rewardLabel(stars)}</p>
             <p className="panel-detail">{bestLabel(best[levelIndex] ?? 0)}</p>
-            <button type="button" className="panel-action" onClick={() => load(levelIndex, randomSeed())}>
+            <button type="button" className="panel-action" onClick={() => load(levelIndex, dealSeed(levelIndex))}>
               再来一局
             </button>
           </div>

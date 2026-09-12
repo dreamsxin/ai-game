@@ -8,6 +8,7 @@ import {
   findMove,
   isEmpty,
   isRun,
+  mobility,
   runStart,
   targetsFor,
   topOf,
@@ -120,3 +121,22 @@ test('一步都走不了时提示给 null，死局判断就靠它', () => {
   const piles = Array.from({ length: 10 }, (unused, i) => pile([SPADE(7) + i * 0]));
   assert.equal(findMove(piles, 4), null);
 });
+
+test('mobility 分开数「能走几步」和「几步在接同门」', () => {
+  // 黑桃 8 能压黑桃 9 也能压红桃 9，两步都合法，但只有前一步在接同门。
+  const piles = [
+    pile([SPADE(8)]),
+    pile([SPADE(9)]),
+    pile([HEART(9)]),
+    ...Array.from({ length: 7 }, () => pile([SPADE(2)])),
+  ];
+  assert.deepEqual(mobility(piles, 4), { moves: 2, sameSuit: 1 });
+  // 1 花色下这两个 9 就是同一门了，同门那一栏跟着变——难度就体现在这一栏上。
+  assert.deepEqual(mobility(piles, 1), { moves: 2, sameSuit: 2 });
+});
+
+test('死局的 mobility 是两个 0', () => {
+  const piles = Array.from({ length: 10 }, () => pile([SPADE(7)]));
+  assert.deepEqual(mobility(piles, 4), { moves: 0, sameSuit: 0 });
+});
+

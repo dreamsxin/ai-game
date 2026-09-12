@@ -4,6 +4,7 @@ import { RANKS, rankOf } from '../src/game/cards.js';
 import {
   DEAL_ROWS,
   FOUNDATION_COUNT,
+  LEVELS,
   OPENING_CARDS,
   PILE_COUNT,
   STOCK_CARDS,
@@ -14,12 +15,15 @@ import {
   autoMove,
   boardView,
   createGame,
+  dealRating,
   dealRow,
   dealsLeft,
   hint,
   moveTo,
+  pickSeed,
   restart,
   restore,
+  SEED_TRIES,
   scoreOfState,
   select,
   serialize,
@@ -296,6 +300,44 @@ test('存档里的 status 只信 won：死局是从局面现算的，不该被�
   assert.equal(restore({ ...good, status: 'stuck' }).status, 'playing');
   assert.equal(restore({ ...good, status: 'won' }).status, 'won');
   assert.equal(restore({ ...good, status: '乱写的' }).status, 'playing');
+});
+
+test('pickSeed 挑出来的开局达得到这一档的门槛', () => {
+  // 20 个不同的起点，每个都要求挑出来的 seed 真的达标——不是「挑了但还是那个烂局」。
+  for (let start = 1; start <= 2000; start += 100) {
+    for (const level of [0, 1, 2]) {
+      const seed = pickSeed(level, start);
+      const rating = dealRating(level, seed);
+      const recipe = LEVELS[level];
+      assert.ok(rating.ok, `level ${level} 从 ${start} 起挑到 ${seed}，仍不达标：${JSON.stringify(rating)}`);
+      assert.ok(rating.moves >= recipe.minMoves);
+      assert.ok(rating.sameSuit >= recipe.minSameSuit);
+      assert.ok(seed >= start && seed < start + SEED_TRIES, '只许往后找，且不许越过上限');
+    }
+  }
+});
+
+test('本来就达标的 seed 原样返回，筛选不白改玩家的局', () => {
+  for (let seed = 1; seed <= 200; seed += 1) {
+    if (dealRating(2, seed).ok) {
+      assert.equal(pickSeed(2, seed), seed);
+      return;
+    }
+  }
+  assert.fail('两百个 seed 里一个达标的都没有，门槛定得不对');
+});
+
+test('一个都不达标时给出最不坏的那个，绝不返回空', () => {
+  // tries = 1 时没有选择余地，必须原样返回，不能返回 null 卡住「换一局」。
+  const seed = pickSeed(2, 7, 1);
+  assert.equal(seed, 7);
+  assert.equal(typeof dealRating(2, seed).score, 'number');
+});
+
+test('筛过的局和没筛的局是同一套发牌逻辑，restart 仍然逐字段复现', () => {
+  const seed = pickSeed(1, 4242);
+  const game = createGame(1, seed);
+  assert.deepEqual(restart(game), game, 'createGame 本身不许偷偷筛，否则存档就还原不回来了');
 });
 
 // 造一份形状对得上的快照，专门喂给「历史截断」那条测试。

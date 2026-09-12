@@ -121,4 +121,24 @@ export function findMove(piles, suits) {
   return ranked.length > 0 ? ranked[0] : null;
 }
 
+/**
+ * 这个局面有多「活」：一共能走几步，其中几步是在把同门的牌接起来。
+ *
+ * 两个数缺一不可。能走的步数只看点数（放牌只比大小，不看花色），所以它跟难度无关；
+ * 同门那一栏才是难度敏感的——四花色下「有得走但一步都推进不了收门」是最难受的局面，
+ * 光数步数看不出来。发新局筛 seed 就靠这两个数。
+ */
+export function mobility(piles, suits) {
+  const moves = rankedMoves(piles, suits);
+  let sameSuit = 0;
+  for (const move of moves) {
+    const target = topOf(piles[move.to]);
+    if (target === null) continue;
+    const moving = piles[move.from].cards[move.index];
+    if (suitOf(target, suits) === suitOf(moving, suits)) sameSuit += 1;
+  }
+  return { moves: moves.length, sameSuit };
+}
+
+
 

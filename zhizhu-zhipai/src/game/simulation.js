@@ -20,6 +20,7 @@ import {
   findMove,
   isEmpty,
   isRun,
+  mobility,
   runStart,
   targetsFor,
   topOf,
@@ -75,6 +76,53 @@ export function createGame(levelIndex = 0, seed = 1) {
 }
 
 export const restart = (state) => createGame(state.levelIndex, state.seed);
+
+// 筛 seed 最多试这么多个。达标率量过是八成上下，实际一两个就中了，
+// 40 只是个兜底上限——绝不能为了「完美牌局」让玩家点一下等半秒。
+export const SEED_TRIES = 40;
+
+/**
+ * 这个 seed 开出来的局好不好。达标就直接用，不达标时 score 用来挑「最不坏」的那个。
+ *
+ * 注意 createGame 本身不筛：restart 和存档都靠「同 seed 开出同一局」这条，
+ * 筛选只发生在**挑 seed** 的时候。
+ */
+export function dealRating(levelIndex, seed) {
+  const game = createGame(levelIndex, seed);
+  const { moves, sameSuit } = mobility(game.piles, game.suits);
+  const recipe = levelRecipe(levelIndex);
+  return {
+    moves,
+    sameSuit,
+    ok: moves >= recipe.minMoves && sameSuit >= recipe.minSameSuit,
+    // 挑「最不坏」时同门走法更值钱：它才是真能往收门推进的一步。
+    score: sameSuit * 10 + moves,
+  };
+}
+
+/**
+ * 给新局挑一个 seed。蜘蛛纸牌最伤人的体验是「牌摆在那儿就没得走」，
+ * 随机发牌里约一成开局能走的步数少得可怜，四花色下还有近两成一步同门的都没有，
+ * 玩家碰上这种局只会以为是自己看漏了。
+ *
+ * 从 seed 起往后逐个试，第一个达标的就用；全都不达标就用最不坏的那个——
+ * 玩家点了「换一局」必须拿到一局，宁可牌差点也不能卡在这儿。
+ */
+export function pickSeed(levelIndex, seed, tries = SEED_TRIES) {
+  let best = seed;
+  let bestScore = -1;
+  for (let i = 0; i < tries; i += 1) {
+    const candidate = seed + i;
+    const rating = dealRating(levelIndex, candidate);
+    if (rating.ok) return candidate;
+    if (rating.score > bestScore) {
+      bestScore = rating.score;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
 export const scoreOfState = (state) => scoreOf(state.moves, state.runs);
 export const starsOfState = (state) => starsFor(scoreOfState(state));
 export const dealsLeft = (state) => Math.ceil(state.stock.length / PILE_COUNT);
