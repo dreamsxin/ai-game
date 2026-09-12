@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">迷宫穿越</string>
+    <string name="title_activity_main">迷宫穿越</string>
+    <string name="package_name">com.aigame.migongchuansuo</string>
+    <string name="custom_url_scheme">com.aigame.migongchuansuo</string>
+</resources>

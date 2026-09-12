@@ -31,6 +31,42 @@ npm run test:migong-chuansuo
 npm run build:migong-chuansuo
 ```
 
+## 打 Android APK
+
+用 Capacitor 把 Vite 产物包进一个 WebView 壳，原生工程在 `android/`（已入版本库，可以直接改）。
+
+```bash
+npm run apk:debug --workspace migong-chuansuo     # 产物在 android/app/build/outputs/apk/debug/app-debug.apk
+npm run apk:release --workspace migong-chuansuo   # 未签名，需自备 keystore
+```
+
+跑之前要先把两件本机配置指对，否则会卡在很难看懂的报错上：
+
+- **`android/local.properties` 写 SDK 路径**（这个文件按惯例不入库）：
+  ```properties
+  sdk.dir=E\:\\SDK
+  ```
+- **`JAVA_HOME` 指向一个 JDK 17–21**。别用 Android Studio 自带的 `jbr`：它现在是 JDK 25，
+  而 Gradle 8.x 根本不支持 Java 25（要到 Gradle 9.1 才支持），AGP 8.7 这一侧又还没跟上 Gradle 9，
+  两头对不上。本机用的是 `E:\apk\tools\jdk-21\jdk-21.0.5+11`：
+  ```powershell
+  $env:JAVA_HOME = "E:\apk\tools\jdk-21\jdk-21.0.5+11"
+  ```
+
+其他几处踩过的坑，都已经在仓库里修掉了：
+
+- `vite.config.js` 里的 `base: './'` 是必须的。Capacitor 把 `dist` 塞进 APK 后是用 `file://` 加载的，
+  绝对路径 `/assets/...` 会直接 404 白屏。相对路径在浏览器里跑一样正常。
+- `gradle-wrapper.properties` 的 `networkTimeout` 从模板默认的 10 秒提到 180 秒——第一次下载
+  Gradle 发行包时 10 秒连握手都不够。同时换成 `-bin.zip`，比 `-all.zip` 少下一半。
+- 仓库根的 `.gitattributes` 把 `gradlew` 钉成 LF。这台机器 `core.autocrlf` 是开的，
+  换成 CRLF 后在类 Unix 上会报 `bad interpreter: /bin/sh^M`。
+- `compileSdk` 是 35，本机 SDK 里原本只有 `android-37.0`。AGP 会自己从 dl.google.com 补装
+  `platforms;android-35` 和 `build-tools;34.0.0`（licenses 目录已有授权记录，不需要 cmdline-tools）。
+
+实测产物：4.1 MB，`com.aigame.migongchuansuo`，minSdk 23 / targetSdk 35，应用名「迷宫穿越」，
+`assets/public/` 里是相对路径的 index.html。首次构建含下载约 6 分钟，之后增量构建是秒级。
+
 ## 结构
 
 `src/game/` 是纯逻辑层，不引用 Three.js：`rules.js` 用一个整数编码一块砖（低 4 位是四向门、第 5 位是跃迁垫），

@@ -1,0 +1,8 @@
+{
+  "appId": "com.aigame.migongchuansuo",
+  "appName": "迷宫穿越",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  }
+}

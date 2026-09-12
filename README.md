@@ -210,3 +210,22 @@ npm run test:zhongguo-chengshi
 npm run build:zhongguo-chengshi
 ```
 
+## 打 Android APK
+
+目前只有 `migong-chuansuo` 接了 Capacitor，原生工程在 `migong-chuansuo/android/`（已入版本库）。
+
+```bash
+$env:JAVA_HOME = "E:\apk\tools\jdk-21\jdk-21.0.5+11"   # 必须是 JDK 17–21
+npm run apk:debug --workspace migong-chuansuo
+# 产物：migong-chuansuo/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+两条最容易卡住的：**Android Studio 自带的 `jbr` 是 JDK 25，用不了**（Gradle 8.x 不支持 Java 25，
+而 AGP 8.7 又还没跟上 Gradle 9），要另找一个 JDK 17–21；以及 `android/local.properties` 里的
+`sdk.dir` 要指向本机 SDK（该文件按惯例不入库）。完整的坑位清单见
+[`migong-chuansuo/README.md`](migong-chuansuo/README.md) 的「打 Android APK」一节。
+
+要给别的游戏也打包，照 `migong-chuansuo` 抄三样东西：`vite.config.js` 里的 `base: './'`、
+`capacitor.config.json`、以及 package.json 里的 `apk:*` 脚本，然后 `npx cap add android`。
+
+
