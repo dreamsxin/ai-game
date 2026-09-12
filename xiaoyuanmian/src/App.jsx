@@ -1,6 +1,7 @@
-import { AlertTriangle, LoaderCircle, Search } from 'lucide-react';
+import { AlertTriangle, LoaderCircle, Search, Volume2, VolumeX } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { askCharacter, CaseApiError, confrontCharacter, getCase, performAction, startCase, submitAccusation } from './caseApi.js';
+import { createAudio } from './audio.js';
 import AccusationPanel from './components/AccusationPanel.jsx';
 import CaseDrawer from './components/CaseDrawer.jsx';
 import CaseHeader from './components/CaseHeader.jsx';
@@ -23,10 +24,17 @@ export default function App() {
   const [selectedEvidenceId, setSelectedEvidenceId] = useState('');
   const requestRef = useRef(null);
   const noticeTimer = useRef(null);
+  const audioRef = useRef(null);
+  if (!audioRef.current) audioRef.current = createAudio({ muted: true });
+  const [muted, setMuted] = useState(true);
+  const toggleMute = () => setMuted(audioRef.current.setMuted(!muted));
+  useEffect(() => () => audioRef.current?.dispose(), []);
 
   const applyResult = useCallback(result => {
     setGame(result);
     localStorage.setItem(STORAGE_KEY, result.gameId);
+    // 只认顶层 event。开局／读档／刷新的响应没有它，所以重进不会把上一次的动作重播一遍。
+    audioRef.current?.notify(result);
     if (result.event?.message) {
       setNotice(result.event.message);
       clearTimeout(noticeTimer.current);
@@ -86,6 +94,8 @@ export default function App() {
       if (!controller.signal.aborted) applyResult(result);
     } catch (cause) {
       if (controller.signal.aborted) return;
+      // 请求失败跟「猜错了」是两回事：一个是机器的问题，一个是你的判断。
+      audioRef.current?.play('error');
       if (cause.code === 'version_conflict') {
         try { await refresh(); setError('现场记录已更新，请重新执行刚才的操作。'); }
         catch { setError('无法刷新案件状态。'); }
@@ -138,7 +148,7 @@ export default function App() {
 
   const state = game.state;
   return <div className="app-shell">
-    <CaseHeader state={state} aiConfigured={aiConfigured} onRestart={restart}/>
+    <CaseHeader state={state} aiConfigured={aiConfigured} muted={muted} onToggleMute={toggleMute} onRestart={restart}/>
     <main className="investigation-main">
       <div className="case-kicker"><Search size={14}/><span>CASE 04-17</span><i></i><p>{state.case.opening}</p></div>
       <div className="investigation-grid">
