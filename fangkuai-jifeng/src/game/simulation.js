@@ -142,6 +142,9 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
 
   if (input.left) lane = clampLane(lane - 1);
   if (input.right) lane = clampLane(lane + 1);
+  // 撞到边线的那次输入不算变道，所以按实际结果发事件，而不是按有没有按键。
+  if (lane !== state.lane) effects.push({ type: 'lane', from: state.lane, to: lane });
+
   if (input.jump && grounded) {
     vy = JUMP_SPEED;
     grounded = false;

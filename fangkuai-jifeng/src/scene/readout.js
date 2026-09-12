@@ -35,6 +35,20 @@ export const statusLabel = (status) => {
 
 export const starLabel = (stars) => '★'.repeat(Math.max(0, stars)) + '☆'.repeat(Math.max(0, 3 - stars));
 
+// 只有真刷掉旧的最高分才报新纪录，否则每局都报喜就不值钱了。
+export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+// 星级点评按拿到几颗给，和上面那行「距离账」分开说。跑到哪算哪，不挑刺。
+export const rewardLabel = (stars) => {
+  if (stars >= 3) return '满星长跑';
+  if (stars === 2) return '再远一点就是满星';
+  if (stars === 1) return '跑起来了，下次多串金币';
+  return '再来一次，先把变道练顺';
+};
+
+
 export const crashReason = (effects) => {
   const crash = effects.find((effect) => effect.type === 'crash');
   if (!crash) return null;
