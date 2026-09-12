@@ -109,9 +109,12 @@ function buildSolved(rng, recipe) {
   };
 }
 
-function scrambleBoard(rng, board, start, count) {
+// 打乱要把出口一起带着走：出口长在砖上，跟玩家一样会被推移带位移。
+// 于是「解开态的出口」和「初始态的出口」是两个不同的格子——前者是关卡设计时的对角，
+// 后者才是玩家一开始看到的那道门。两个都得留着，体检时要分开用。
+function scrambleBoard(rng, board, start, exit, count) {
   const actions = shiftActions(board);
-  let current = { board, cell: start };
+  let current = { board, cell: start, exit };
   const moves = [];
   for (let guard = 0; guard < count * 80 && moves.length < count; guard += 1) {
     const action = rng.pick(actions);
@@ -120,10 +123,10 @@ function scrambleBoard(rng, board, start, count) {
     if (last && last.layer === action.layer && last.axis === action.axis && last.index === action.index) {
       continue;
     }
-    current = applyShift(current.board, current.cell, action);
+    current = applyShift(current, action);
     moves.push(action);
   }
-  return { board: current.board, player: current.cell, moves };
+  return { board: current.board, player: current.cell, exit: current.exit, moves };
 }
 
 // 打乱序列反过来、方向取反，就是一条保底解法。
@@ -132,7 +135,7 @@ const invertMoves = (moves) => moves.map((move) => ({ ...move, dir: -move.dir })
 function buildLevel(recipe) {
   const rng = createRandom(recipe.seed);
   const solved = buildSolved(rng, recipe);
-  const scrambled = scrambleBoard(rng, solved.board, solved.start, recipe.scramble);
+  const scrambled = scrambleBoard(rng, solved.board, solved.start, solved.exit, recipe.scramble);
   const solution = invertMoves(scrambled.moves);
   return {
     seed: recipe.seed,
@@ -144,7 +147,9 @@ function buildLevel(recipe) {
     solvedBoard: solved.board,
     start: scrambled.player,
     solvedStart: solved.start,
-    exit: solved.exit,
+    // exit 是玩家开局看到的那道门；solvedExit 是把打乱推回去之后它该在的位置。
+    exit: scrambled.exit,
+    solvedExit: solved.exit,
     warps: solved.warps,
     scramble: scrambled.moves.length,
     solution,
@@ -153,15 +158,16 @@ function buildLevel(recipe) {
 }
 
 // 体检：解开态必须通、初始态必须不通、保底解法必须真的能通。
+// 注意三条各用哪个出口：解开态用 solvedExit，初始态和保底解法用 exit（保底解法会把它推回去）。
 export function validateLevel(level) {
   const issues = [];
-  if (!canReach(level.solvedBoard, level.solvedStart, level.exit)) {
+  if (!canReach(level.solvedBoard, level.solvedStart, level.solvedExit)) {
     issues.push('解开态里出口不可达');
   }
   if (level.scramble < 1) issues.push('打乱步数为零');
   if (canReach(level.board, level.start, level.exit)) issues.push('初始态已经通关');
-  const end = replay(level.board, level.start, level.solution);
-  if (!canReach(end.board, end.cell, level.exit)) issues.push('保底解法走不到出口');
+  const end = replay(level.board, level.start, level.exit, level.solution);
+  if (!canReach(end.board, end.cell, end.exit)) issues.push('保底解法走不到出口');
   return { ok: issues.length === 0, issues };
 }
 

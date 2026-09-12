@@ -127,6 +127,8 @@ export function pathBetween(board, origin, goal) {
   return path.reverse();
 }
 
-// 解算器的状态指纹：砖面加站位，同一局面只展开一次。
-export const boardSignature = (board, cell) =>
-  `${board.tiles.map((layer) => layer.join(',')).join('|')}#${cellKey(cell)}`;
+// 解算器的状态指纹：砖面、站位、出口三样都要进。
+// 出口也长在砖上，会跟着推移一起走，所以「同一张图、玩家同一格、但出口在别处」
+// 是两个不同的局面——少了出口这一维会把它们当成同一个剪掉，搜出来的解就是错的。
+export const boardSignature = (board, cell, exit = null) =>
+  `${board.tiles.map((layer) => layer.join(',')).join('|')}#${cellKey(cell)}${exit ? `>${cellKey(exit)}` : ''}`;

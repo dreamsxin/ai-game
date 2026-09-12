@@ -38,9 +38,9 @@ test('保底解法真的能走通，可解性是构造出来的', () => {
   for (let seed = 1; seed <= 40; seed += 1) {
     const { level } = generateLevel({ seed, cols: 5, rows: 4, layers: 2, scramble: 5 });
     assert.ok(level, `seed ${seed} 生成失败`);
-    const end = replay(level.board, level.start, level.solution);
+    const end = replay(level.board, level.start, level.exit, level.solution);
     assert.equal(
-      canReach(end.board, end.cell, level.exit),
+      canReach(end.board, end.cell, end.exit),
       true,
       `seed ${seed} 的保底解法走不到出口`,
     );
@@ -49,7 +49,7 @@ test('保底解法真的能走通，可解性是构造出来的', () => {
 
 test('保底解法把砖面和站位都还原成解开态', () => {
   const { level } = generateLevel({ seed: 99, cols: 4, rows: 4, layers: 1, scramble: 4 });
-  const end = replay(level.board, level.start, level.solution);
+  const end = replay(level.board, level.start, level.exit, level.solution);
   assert.deepEqual(end.board.tiles, level.solvedBoard.tiles);
   assert.deepEqual(end.cell, level.solvedStart);
 });

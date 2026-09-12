@@ -26,7 +26,7 @@ import {
   zToRow,
 } from './models.js';
 import { cameraDistance } from './readout.js';
-import { easeOutCubic, mix, slidePositions, walkDuration, walkPoint } from './motion.js';
+import { easeOutCubic, mix, slideCell, slidePositions, walkDuration, walkPoint } from './motion.js';
 
 // 砖面高度：地板占 1 格体素，角色和高亮都贴在它上面。
 const FLOOR_TOP = VOXEL_SIZE;
@@ -338,28 +338,25 @@ export function createScene(host) {
       height = mix(point.from.layer, point.to.layer, point.t) * LAYER_HEIGHT;
       // 跨层那一步会把跳跃拉高，跃迁看着才像跃迁。
       hop = point.hop * (point.from.layer === point.to.layer ? 0.14 : 0.3);
-    } else if (animation && animation.kind === 'shift' && animation.layer === state.player.layer) {
-      const onLine = animation.axis === AXIS_ROW ? row === animation.index : col === animation.index;
-      if (onLine) {
-        const along = slidePositions(
-          animation.axis === AXIS_ROW ? cols : rows,
-          animation.dir,
-          easeOutCubic(progress),
-        );
-        if (animation.axis === AXIS_ROW) col = along.positions[state.player.col];
-        else row = along.positions[state.player.row];
+    } else {
+      const slid = slideCell(state.player, animation, state.board, progress);
+      if (slid) {
+        col = slid.col;
+        row = slid.row;
       }
     }
     playerMesh.position.set(columnToX(cols, col), height + FLOOR_TOP + hop, rowToZ(rows, row));
     playerMesh.rotation.y = Math.sin(time * 1.8) * 0.14;
   };
 
-  const writeExit = (state, time) => {
+  const writeExit = (state, progress, time) => {
     const { cols, rows } = state.board;
+    // 出口跟砖一起滑：门是长在砖上的，砖走它就得走，不然会看见门先到位、砖后跟上。
+    const slid = slideCell(state.exit, animation, state.board, progress) ?? state.exit;
     exitMesh.position.set(
-      columnToX(cols, state.exit.col),
+      columnToX(cols, slid.col),
       state.exit.layer * LAYER_HEIGHT + FLOOR_TOP,
-      rowToZ(rows, state.exit.row),
+      rowToZ(rows, slid.row),
     );
     exitMesh.rotation.y = time * 0.7;
     // 通关后把门拱抬起来一点，作为「成了」的收尾反馈。
@@ -489,7 +486,7 @@ export function createScene(host) {
       const progress = progressOf(time);
       writeTiles(state, progress);
       writePlayer(state, progress, time);
-      writeExit(state, time);
+      writeExit(state, progress, time);
       writeBands(state, focus);
       writePlates(state, focus);
       updateCamera(state);

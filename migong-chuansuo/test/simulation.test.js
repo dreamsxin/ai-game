@@ -132,8 +132,42 @@ test('撤销回到上一步的棋盘和站位，并把计数退回去', () => {
   assert.equal(origin.shifts, 0);
   assert.deepEqual(origin.board.tiles, state.board.tiles);
   assert.deepEqual(origin.player, state.player);
+  assert.deepEqual(origin.exit, state.exit, '出口跟着推移走过，撤销也得跟着退回来');
   assert.equal(undo(origin), origin, '没有历史时撤销应该原样返回');
 });
+
+test('推移会把出口一起带走：门长在砖上', () => {
+  const state = fresh();
+  // 推出口所在的那一行：门必须跟着走一格。
+  const along = shift(setLayer(state, state.exit.layer), AXIS_ROW, state.exit.row, 1);
+  const width = state.board.cols;
+  assert.deepEqual(along.exit, {
+    ...state.exit,
+    col: (state.exit.col + 1) % width,
+  }, '出口在被推的行上，就该跟着挪一格');
+
+  // 推别的行：门不该动。
+  const otherRow = (state.exit.row + 1) % state.board.rows;
+  const aside = shift(setLayer(state, state.exit.layer), AXIS_ROW, otherRow, 1);
+  assert.deepEqual(aside.exit, state.exit, '不在被推的行上就不该动');
+
+  // 推别的层：门也不该动，推移只作用在激活层上。
+  if (state.board.layers > 1) {
+    const otherLayer = (state.exit.layer + 1) % state.board.layers;
+    const elsewhere = shift(setLayer(state, otherLayer), AXIS_ROW, state.exit.row, 1);
+    assert.deepEqual(elsewhere.exit, state.exit, '跨层的推移不该影响出口');
+  }
+});
+
+test('出口所在的列被推时也跟着走', () => {
+  const state = fresh();
+  const moved = shift(setLayer(state, state.exit.layer), AXIS_COL, state.exit.col, 1);
+  assert.deepEqual(moved.exit, {
+    ...state.exit,
+    row: (state.exit.row + 1) % state.board.rows,
+  });
+});
+
 
 test('走位不进历史，撤销只回退推移', () => {
   const state = shift(fresh(), AXIS_ROW, 0, 1);

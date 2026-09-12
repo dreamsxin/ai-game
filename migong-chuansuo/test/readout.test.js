@@ -159,8 +159,8 @@ test('推移方向的说法和屏幕方向对得上', () => {
   assert.equal(pushLabel(AXIS_COL, -1), '整列上移');
 });
 
-test('新手引导四步讲完，每步都有标题和说明', () => {
-  assert.equal(TUTORIAL_STEPS.length, 4);
+test('新手引导五步讲完，每步都有标题和说明', () => {
+  assert.equal(TUTORIAL_STEPS.length, 5);
   for (const step of TUTORIAL_STEPS) {
     assert.ok(step.title.length > 0);
     assert.ok(step.detail.length > 8, `「${step.title}」的说明太短`);

@@ -7,9 +7,11 @@ import { solve } from './solver.js';
 
 const HISTORY_LIMIT = 40;
 
+// 出口也进快照：它跟着推移走，撤销时必须一起退回去，不然门会留在推过之后的位置。
 const snapshot = (state) => ({
   board: state.board,
   player: state.player,
+  exit: state.exit,
   shifts: state.shifts,
   activeLayer: state.activeLayer,
 });
@@ -75,7 +77,13 @@ export function selectCell(state, cell) {
 }
 
 
-/** 推移一整行或一整列。玩家站在这条线上就跟着走，这一步也是他唯一的免费位移。 */
+/**
+ * 推移一整行或一整列。玩家站在这条线上就跟着走，这一步也是他唯一的免费位移。
+ *
+ * 出口同样跟着走：它是长在砖上的一道门，不是钉在空中的坐标。
+ * 门固定不动的话，玩家可以盯着那个格子倒推该把哪条路凑过去，难度塌一半；
+ * 门会跑，就得同时算「路通到哪」和「门被我推到哪」，这才是这个玩法该有的思考量。
+ */
 export function shift(state, axis, index, dir) {
   if (state.status !== 'playing') return state;
   const layer = state.activeLayer;
@@ -83,13 +91,14 @@ export function shift(state, axis, index, dir) {
   if (index < 0 || index >= limit || dir === 0) return state;
   const board = shiftLine(state.board, layer, axis, index, dir);
   const player = shiftCell(state.board, state.player, layer, axis, index, dir);
+  const exit = shiftCell(state.board, state.exit, layer, axis, index, dir);
   const history = [...state.history, snapshot(state)].slice(-HISTORY_LIMIT);
   const effects = [{ type: 'shift', layer, axis, index, dir }];
   // 推完就通了要立刻提示，否则玩家会以为还没解开。
-  if (canReach(board, player, state.exit)) effects.push({ type: 'open' });
+  if (canReach(board, player, exit)) effects.push({ type: 'open' });
   return commit(
     state,
-    { board, player, shifts: state.shifts + 1, selection: null, history },
+    { board, player, exit, shifts: state.shifts + 1, selection: null, history },
     effects,
   );
 }

@@ -1,4 +1,6 @@
 // 动画插值的纯数学。放在渲染层但不碰 three，所以位移、绕回、跳跃都能单测。
+import { AXIS_ROW } from '../game/rules.js';
+
 export const clamp01 = (value) => Math.max(0, Math.min(1, value));
 export const easeOutCubic = (t) => 1 - (1 - clamp01(t)) ** 3;
 export const mix = (from, to, t) => from + (to - from) * t;
@@ -20,6 +22,24 @@ export function slidePositions(length, dir, progress) {
     }
   }
   return { positions, ghost };
+}
+
+/**
+ * 推移动画里这一格该画在哪（单位是格）。长在被推那条线上的东西都得跟着滑：
+ * 玩家和出口共用这一段，别让门在砖滑动的时候先瞬移到位、砖再跟上。
+ *
+ * 传进来的 cell 是**推完之后**的坐标，跟 slidePositions 的下标口径一致。
+ * 不在这一层、或者不在被推的那条线上，就返回 null——调用方直接用静态坐标。
+ */
+export function slideCell(cell, animation, board, progress) {
+  if (!animation || animation.kind !== 'shift' || animation.layer !== cell.layer) return null;
+  const isRow = animation.axis === AXIS_ROW;
+  const onLine = isRow ? cell.row === animation.index : cell.col === animation.index;
+  if (!onLine) return null;
+  const along = slidePositions(isRow ? board.cols : board.rows, animation.dir, easeOutCubic(progress));
+  return isRow
+    ? { col: along.positions[cell.col], row: cell.row }
+    : { col: cell.col, row: along.positions[cell.row] };
 }
 
 /** 走位路径的插值。progress 走完 1 就停在终点，跳跃高度取半个正弦。 */

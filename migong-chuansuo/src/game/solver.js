@@ -18,9 +18,17 @@ export function shiftActions(board) {
   return actions;
 }
 
-export const applyShift = (board, cell, action) => ({
-  board: shiftLine(board, action.layer, action.axis, action.index, action.dir),
-  cell: shiftCell(board, cell, action.layer, action.axis, action.index, action.dir),
+/**
+ * 推一次，棋盘、玩家、出口一起走。
+ *
+ * 出口是长在砖上的一道门，不是钉在空中的坐标：推走那一行，门跟着走。
+ * 只挪棋盘不挪出口，谜题就退化成「把路凑到一个固定终点」，玩家可以盯着那个格子倒推，
+ * 难度塌一半。所以这三样必须在同一个函数里一起变，别在调用方各挪一半。
+ */
+export const applyShift = (pose, action) => ({
+  board: shiftLine(pose.board, action.layer, action.axis, action.index, action.dir),
+  cell: shiftCell(pose.board, pose.cell, action.layer, action.axis, action.index, action.dir),
+  exit: shiftCell(pose.board, pose.exit, action.layer, action.axis, action.index, action.dir),
 });
 
 /**
@@ -30,24 +38,24 @@ export const applyShift = (board, cell, action) => ({
 export function solve(board, player, exit, { maxDepth = 3, maxStates = 60000 } = {}) {
   if (canReach(board, player, exit)) return { shifts: 0, moves: [], visited: 1, exhausted: false };
   const actions = shiftActions(board);
-  const seen = new Set([boardSignature(board, player)]);
-  let frontier = [{ board, cell: player, moves: [] }];
+  const seen = new Set([boardSignature(board, player, exit)]);
+  let frontier = [{ board, cell: player, exit, moves: [] }];
   let visited = 1;
   for (let depth = 1; depth <= maxDepth; depth += 1) {
     const next = [];
     for (const node of frontier) {
       for (const action of actions) {
-        const stepped = applyShift(node.board, node.cell, action);
-        const signature = boardSignature(stepped.board, stepped.cell);
+        const stepped = applyShift(node, action);
+        const signature = boardSignature(stepped.board, stepped.cell, stepped.exit);
         if (seen.has(signature)) continue;
         seen.add(signature);
         visited += 1;
         const moves = [...node.moves, action];
-        if (canReach(stepped.board, stepped.cell, exit)) {
+        if (canReach(stepped.board, stepped.cell, stepped.exit)) {
           return { shifts: depth, moves, visited, exhausted: false };
         }
         if (visited >= maxStates) return { shifts: null, moves: null, visited, exhausted: true };
-        next.push({ board: stepped.board, cell: stepped.cell, moves });
+        next.push({ board: stepped.board, cell: stepped.cell, exit: stepped.exit, moves });
       }
     }
     if (next.length === 0) return { shifts: null, moves: null, visited, exhausted: false };
@@ -56,9 +64,9 @@ export function solve(board, player, exit, { maxDepth = 3, maxStates = 60000 } =
   return { shifts: null, moves: null, visited, exhausted: true };
 }
 
-// 回放一串动作，返回终局。测试用它验证解法真的成立。
-export function replay(board, player, moves) {
-  let current = { board, cell: player };
-  for (const action of moves) current = applyShift(current.board, current.cell, action);
+// 回放一串动作，返回终局（棋盘、玩家、出口都是推完之后的）。测试用它验证解法真的成立。
+export function replay(board, player, exit, moves) {
+  let current = { board, cell: player, exit };
+  for (const action of moves) current = applyShift(current, action);
   return current;
 }
