@@ -16,10 +16,13 @@ import {
   Trees,
   Trophy,
   Users,
+  Volume2,
+  VolumeX,
   Zap,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+
 import { BUILD_ORDER, BUILDINGS, LEVEL_COUNT, TOOL_BULLDOZE, DEMOLISH_COST } from './game/rules.js';
 import { createInput } from './game/input.js';
 import {
@@ -34,6 +37,7 @@ import {
 } from './game/simulation.js';
 import { createScene } from './scene/createScene.js';
 import { YAW_STEP, advanceClock, zoomStep } from './scene/motion.js';
+import { createAudio, vibrate, vibrationFor } from './scene/audio.js';
 import {
   TUTORIAL_STEPS,
   buildingBrief,
@@ -42,9 +46,12 @@ import {
   loseComment,
   moneyLabel,
   monthLabel,
+  muteLabel,
   netLabel,
   populationLabel,
   powerLabel,
+  recordLabel,
+  rewardLabel,
   speedLabel,
   starLabel,
   toolLabel,
@@ -53,6 +60,8 @@ import {
 
 const STARS_KEY = 'chengshi-jianzao:stars';
 const TAUGHT_KEY = 'chengshi-jianzao:taught';
+const MUTE_KEY = 'chengshi-jianzao:muted';
+
 const TOOL_ICONS = {
   road: Route,
   house: Home,
@@ -88,27 +97,56 @@ export default function App() {
   // 一次拖动里同一格只建一次，否则手指停住会反复扣钱。
   const paintedRef = useRef(-1);
   const paintingRef = useRef(false);
+  // 音频引擎不参与渲染，放进 state 只会白白多一轮重渲染。
+  const audioRef = useRef(null);
   const [view, setView] = useState(gameRef.current);
   const [stars, setStars] = useState(() => readJson(STARS_KEY, {}));
   const [guide, setGuide] = useState(() => !readJson(TAUGHT_KEY, false));
+  const [muted, setMuted] = useState(() => readJson(MUTE_KEY, false));
+  const [record, setRecord] = useState(false);
+
+  const sound = useCallback((name) => {
+    if (!audioRef.current) audioRef.current = createAudio({ muted });
+    return audioRef.current.play(name);
+  }, [muted]);
 
   // 权威状态在 ref 里，React state 只是 HUD 的镜像。
+  // 这一关没有 effects 数组，所以音效由「前后两个状态」派生——apply 正好是唯一的出入口。
   const apply = useCallback((next) => {
-    if (next === gameRef.current) return;
+    const prev = gameRef.current;
+    if (next === prev) return;
     gameRef.current = next;
     setView(next);
+    if (!audioRef.current) audioRef.current = createAudio({ muted });
+    audioRef.current.notify(prev, next);
+    vibrate(vibrationFor(prev, next));
+  }, [muted]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((current) => {
+      const next = !current;
+      writeJson(MUTE_KEY, next);
+      if (audioRef.current) audioRef.current.setMuted(next);
+      return next;
+    });
   }, []);
+
 
   const load = useCallback((index, seed) => {
     gameRef.current = createGame(index, seed);
     paintedRef.current = -1;
     setView(gameRef.current);
-  }, []);
+    setRecord(false);
+    // 面板上的按钮是本局第一个用户手势，正好拿它把 AudioContext 解锁。
+    sound('road');
+  }, [sound]);
 
   const closeGuide = useCallback(() => {
     setGuide(false);
     writeJson(TAUGHT_KEY, true);
-  }, []);
+    sound('road');
+  }, [sound]);
+
 
   const onAction = useCallback((action) => {
     const state = gameRef.current;
@@ -180,14 +218,23 @@ export default function App() {
     };
   }, [apply, onAction]);
 
+  // 卸载时关掉 AudioContext。浏览器对同时存在的 context 有上限，热更新时不关会攒着。
+  useEffect(() => () => audioRef.current?.dispose(), []);
+
+  // 破纪录要在写盘之前判：写完 best 就等于新星数，再比就永远比不出来了。
   useEffect(() => {
-    if (view.status !== 'won') return;
+    if (view.status !== 'won') {
+      setRecord(false);
+      return;
+    }
     const best = stars[view.levelIndex] ?? 0;
     if (view.stars <= best) return;
-    const record = { ...stars, [view.levelIndex]: view.stars };
-    setStars(record);
-    writeJson(STARS_KEY, record);
+    setRecord(true);
+    const next = { ...stars, [view.levelIndex]: view.stars };
+    setStars(next);
+    writeJson(STARS_KEY, next);
   }, [view.status, view.stars, view.levelIndex, stars]);
+
 
   // 提示是一次性的，留在屏幕上会和下一条月报打架。
   useEffect(() => {
@@ -242,7 +289,18 @@ export default function App() {
         <button type="button" className="chip chip-help" onClick={() => setGuide(true)}>
           <HelpCircle size={13} aria-hidden="true" /> 玩法
         </button>
+        <button
+          type="button"
+          className="chip chip-help"
+          onClick={toggleMute}
+          aria-pressed={muted}
+          aria-label={muteLabel(muted)}
+        >
+          {muted ? <VolumeX size={13} aria-hidden="true" /> : <Volume2 size={13} aria-hidden="true" />}
+          {muted ? '静音' : '音效'}
+        </button>
       </div>
+
 
       <div className="hud-camera">
         <button type="button" className="pad-key" onClick={() => onAction('rotateLeft')} aria-label="视角左转">
@@ -330,12 +388,27 @@ export default function App() {
 
       {view.status === 'won' && (
         <div className="overlay" role="dialog" aria-modal="true">
-          <div className="panel">
+          <div className="panel panel-settle">
             <h1>达标</h1>
             <p className="panel-status">{levelLabel(view.levelIndex, view.level)} · {monthLabel(view.month)}</p>
-            <p className="panel-stars">{starLabel(view.stars)}</p>
+            {record && <p className="panel-badge">{recordLabel(record)}</p>}
+            {/* 星星逐颗弹出来，一次性全亮就没有「攒到了」的感觉。 */}
+            <p className="panel-stars" aria-label={`获得 ${view.stars} 星`}>
+              {starLabel(view.stars).split('').map((mark, index) => (
+                <i
+                  key={index}
+                  className={mark === '★' ? 'star-on' : 'star-off'}
+                  style={{ animationDelay: `${index * 180}ms` }}
+                  aria-hidden="true"
+                >
+                  {mark}
+                </i>
+              ))}
+            </p>
             <p className="panel-score">{view.population} 人</p>
             <p className="panel-detail">{winComment(view.month, view.level.par)}</p>
+            <p className="panel-detail">{rewardLabel(view.stars)} · 总星 {totalStars} / {LEVEL_COUNT * 3}</p>
+
             <button
               type="button"
               className="panel-action"

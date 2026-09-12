@@ -7,14 +7,35 @@ import {
   buildingBrief,
   coachLine,
   monthLabel,
+  muteLabel,
   netLabel,
   powerLabel,
   populationLabel,
+  recordLabel,
+  rewardLabel,
   speedLabel,
   starLabel,
   toolLabel,
   winComment,
 } from '../src/scene/readout.js';
+
+test('只有真刷掉这一关旧星数才报新纪录', () => {
+  assert.equal(recordLabel(true), '新纪录');
+  assert.equal(recordLabel(false), null);
+});
+
+test('音效开关的文案把当前状态说清楚', () => {
+  assert.equal(muteLabel(true), '音效已关');
+  assert.equal(muteLabel(false), '音效已开');
+});
+
+test('星级点评按拿到几颗给，达标时不挑刺', () => {
+  assert.match(rewardLabel(3), /满星/);
+  assert.match(rewardLabel(2), /满星/);
+  assert.notEqual(rewardLabel(2), rewardLabel(3));
+  assert.match(rewardLabel(1), /达标/);
+});
+
 
 test('月份显示成年月，跨年会进位', () => {
   assert.equal(monthLabel(0), '第 1 年 1 月');

@@ -68,6 +68,19 @@ export const winComment = (months, par) => {
 
 export const loseComment = () => '连续几个月入不敷出：先拆掉停摆的耗电大户，再靠住宅和商铺回血';
 
+// 只有真刷掉这一关的旧星数才报新纪录，否则重刷同一关每次都报喜就不值钱了。
+export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+// 星级点评按拿到几颗给，和上面那行「工期账」分开说。达标本身不该被挑刺。
+export const rewardLabel = (stars) => {
+  if (stars >= 3) return '满星达标';
+  if (stars === 2) return '再快几个月就是满星';
+  return '达标了，下次早点铺开路网';
+};
+
+
 export const TUTORIAL_STEPS = [
   { title: '路先行', detail: '所有建筑都要贴着一条能连回城门的路，断头路不算通车。' },
   { title: '住宅配岗位', detail: `住宅出人、商铺工厂出岗位，一个岗位养 ${WORKERS_PER_JOB} 个居民，两边都缺人口就卡住。` },
