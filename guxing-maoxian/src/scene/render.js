@@ -257,55 +257,8 @@ export function createRenderer(host) {
     ctx.globalAlpha = 1;
   };
 
-  return {
-    notify(effects) {
-      for (const effect of effects) {
-        spawnBurst(effect);
-        const text = POPUP_TEXT[effect.type];
-        if (text) popups = [...popups, { text, x: effect.x, y: effect.y, life: 0.8 }];
-      }
-    },
-    render(state, dt = 0) {
-      clock += dt;
-      const box = layout();
-      // 换关或重生时相机直接吸到新位置，不要拖一条横穿关卡的长镜头。
-      if (lastLevel !== state.levelKey || state.status === 'ready') {
-        cam.ready = false;
-        lastLevel = state.levelKey;
-      }
-      follow(state, box, dt);
-      ctx.setTransform(box.ratio, 0, 0, box.ratio, 0, 0);
-      ctx.clearRect(0, 0, box.width, box.height);
-      drawBackground(box, PALETTES[state.levelIndex % PALETTES.length]);
-
-      const startCol = Math.max(0, Math.floor(cam.x) - 1);
-      const endCol = Math.min(state.width - 1, Math.ceil(cam.x + box.cols) + 1);
-      const startRow = Math.max(0, Math.floor(cam.y) - 1);
-      const endRow = Math.min(state.height - 1, Math.ceil(cam.y + box.rows) + 1);
-      for (let row = startRow; row <= endRow; row += 1) {
-        for (let col = startCol; col <= endCol; col += 1) {
-          const tile = state.grid[row][col];
-          if (tile === ' ') continue;
-          const above = row > 0 ? state.grid[row - 1][col] : ' ';
-          drawTile(tile, (col - cam.x) * box.cell, (row - cam.y) * box.cell, box.cell, above === ' ');
-        }
-      }
-
-      for (const item of state.items) drawItem(item, box);
-      for (const enemy of state.enemies) drawEnemy(enemy, box);
-      drawPlayer(state.player, box, state.status);
-      drawParticles(box, dt);
-    },
-    dispose() {
-      particles = [];
-      popups = [];
-      canvas.remove();
-    },
-  };
-}
-
-
   const drawItem = (item, box) => {
+
     const cell = box.cell;
     const px = (item.x - cam.x) * cell;
     const py = (item.y - cam.y) * cell;
@@ -407,6 +360,125 @@ export function createRenderer(host) {
     }
     ctx.globalAlpha = 1;
   };
+
+  // 敌人：菇菇怪是一坨会走的伞菌，乌龟多一层壳。全靠几何图形画，不依赖任何贴图。
+  // 状态决定画法：walk 正常走，shell 只剩壳，sliding 壳在转，dead 压扁，flip 翻过来掉下去。
+  const drawEnemy = (enemy, box) => {
+    const cell = box.cell;
+    const px = (enemy.x - cam.x) * cell;
+    const py = (enemy.y - cam.y) * cell;
+    const w = enemy.w * cell;
+    const h = enemy.h * cell;
+    const turtle = enemy.kind === 'turtle';
+    const shelled = enemy.state === 'shell' || enemy.state === 'sliding';
+
+    ctx.save();
+    // 翻掉的敌人整体倒过来，和「踩扁」一眼分得开。
+    if (enemy.state === 'flip') {
+      ctx.translate(px + w / 2, py + h / 2);
+      ctx.rotate(Math.PI);
+      ctx.translate(-(px + w / 2), -(py + h / 2));
+    }
+
+    if (shelled) {
+      // 滑行的壳自转，站着的壳快醒时抖一下当预告。
+      const spin = enemy.state === 'sliding' ? clock * 9 * enemy.dir : 0;
+      const wobble = enemy.state === 'shell' && enemy.timer < 1 ? Math.sin(clock * 26) * w * 0.05 : 0;
+      ctx.save();
+      ctx.translate(px + w / 2 + wobble, py + h / 2);
+      ctx.rotate(spin);
+      ctx.fillStyle = '#2fa860';
+      circle(ctx, 0, 0, Math.min(w, h) * 0.5);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.28)';
+      ctx.lineWidth = Math.max(1, cell * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.34, 0);
+      ctx.lineTo(w * 0.34, 0);
+      ctx.moveTo(0, -h * 0.34);
+      ctx.lineTo(0, h * 0.34);
+      ctx.stroke();
+      ctx.restore();
+      ctx.restore();
+      return;
+    }
+
+    // 踩扁的那一下压成一张饼，靠 timer 收缩，不另外做动画状态。
+    const squash = enemy.state === 'dead' ? Math.max(0.18, enemy.timer / 0.45) : 1;
+    const bodyH = h * squash;
+    const bodyY = py + h - bodyH;
+    // 走动时左右晃一点，静止的和在走的一眼分得出。
+    const sway = enemy.state === 'walk' ? Math.sin(clock * 11 + enemy.id) * w * 0.05 : 0;
+
+    ctx.fillStyle = turtle ? '#2fa860' : '#f0d8b8';
+    roundRect(ctx, px + w * 0.14 + sway, bodyY + bodyH * 0.44, w * 0.72, bodyH * 0.56, w * 0.2);
+    ctx.fill();
+
+    ctx.fillStyle = turtle ? '#7ad46a' : '#9b5fd0';
+    ctx.beginPath();
+    ctx.ellipse(px + w / 2 + sway, bodyY + bodyH * 0.46, w * 0.5, bodyH * 0.42, 0, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    if (enemy.state !== 'dead') {
+      const look = enemy.dir >= 0 ? 1 : -1;
+      ctx.fillStyle = '#243046';
+      circle(ctx, px + w * (0.5 + look * 0.15) + sway, bodyY + bodyH * 0.66, w * 0.07);
+      ctx.fill();
+      circle(ctx, px + w * (0.5 + look * 0.15) - look * w * 0.26 + sway, bodyY + bodyH * 0.66, w * 0.07);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  return {
+    notify(effects) {
+      for (const effect of effects) {
+        spawnBurst(effect);
+        const text = POPUP_TEXT[effect.type];
+        if (text) popups = [...popups, { text, x: effect.x, y: effect.y, life: 0.8 }];
+      }
+    },
+    render(state, dt = 0) {
+      clock += dt;
+      const box = layout();
+      // 换关或重生时相机直接吸到新位置，不要拖一条横穿关卡的长镜头。
+      if (lastLevel !== state.levelKey || state.status === 'ready') {
+        cam.ready = false;
+        lastLevel = state.levelKey;
+      }
+      follow(state, box, dt);
+      ctx.setTransform(box.ratio, 0, 0, box.ratio, 0, 0);
+      ctx.clearRect(0, 0, box.width, box.height);
+      drawBackground(box, PALETTES[state.levelIndex % PALETTES.length]);
+
+      const startCol = Math.max(0, Math.floor(cam.x) - 1);
+      const endCol = Math.min(state.width - 1, Math.ceil(cam.x + box.cols) + 1);
+      const startRow = Math.max(0, Math.floor(cam.y) - 1);
+      const endRow = Math.min(state.height - 1, Math.ceil(cam.y + box.rows) + 1);
+      for (let row = startRow; row <= endRow; row += 1) {
+        for (let col = startCol; col <= endCol; col += 1) {
+          const tile = state.grid[row][col];
+          if (tile === ' ') continue;
+          const above = row > 0 ? state.grid[row - 1][col] : ' ';
+          drawTile(tile, (col - cam.x) * box.cell, (row - cam.y) * box.cell, box.cell, above === ' ');
+        }
+      }
+
+      for (const item of state.items) drawItem(item, box);
+      for (const enemy of state.enemies) drawEnemy(enemy, box);
+      drawPlayer(state.player, box, state.status);
+      drawParticles(box, dt);
+    },
+    dispose() {
+      particles = [];
+      popups = [];
+      canvas.remove();
+    },
+  };
+}
+
+
 
 
 
