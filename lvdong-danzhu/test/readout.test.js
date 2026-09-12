@@ -14,13 +14,35 @@ import {
   grooveLabel,
   levelLabel,
   livesLabel,
+  muteLabel,
   pressureRatio,
   progressPercent,
+  recordLabel,
   remainLabel,
+  rewardLabel,
   starLabel,
   statusLabel,
   waveLabel,
 } from '../src/scene/readout.js';
+
+test('只有真刷掉旧的最高分才报新纪录', () => {
+  assert.equal(recordLabel(true), '新纪录');
+  assert.equal(recordLabel(false), null);
+});
+
+test('音效开关的文案把当前状态说清楚', () => {
+  assert.equal(muteLabel(true), '音效已关');
+  assert.equal(muteLabel(false), '音效已开');
+});
+
+test('星级点评按拿到几颗给，通关时不挑刺', () => {
+  assert.match(rewardLabel(3), /满星/);
+  assert.match(rewardLabel(2), /满星/);
+  assert.notEqual(rewardLabel(2), rewardLabel(3));
+  assert.match(rewardLabel(1), /过关/);
+  assert.notEqual(rewardLabel(0), rewardLabel(1), '零星是没过关，不能和过关说一样的话');
+});
+
 
 test('分数按中文千分位显示，时间补零', () => {
   assert.equal(formatScore(12345), '12,345');
