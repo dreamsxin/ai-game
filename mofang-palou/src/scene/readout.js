@@ -5,6 +5,7 @@ import {
   TILE_SPAN,
   VIEW_SIDE,
   VIEW_TOP,
+  axesForView,
   orderForTower,
   viewLabel,
 } from '../game/rules.js';
@@ -176,5 +177,25 @@ export const cellPosition = (order, cell) => [
   (cell.layer - (order - 1) / 2) * LAYER_HEIGHT,
   (cell.row - (order - 1) / 2) * TILE_SPAN,
 ];
+
+// 滑够这么多像素才算一次推移，短于它就是点击。太小会把点击误判成滑动。
+export const SWIPE_THRESHOLD = 22;
+
+/**
+ * 一次滑动该推哪条轴、往哪个方向。**屏幕方向到世界方向的符号在两个视角里是反的**：
+ * 俯视时相机在上方朝下压，世界 +z（row 变大）投在屏幕下方，所以往下滑 = row 加；
+ * 侧视时相机正对塔身，世界 +y（layer 变大）投在屏幕上方，所以往**上**滑才是 layer 加。
+ * 这个符号搞反了会让「推柱」整个反向，是最容易错又最难看出来的一处。
+ */
+export function gestureShift(view, dx, dy) {
+  const axes = axesForView(view);
+  if (!axes) return null;
+  if (Math.hypot(dx, dy) < SWIPE_THRESHOLD) return null;
+  if (Math.abs(dx) >= Math.abs(dy)) return { axis: axes.horizontal, dir: dx > 0 ? 1 : -1 };
+  const down = dy > 0;
+  if (view === VIEW_TOP) return { axis: axes.vertical, dir: down ? 1 : -1 };
+  return { axis: axes.vertical, dir: down ? -1 : 1 };
+}
+
 
 

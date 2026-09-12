@@ -14,6 +14,7 @@ import {
 } from '../src/scene/motion.js';
 import {
   CAMERA_FOV,
+  SWIPE_THRESHOLD,
   TUTORIAL_STEPS,
   cameraFor,
   cellPosition,
@@ -25,6 +26,7 @@ import {
   floorsLabel,
   gainLabel,
   gestureLabel,
+  gestureShift,
   hintLabel,
   nextTowerLabel,
   orderLabel,
@@ -148,6 +150,20 @@ test('三个视角各给相机位置、目标和裁剪策略', () => {
   assert.notDeepEqual(orbit.position, spun.position, '转台会转');
   // 阶数越大退得越远，六阶不能溢出屏幕。
   assert.ok(cameraFor(VIEW_ORBIT, 6, 0.46).position[1] > cameraFor(VIEW_ORBIT, 3, 0.46).position[1]);
+});
+
+test('滑动到轴的映射：俯视往下滑是 row 加，侧视往上滑才是 layer 加', () => {
+  // 横滑在两个视角里都是推行，符号一致。
+  assert.deepEqual(gestureShift(VIEW_TOP, 60, 4), { axis: AXIS_ROW, dir: 1 });
+  assert.deepEqual(gestureShift(VIEW_SIDE, -60, 4), { axis: AXIS_ROW, dir: -1 });
+  // 竖滑的符号是反的：这一处搞错会让「推柱」整个反向。
+  assert.deepEqual(gestureShift(VIEW_TOP, 4, 60), { axis: AXIS_COL, dir: 1 }, '俯视往下滑 = row 加');
+  assert.deepEqual(gestureShift(VIEW_TOP, 4, -60), { axis: AXIS_COL, dir: -1 });
+  assert.deepEqual(gestureShift(VIEW_SIDE, 4, -60), { axis: AXIS_PILLAR, dir: 1 }, '侧视往上滑 = layer 加');
+  assert.deepEqual(gestureShift(VIEW_SIDE, 4, 60), { axis: AXIS_PILLAR, dir: -1 });
+  // 转台不推；没滑够距离算点击不算滑动。
+  assert.equal(gestureShift(VIEW_ORBIT, 60, 4), null);
+  assert.equal(gestureShift(VIEW_TOP, 5, 5), null, `没超过 ${SWIPE_THRESHOLD}px 就是点击`);
 });
 
 test('格子坐标以塔心为原点，三视角共用一套', () => {

@@ -1,0 +1,263 @@
+/* 手机竖屏优先。画布铺满整屏，HUD 全部浮在上面 —— 三维场景本来就该占满视野，
+   把它塞进一个方框里会让六阶塔小到看不清门。 */
+* { box-sizing: border-box; }
+
+:root {
+  --ink: #eaf0ff;
+  --dim: #93a2c8;
+  --panel: rgba(10, 14, 28, 0.82);
+  --edge: rgba(150, 172, 226, 0.24);
+  --accent: #7ff0ff;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: #05060f;
+  color: var(--ink);
+  font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+.app { position: relative; height: 100%; overflow: hidden; }
+
+@supports (height: 100dvh) {
+  .app { height: 100dvh; }
+}
+
+/* 画布吃掉整屏。touch-action: none 是必须的：不关掉浏览器的滚动手势，
+   竖滑会被当成翻页，推柱就永远推不动。 */
+.stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.top {
+  position: absolute;
+  top: calc(var(--safe-top) + 10px);
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.top > * {
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  padding: 7px 11px;
+  backdrop-filter: blur(6px);
+}
+
+.tower { flex: 1; display: flex; flex-direction: column; }
+.tower strong { font-size: 15px; }
+.tower span { font-size: 11px; color: var(--dim); }
+
+.shifts { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.shifts strong { font-size: 16px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.shifts span { font-size: 10px; color: var(--dim); }
+
+.score { display: flex; align-items: center; gap: 5px; color: #ffd479; }
+.score strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+
+/* 视角按钮竖排贴左边：拇指够得到，又不压住塔身正中。 */
+.views {
+  position: absolute;
+  top: calc(var(--safe-top) + 76px);
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.view {
+  min-width: 56px;
+  padding: 7px 10px;
+  border-radius: 11px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.view-on { color: #05060f; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+.ticker {
+  position: absolute;
+  top: calc(var(--safe-top) + 76px);
+  left: 76px;
+  right: 10px;
+  margin: 0;
+  padding: 7px 11px;
+  border-radius: 11px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  font-size: 12.5px;
+  backdrop-filter: blur(6px);
+}
+
+/* 当前在操作哪一面 + 翻面按钮，摆在右下、十字键上方。 */
+.face {
+  position: absolute;
+  right: 10px;
+  bottom: calc(var(--safe-bottom) + 118px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  font-size: 12.5px;
+  backdrop-filter: blur(6px);
+}
+
+.stepper { display: flex; flex-direction: column; gap: 3px; }
+
+.stepper button {
+  width: 34px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--edge);
+  background: rgba(24, 32, 56, 0.9);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.gesture {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--safe-bottom) + 84px);
+  margin: 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.keys {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--safe-bottom) + 12px);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.key {
+  position: relative;
+  flex: 1;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.key em {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  font-size: 10px;
+  font-style: normal;
+  color: var(--accent);
+}
+
+.advice {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--safe-bottom) + 72px);
+  margin: 0;
+  padding: 7px 11px;
+  border-radius: 11px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* 结算和玩法共用一个面板样式：内容不同，但都是「盖住场景、给一个决定」。 */
+.sheet {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(var(--safe-bottom) + 14px);
+  max-height: 78%;
+  overflow-y: auto;
+  padding: 18px 16px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--edge);
+  background: rgba(9, 12, 24, 0.95);
+  backdrop-filter: blur(10px);
+  animation: rise 0.24s ease-out;
+}
+
+@keyframes rise {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.sheet h2 { margin: 0 0 8px; font-size: 19px; }
+.gain { margin: 0 0 4px; font-size: 15px; color: var(--accent); font-weight: 600; }
+.remark { margin: 0 0 4px; font-size: 13px; }
+.tally { margin: 0 0 14px; font-size: 12px; color: var(--dim); }
+
+.steps { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 9px; }
+.steps li { font-size: 13px; }
+.steps strong { display: block; }
+.steps span { color: var(--dim); }
+
+.primary, .ghost {
+  width: 100%;
+  height: 46px;
+  border-radius: 13px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #05060f;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ghost {
+  margin-top: 8px;
+  background: transparent;
+  border-color: var(--edge);
+  color: var(--dim);
+  font-weight: 400;
+}
+
+/* 矮屏（小手机横过来、或者带地址栏的浏览器）把浮层收紧，别把画面挤没了。 */
+@media (max-height: 680px) {
+  .key { height: 46px; }
+  .gesture { bottom: calc(var(--safe-bottom) + 70px); }
+  .face { bottom: calc(var(--safe-bottom) + 100px); }
+  .views { top: calc(var(--safe-top) + 68px); }
+  .ticker { top: calc(var(--safe-top) + 68px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet { animation: none; }
+}
+
+
