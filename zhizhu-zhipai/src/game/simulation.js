@@ -1,6 +1,6 @@
 // 回合制状态机。所有动作都是纯函数：吃一份状态，吐一份新状态，绝不原地改。
 // 每次推进都会带一串 effects——表现层（音效、震动、提示条）只认这一个出口。
-import { freshDeck } from './cards.js';
+import { CARD_COUNT, freshDeck } from './cards.js';
 import { createRandom } from './random.js';
 import {
   DEAL_ROWS,
@@ -8,6 +8,7 @@ import {
   HISTORY_LIMIT,
   PILE_COUNT,
   RUN_LENGTH,
+  clampLevel,
   levelRecipe,
   scoreOf,
   starsFor,
@@ -219,3 +220,89 @@ export function boardView(state) {
     top: state.piles.map(topOf),
   };
 }
+
+// 存档格式版本号。牌局结构一变就往上加一，旧存档直接丢掉当新局开，
+// 绝不能拿一份对不上的存档去渲染——那会白屏，比丢一局严重得多。
+export const SAVE_VERSION = 1;
+
+/** 只存能还原牌局的那几样。selection 和 effects 是瞬时的，不进存档。 */
+export const serialize = (state) => ({
+  v: SAVE_VERSION,
+  seed: state.seed,
+  levelIndex: state.levelIndex,
+  status: state.status,
+  piles: state.piles.map((pile) => ({ c: pile.cards, d: pile.down })),
+  stock: state.stock,
+  foundations: state.foundations,
+  moves: state.moves,
+  runs: state.runs,
+  // 历史存最近 12 步就够了：存满 60 步会让存档大到几十 KB，而玩家实际只会撤几步。
+  history: state.history.slice(-12).map((snap) => ({
+    piles: snap.piles.map((pile) => ({ c: pile.cards, d: pile.down })),
+    stock: snap.stock,
+    foundations: snap.foundations,
+    moves: snap.moves,
+    runs: snap.runs,
+  })),
+});
+
+const validPile = (pile) =>
+  Boolean(pile)
+  && Array.isArray(pile.c)
+  && Number.isInteger(pile.d)
+  && pile.d >= 0
+  && pile.d <= pile.c.length
+  && pile.c.every((id) => Number.isInteger(id) && id >= 0 && id < CARD_COUNT);
+
+const readPiles = (piles) => piles.map((pile) => ({ cards: [...pile.c], down: pile.d }));
+
+/**
+ * 从存档还原一局。任何一处对不上就返回 null，让调用方开新局。
+ *
+ * 校验的核心是「牌数守恒」：摞里的 + 牌库里的 + 已收门×13 必须正好 104，而且不能有重复 id。
+ * 存档是唯一会被外部改坏的输入（玩家可以手改 localStorage），这一关必须自己把住。
+ */
+export function restore(raw) {
+  if (!raw || raw.v !== SAVE_VERSION) return null;
+  if (!Array.isArray(raw.piles) || raw.piles.length !== PILE_COUNT) return null;
+  if (!raw.piles.every(validPile)) return null;
+  if (!Array.isArray(raw.stock) || !Array.isArray(raw.foundations)) return null;
+  if (!Number.isInteger(raw.moves) || raw.moves < 0) return null;
+  if (!Number.isInteger(raw.runs) || raw.runs < 0 || raw.runs > FOUNDATION_COUNT) return null;
+
+  const piles = readPiles(raw.piles);
+  const stock = [...raw.stock];
+  const onBoard = [...piles.flatMap((pile) => pile.cards), ...stock];
+  if (onBoard.length + raw.runs * RUN_LENGTH !== CARD_COUNT) return null;
+  if (new Set(onBoard).size !== onBoard.length) return null;
+  if (raw.foundations.length !== raw.runs) return null;
+
+  const recipe = levelRecipe(raw.levelIndex);
+  const history = Array.isArray(raw.history)
+    ? raw.history.filter((snap) => Array.isArray(snap?.piles) && snap.piles.every(validPile)).map((snap) => ({
+      piles: readPiles(snap.piles),
+      stock: [...snap.stock],
+      foundations: [...snap.foundations],
+      moves: snap.moves,
+      runs: snap.runs,
+    }))
+    : [];
+
+  return {
+    seed: raw.seed ?? 1,
+    levelIndex: clampLevel(raw.levelIndex),
+    suits: recipe.suits,
+    // 存档里的 status 只信 won，其余一律当「还在打」——死局是从局面现算的，不该被存档定死。
+    status: raw.status === 'won' ? 'won' : 'playing',
+    piles,
+    stock,
+    foundations: [...raw.foundations],
+    moves: raw.moves,
+    runs: raw.runs,
+    selection: null,
+    history,
+    effects: [],
+    tick: 0,
+  };
+}
+

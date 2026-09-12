@@ -21,8 +21,10 @@ import {
   hint,
   moveTo,
   restart,
+  restore,
   scoreOfState,
   select,
+  serialize,
   starsOfState,
   undo,
 } from './game/simulation.js';
@@ -49,8 +51,12 @@ const BEST_KEY = 'zhizhu-zhipai:best';
 const MUTE_KEY = 'zhizhu-zhipai:muted';
 const TAUGHT_KEY = 'zhizhu-zhipai:taught';
 const LEVEL_KEY = 'zhizhu-zhipai:level';
+// 整局牌面存这里：一局蜘蛛纸牌要打十几分钟，切个后台就从头开始是不能接受的。
+const SAVE_KEY = 'zhizhu-zhipai:save';
 
 const randomSeed = () => Math.floor(Math.random() * 1_000_000_000) + 1;
+// 摞与摞之间的缝，px。牌宽和牌的横向位置都按它算，两处必须用同一个数。
+const CARD_GAP = 4;
 
 const readJson = (key, fallback) => {
   try {
@@ -76,11 +82,18 @@ const stackGap = (boardHeight, cardHeight, longest) => {
   return Math.max(6, Math.min(26, room / (longest - 1)));
 };
 
+// 开局要么接上存档，要么开新局。存档读不出来（版本变了、被手改坏了）就当新局，
+// 绝不能拿一份对不上的存档去渲染——那会白屏，比丢一局严重得多。
+const openingGame = () => {
+  const level = readJson(LEVEL_KEY, 0);
+  return restore(readJson(SAVE_KEY, null)) ?? createGame(level, randomSeed());
+};
+
 export default function App() {
   const boardRef = useRef(null);
   const audioRef = useRef(null);
-  const [levelIndex, setLevelIndex] = useState(() => readJson(LEVEL_KEY, 0));
-  const [game, setGame] = useState(() => createGame(readJson(LEVEL_KEY, 0), randomSeed()));
+  const [game, setGame] = useState(openingGame);
+  const [levelIndex, setLevelIndex] = useState(() => game.levelIndex);
   const [best, setBest] = useState(() => readJson(BEST_KEY, {}));
   const [muted, setMuted] = useState(() => readJson(MUTE_KEY, false));
   const [guide, setGuide] = useState(() => !readJson(TAUGHT_KEY, false));
@@ -97,15 +110,15 @@ export default function App() {
   }, []);
 
   // 权威状态就是这个 state：回合制不需要每帧重渲染，一次动作一次 setState 正好。
+  // 副作用（音效、震动）放在 setGame 外面：React 允许多次调用 updater，
+  // 塞进 updater 里会把同一声音效重放好几遍。
   const apply = useCallback((next) => {
-    setGame((current) => {
-      if (next === current) return current;
-      ensureAudio().notify(next.effects);
-      vibrate(vibrationFor(next.effects));
-      return next;
-    });
+    if (next === game) return;
+    setGame(next);
     setAdvice(null);
-  }, [ensureAudio]);
+    ensureAudio().notify(next.effects);
+    vibrate(vibrationFor(next.effects));
+  }, [game, ensureAudio]);
 
   const toggleMute = useCallback(() => {
     setMuted((current) => {
@@ -140,6 +153,11 @@ export default function App() {
   // 卸载时关掉 AudioContext：浏览器对同时存在的 context 有上限，热更新时不关会攒着。
   useEffect(() => () => audioRef.current?.dispose(), []);
 
+  // 每一步都写存档。序列化是纯函数，只挑能还原牌局的那几样，历史只留最近 12 步。
+  useEffect(() => {
+    writeJson(SAVE_KEY, serialize(game));
+  }, [game]);
+
   const score = scoreOfState(game);
   const stars = starsOfState(game);
   const finished = game.status === 'won';
@@ -159,7 +177,7 @@ export default function App() {
     () => Math.max(1, ...game.piles.map((pile) => pile.cards.length)),
     [game.piles],
   );
-  const cardWidth = box.width > 0 ? (box.width - (PILE_COUNT - 1) * 4) / PILE_COUNT : 0;
+  const cardWidth = box.width > 0 ? (box.width - (PILE_COUNT - 1) * CARD_GAP) / PILE_COUNT : 0;
   const cardHeight = cardWidth * 1.42;
   const gap = stackGap(box.height, cardHeight, longest);
   const suits = levelRecipe(game.levelIndex).suits;
@@ -250,7 +268,17 @@ export default function App() {
             }}
           >
             {isEmpty(pile) && <span className="pile-empty" aria-hidden="true" />}
-            {pile.cards.map((card, cardIndex) => {
+          </div>
+        ))}
+
+        {/*
+          所有牌都画在同一层里，位置按「第几摞、第几张」算。
+          这样一张牌换摞时 DOM 节点不变（key 是牌的 id），CSS 才能把它从旧位置
+          滑到新位置；如果牌是各摞的子节点，跨摞移动就是删一个建一个，只能瞬移。
+        */}
+        <div className="cards" aria-hidden="false">
+          {game.piles.flatMap((pile, pileIndex) =>
+            pile.cards.map((card, cardIndex) => {
               const down = cardIndex < pile.down;
               const picked = game.selection
                 && game.selection.from === pileIndex
@@ -261,7 +289,11 @@ export default function App() {
                   className={`card${down ? ' card-down' : ''}${picked ? ' card-picked' : ''}${
                     !down && isRed(card, suits) ? ' card-red' : ''
                   }`}
-                  style={{ top: `calc(${cardIndex} * var(--stack))`, zIndex: cardIndex + 1 }}
+                  style={{
+                    left: `calc((var(--card-w) + ${CARD_GAP}px) * ${pileIndex})`,
+                    top: `calc(${cardIndex} * var(--stack))`,
+                    zIndex: pileIndex * 100 + cardIndex + 1,
+                  }}
                   onClick={onCard(pileIndex, cardIndex)}
                   onDoubleClick={onCardDouble(pileIndex, cardIndex)}
                   aria-label={down ? '背面牌' : cardLabel(card, suits)}
@@ -274,9 +306,9 @@ export default function App() {
                   )}
                 </span>
               );
-            })}
-          </div>
-        ))}
+            }),
+          )}
+        </div>
       </div>
 
       {message && <p className="toast" role="status">{message}</p>}

@@ -19,8 +19,10 @@ import {
   hint,
   moveTo,
   restart,
+  restore,
   scoreOfState,
   select,
+  serialize,
   undo,
 } from '../src/game/simulation.js';
 
@@ -222,3 +224,89 @@ test('星级按最终分给，满星要求几乎一步不废', () => {
   assert.equal(scoreOf(0, FOUNDATION_COUNT), 1300);
   assert.equal(scoreOf(9999, 0), 0, '分数有底线，不该出现负分');
 });
+
+// 真实牌局里走一步。别去猜「第 1 摞正好能压到第 2 摞」——那取决于洗牌，
+// 让提示替我们找一个确定合法的落点。
+const walkOneStep = (level, seed) => {
+  const game = fresh(level, seed);
+  const { state, move } = hint(game);
+  assert.ok(move, `seed ${seed} 开局就无路可走，换一个 seed`);
+  const moved = moveTo(state, move.to);
+  assert.equal(moved.moves, 1, '提示给的落点必须真能落下去');
+  return { game, moved };
+};
+
+test('存档能原样还原一局：牌面、步数、收门、历史都对得上', () => {
+  const { moved: game } = walkOneStep(2, 31);
+  const saved = JSON.parse(JSON.stringify(serialize(game)));
+  const back = restore(saved);
+  assert.ok(back);
+  assert.deepEqual(back.piles, game.piles);
+  assert.deepEqual(back.stock, game.stock);
+  assert.deepEqual(back.foundations, game.foundations);
+  assert.equal(back.moves, game.moves);
+  assert.equal(back.runs, game.runs);
+  assert.equal(back.levelIndex, game.levelIndex);
+  assert.equal(back.suits, game.suits);
+  // 瞬时字段不进存档
+  assert.equal(back.selection, null);
+  assert.deepEqual(back.effects, []);
+});
+
+test('还原后接着打得下去，撤销也还能用', () => {
+  const { game, moved } = walkOneStep(0, 12);
+  const back = restore(JSON.parse(JSON.stringify(serialize(moved))));
+  assert.ok(back.history.length > 0, '历史该跟着存档一起回来');
+  const undone = undo(back);
+  assert.deepEqual(undone.piles, game.piles, '撤销该退回搬牌之前');
+});
+
+test('历史只存最近 12 步，存档不会越打越胖', () => {
+  const fat = { ...fresh(0, 4), history: Array.from({ length: 40 }, () => snapshotLike()) };
+  assert.equal(serialize(fat).history.length, 12);
+});
+
+test('存档对不上就当没有：版本、结构、牌数、重复牌全都要拦住', () => {
+  const good = serialize(fresh(1, 8));
+  assert.ok(restore(good));
+  assert.equal(restore(null), null);
+  assert.equal(restore(undefined), null);
+  assert.equal(restore({}), null, '没有版本号的一律不认');
+  assert.equal(restore({ ...good, v: good.v + 1 }), null, '版本变了就丢掉');
+  assert.equal(restore({ ...good, piles: good.piles.slice(0, 3) }), null, '摞数不对');
+  assert.equal(restore({ ...good, stock: 'nope' }), null);
+  assert.equal(restore({ ...good, moves: -1 }), null);
+  assert.equal(restore({ ...good, runs: 99 }), null);
+  // 少一张牌：牌数守恒这一关必须自己把住，存档是玩家能手改的
+  const short = { ...good, stock: good.stock.slice(1) };
+  assert.equal(restore(short), null, '牌数不守恒');
+  // 多一张重复的牌
+  const dupe = { ...good, stock: [...good.stock.slice(1), good.stock[0], good.stock[0]] };
+  assert.equal(restore(dupe), null, '出现了重复的牌');
+  // down 越界
+  const bad = { ...good, piles: good.piles.map((p, i) => (i === 0 ? { ...p, d: p.c.length + 5 } : p)) };
+  assert.equal(restore(bad), null);
+  // 牌 id 超范围
+  const wild = { ...good, piles: good.piles.map((p, i) => (i === 0 ? { ...p, c: [999, ...p.c.slice(1)] } : p)) };
+  assert.equal(restore(wild), null);
+});
+
+test('存档里的 status 只信 won：死局是从局面现算的，不该被存档定死', () => {
+  const good = serialize(fresh(0, 6));
+  assert.equal(restore({ ...good, status: 'stuck' }).status, 'playing');
+  assert.equal(restore({ ...good, status: 'won' }).status, 'won');
+  assert.equal(restore({ ...good, status: '乱写的' }).status, 'playing');
+});
+
+// 造一份形状对得上的快照，专门喂给「历史截断」那条测试。
+function snapshotLike() {
+  const game = fresh(0, 1);
+  return {
+    piles: game.piles,
+    stock: game.stock,
+    foundations: [],
+    moves: 0,
+    runs: 0,
+  };
+}
+

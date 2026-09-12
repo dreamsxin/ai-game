@@ -162,10 +162,18 @@ body {
   z-index: 99;
 }
 
+/* 所有牌都在这一层里，位置由 JSX 按「第几摞、第几张」算成 left/top。
+   牌不是各摞的子节点，跨摞移动才不会变成「删一个建一个」，CSS 也才有得可动。
+   这一层不吃指针事件，缝隙里的点击照旧落到下面的摞上。 */
+.cards {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .card {
   position: absolute;
-  left: 0;
-  width: 100%;
+  width: var(--card-w);
   height: calc(var(--card-w) * 1.42);
   border-radius: 5px;
   background: linear-gradient(180deg, #fdfdf7, #e7e9df);
@@ -177,7 +185,11 @@ body {
   padding-left: 3px;
   line-height: 1;
   overflow: hidden;
+  pointer-events: auto;
+  /* 搬牌、发牌、收门都看得见过程。0.18s 够看清，又不至于让连收时等得慌。 */
+  transition: left 0.18s ease-out, top 0.18s ease-out, transform 0.12s ease-out;
 }
+
 
 .card-red {
   color: #c62839;
@@ -508,5 +520,11 @@ body {
   .panel-stars i {
     animation: none;
   }
+
+  /* 关掉动效的人是真的不想看牌飞来飞去，位置照旧对，只是不再滑。 */
+  .card {
+    transition: none;
+  }
 }
+
 

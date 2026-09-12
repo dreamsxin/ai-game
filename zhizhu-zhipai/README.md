@@ -59,6 +59,28 @@ export const suitOf = (id, suits) => Math.floor(id / RANKS) % suits;
 渲染用的是 DOM 而不是 canvas：一张牌就是一个 `<span>`，点数和花色是真文字。纸牌游戏的
 牌面必须清晰可读、必须能被读屏念出来，canvas 在这两件事上都要额外补一大堆工作。
 
+## 断点续玩
+
+每次状态变化都往 `localStorage` 写一份存档，重开页面直接接着打——纸牌一局要走上百步，
+关掉就没了是不能交付的。存档只存能还原牌局的那几样（`piles`／`stock`／`foundations`／
+步数／门数／最近 12 步历史），`selection` 和 `effects` 是瞬时的，不进存档。
+
+`restore()` 把存档当**不可信输入**看：玩家能手改 `localStorage`。核心那一关是**牌数守恒**——
+摞里的 + 牌库里的 + 已收门×13 必须正好 104，且不能有重复 id；再加上摞数、`down` 越界、
+id 范围、`foundations.length === runs` 一起校验。任何一处对不上就返回 `null`，让调用方开新局：
+拿一份对不上的存档去渲染会白屏，那比丢一局严重得多。
+
+存档里的 `status` **只信 `won`**，其余一律当「还在打」——死局是从当前局面现算的，不该被存档定死。
+格式一变就把 `SAVE_VERSION` 往上加一，旧存档整份丢掉。
+
+## 搬牌的动画
+
+十个 `.pile` 只作为点击热区，**所有牌都住在同一个绝对定位的 `.cards` 层里**，`key` 是牌的 id。
+这样一张牌从第 4 摞搬到第 8 摞时，React 复用的是同一个 DOM 节点，只改 `left`／`top`——
+CSS 的 `transition: left/top` 才有东西可插值。要是按摞嵌套，跨摞就是「旧节点卸载 + 新节点挂载」，
+牌会瞬移。`prefers-reduced-motion` 下这层过渡整个关掉。
+
+
 ## 反馈
 
 - **落牌那一声是全局最要紧的**：纸牌拍在桌上的一记闷响。翻开背面牌比落牌亮，因为它是
@@ -82,7 +104,7 @@ export const suitOf = (id, suits) => Math.floor(id / RANKS) % suits;
 
 ## 测试
 
-69 个测试，`node --test test/*.test.js`：
+74 个测试，`node --test test/*.test.js`：
 
 - `cards.test.js` 盯住「三档难度下每个点数恒 8 张」这条不变量
 - `moves.test.js` 用手搭的局面逐条核规则，包括「整摞明牌搬空摞不算落点」这类边界
@@ -91,3 +113,6 @@ export const suitOf = (id, suits) => Math.floor(id / RANKS) % suits;
   跑完，**每一步都验两条不变量**：场上恒有 104 张牌（摞 + 牌库 + 已收门×13）、明牌 id 不重复。
   牌类游戏没有「一定会结束」的规则，所以不断言机器人必须赢——断言的是规则自洽。
 - `audio.test.js` 用假 `AudioContext` 验「静音时一个节点都不建」「限流真挡住了」「升八度是翻倍」
+- 存档那几条专门喂坏数据：版本对不上、摞数不对、少一张牌、多一张重复牌、`down` 越界、
+  id 超范围，逐条要求 `restore()` 返回 `null`
+
