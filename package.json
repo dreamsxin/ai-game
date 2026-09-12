@@ -17,7 +17,8 @@
     "zhongguo-chengshi",
     "xiaodui-qiangzhan",
     "nizhe-yuanzheng",
-    "chengshi-jianzao"
+    "chengshi-jianzao",
+    "zhizhu-zhipai"
   ],
   "scripts": {
     "dev": "npm run dev --workspace wuqizi",
@@ -36,6 +37,7 @@
     "dev:xiaodui-qiangzhan": "npm run dev --workspace xiaodui-qiangzhan",
     "dev:nizhe-yuanzheng": "npm run dev --workspace nizhe-yuanzheng",
     "dev:chengshi-jianzao": "npm run dev --workspace chengshi-jianzao",
+    "dev:zhizhu-zhipai": "npm run dev --workspace zhizhu-zhipai",
     "build": "npm run build --workspaces --if-present",
     "build:wuqizi": "npm run build --workspace wuqizi",
     "build:xiaoyuanmian": "npm run build --workspace xiaoyuanmian",
@@ -52,6 +54,7 @@
     "build:xiaodui-qiangzhan": "npm run build --workspace xiaodui-qiangzhan",
     "build:nizhe-yuanzheng": "npm run build --workspace nizhe-yuanzheng",
     "build:chengshi-jianzao": "npm run build --workspace chengshi-jianzao",
+    "build:zhizhu-zhipai": "npm run build --workspace zhizhu-zhipai",
     "start": "npm run start --workspace wuqizi",
     "start:xiaoyuanmian": "npm run start --workspace xiaoyuanmian",
     "start:nijie-tunshi": "npm run start --workspace nijie-tunshi",
@@ -67,6 +70,7 @@
     "start:xiaodui-qiangzhan": "npm run start --workspace xiaodui-qiangzhan",
     "start:nizhe-yuanzheng": "npm run start --workspace nizhe-yuanzheng",
     "start:chengshi-jianzao": "npm run start --workspace chengshi-jianzao",
+    "start:zhizhu-zhipai": "npm run start --workspace zhizhu-zhipai",
     "test": "npm test --workspaces --if-present",
     "test:wuqizi": "npm test --workspace wuqizi",
     "test:xiaoyuanmian": "npm test --workspace xiaoyuanmian",
@@ -82,6 +86,7 @@
     "test:zhongguo-chengshi": "npm test --workspace zhongguo-chengshi",
     "test:xiaodui-qiangzhan": "npm test --workspace xiaodui-qiangzhan",
     "test:nizhe-yuanzheng": "npm test --workspace nizhe-yuanzheng",
-    "test:chengshi-jianzao": "npm test --workspace chengshi-jianzao"
+    "test:chengshi-jianzao": "npm test --workspace chengshi-jianzao",
+    "test:zhizhu-zhipai": "npm test --workspace zhizhu-zhipai"
   }
 }

@@ -1,0 +1,512 @@
+:root {
+  color-scheme: dark;
+  --ink: #f2f7f4;
+  --muted: rgba(242, 247, 244, 0.6);
+  --felt: #0b2019;
+  --felt-lit: #12352a;
+  --panel: rgba(6, 20, 16, 0.88);
+  --edge: rgba(255, 255, 255, 0.14);
+  --accent: #ffd166;
+  --win: #7ef2a8;
+  --red: #ff6b7a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* 移动端浏览器的 100% 会跟着工具栏伸缩，dvh 才是真正可见的那一块。 */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+body {
+  background: radial-gradient(circle at 50% 0%, var(--felt-lit), var(--felt) 62%);
+  color: var(--ink);
+  font-family: 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 整屏是一列：顶栏、收门槽、牌桌、底栏。牌桌吃掉剩下的全部高度，
+   所以牌永远不会被底栏压住——这是「显示不全」的根治办法。 */
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  gap: 6px;
+}
+
+.hud-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 9px;
+  border-radius: 11px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  min-width: 0;
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-score .stat-value {
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.stat-best {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 八个收门槽：收齐八门就赢，所以进度得一直摆在眼前。 */
+.foundations {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.slot {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.slot-done {
+  border-style: solid;
+  border-color: rgba(255, 209, 102, 0.6);
+  background: rgba(255, 209, 102, 0.16);
+  color: var(--accent);
+}
+
+.board {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  /* 单行拉满整块牌桌：牌是绝对定位摊在摞里的，摞不占满高度的话
+     长摞就会溢出到底栏上。--stack 已经按 box.height 算过，撑不破。 */
+  grid-template-rows: 1fr;
+  gap: 4px;
+}
+
+.pile {
+  position: relative;
+  height: 100%;
+  /* 整摞都是落点，空摞更要好点——把整列高度都算进热区。 */
+  border-radius: 5px;
+}
+
+
+.pile-empty {
+  position: absolute;
+  inset: 0;
+  height: calc(var(--card-w) * 1.42);
+  border-radius: 5px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+}
+
+/* 能落的摞描一圈金边：候选落点必须一眼看全，否则只能靠试。 */
+.pile-target::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 7px;
+  border: 2px solid var(--accent);
+  pointer-events: none;
+  z-index: 99;
+}
+
+.card {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: calc(var(--card-w) * 1.42);
+  border-radius: 5px;
+  background: linear-gradient(180deg, #fdfdf7, #e7e9df);
+  color: #16202b;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-content: center start;
+  padding-left: 3px;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.card-red {
+  color: #c62839;
+}
+
+.card-rank,
+.card-suit {
+  font-style: normal;
+  display: block;
+  font-size: calc(var(--card-w) * 0.42);
+  font-weight: 700;
+}
+
+.card-suit {
+  font-size: calc(var(--card-w) * 0.36);
+  opacity: 0.85;
+}
+
+/* 背面牌用斜纹，和明牌一眼分开；它也不该有可读文字。 */
+.card-down {
+  background:
+    repeating-linear-gradient(45deg, #1d4b78 0 3px, #163c60 3px 6px);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.card-picked {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  transform: translateX(6%);
+}
+
+.toast {
+  flex: 0 0 auto;
+  margin: 0 auto;
+  padding: 5px 12px;
+  max-width: 100%;
+  border-radius: 999px;
+  font-size: 12px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+
+.tray {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.key,
+.deal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  border: 1px solid var(--edge);
+  background: rgba(6, 20, 16, 0.7);
+  color: var(--ink);
+  touch-action: manipulation;
+}
+
+.key:disabled {
+  opacity: 0.35;
+}
+
+.key-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #2a1b00;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 发牌键是这局的节拍器，做得比其他键显眼，并把剩余轮数写在上面。 */
+.deal {
+  width: 64px;
+  gap: 1px;
+  border-color: rgba(255, 209, 102, 0.55);
+  background: rgba(255, 209, 102, 0.18);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.deal-off {
+  border-color: var(--edge);
+  background: rgba(6, 20, 16, 0.7);
+  color: var(--muted);
+}
+
+.key:focus-visible,
+.deal:focus-visible,
+.pile:focus-visible,
+.panel-action:focus-visible,
+.level-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(3, 10, 8, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.panel {
+  width: min(340px, 100%);
+  /* 矮屏上长面板会被裁掉，而 body 是 overflow: hidden，裁掉就再也看不到。 */
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  text-align: center;
+}
+
+.panel h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 2px;
+}
+
+.panel-status {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 9px;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.panel-steps li {
+  counter-increment: step;
+  padding-left: 25px;
+  position: relative;
+  line-height: 1.5;
+}
+
+.panel-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 209, 102, 0.18);
+  border: 1px solid rgba(255, 209, 102, 0.45);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.panel-steps b {
+  display: block;
+  color: var(--ink);
+}
+
+.panel-levels {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.level-key {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--edge);
+  background: rgba(6, 20, 16, 0.6);
+  color: var(--ink);
+  text-align: left;
+}
+
+.level-key b {
+  font-size: 13px;
+}
+
+.level-key i {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.level-key-on {
+  border-color: var(--accent);
+  background: rgba(255, 209, 102, 0.16);
+}
+
+.panel-badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(255, 209, 102, 0.16);
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  animation: badge-glow 1.6s ease-in-out infinite;
+}
+
+.panel-stars {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: 5px;
+  color: var(--accent);
+}
+
+/* 星星逐颗弹出：animationDelay 由 JSX 按序号给，这里只管弹的姿态。 */
+.panel-stars i {
+  display: inline-block;
+  font-style: normal;
+  animation: star-pop 0.42s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.panel-stars .star-off {
+  color: rgba(242, 247, 244, 0.22);
+}
+
+.panel-score {
+  margin: 6px 0 0;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--win);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-detail {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.panel-action {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 18px;
+  border: none;
+  border-radius: 13px;
+  background: var(--accent);
+  color: #2a1b00;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.panel-win {
+  animation: panel-rise 0.3s ease-out;
+}
+
+@keyframes star-pop {
+  from {
+    transform: scale(0.2) rotate(-25deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes badge-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(255, 209, 102, 0);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(255, 209, 102, 0.45);
+  }
+}
+
+@keyframes panel-rise {
+  from {
+    transform: translateY(14px) scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* 横屏和平板上牌桌别铺满整块宽，牌会大得离谱。 */
+@media (min-width: 720px) {
+  .app {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-win,
+  .panel-badge,
+  .panel-stars i {
+    animation: none;
+  }
+}
+
