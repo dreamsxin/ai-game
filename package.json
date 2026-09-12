@@ -18,7 +18,8 @@
     "xiaodui-qiangzhan",
     "nizhe-yuanzheng",
     "chengshi-jianzao",
-    "zhizhu-zhipai"
+    "zhizhu-zhipai",
+    "mofang-palou"
   ],
   "scripts": {
     "dev": "npm run dev --workspace wuqizi",
@@ -38,6 +39,7 @@
     "dev:nizhe-yuanzheng": "npm run dev --workspace nizhe-yuanzheng",
     "dev:chengshi-jianzao": "npm run dev --workspace chengshi-jianzao",
     "dev:zhizhu-zhipai": "npm run dev --workspace zhizhu-zhipai",
+    "dev:mofang-palou": "npm run dev --workspace mofang-palou",
     "build": "npm run build --workspaces --if-present",
     "build:wuqizi": "npm run build --workspace wuqizi",
     "build:xiaoyuanmian": "npm run build --workspace xiaoyuanmian",
@@ -55,6 +57,7 @@
     "build:nizhe-yuanzheng": "npm run build --workspace nizhe-yuanzheng",
     "build:chengshi-jianzao": "npm run build --workspace chengshi-jianzao",
     "build:zhizhu-zhipai": "npm run build --workspace zhizhu-zhipai",
+    "build:mofang-palou": "npm run build --workspace mofang-palou",
     "start": "npm run start --workspace wuqizi",
     "start:xiaoyuanmian": "npm run start --workspace xiaoyuanmian",
     "start:nijie-tunshi": "npm run start --workspace nijie-tunshi",
@@ -71,6 +74,7 @@
     "start:nizhe-yuanzheng": "npm run start --workspace nizhe-yuanzheng",
     "start:chengshi-jianzao": "npm run start --workspace chengshi-jianzao",
     "start:zhizhu-zhipai": "npm run start --workspace zhizhu-zhipai",
+    "start:mofang-palou": "npm run start --workspace mofang-palou",
     "test": "npm test --workspaces --if-present",
     "test:wuqizi": "npm test --workspace wuqizi",
     "test:xiaoyuanmian": "npm test --workspace xiaoyuanmian",
@@ -87,6 +91,7 @@
     "test:xiaodui-qiangzhan": "npm test --workspace xiaodui-qiangzhan",
     "test:nizhe-yuanzheng": "npm test --workspace nizhe-yuanzheng",
     "test:chengshi-jianzao": "npm test --workspace chengshi-jianzao",
-    "test:zhizhu-zhipai": "npm test --workspace zhizhu-zhipai"
+    "test:zhizhu-zhipai": "npm test --workspace zhizhu-zhipai",
+    "test:mofang-palou": "npm test --workspace mofang-palou"
   }
 }
