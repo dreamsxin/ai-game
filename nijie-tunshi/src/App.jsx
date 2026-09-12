@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CalendarDays, Atom, CirclePause, Dices, Gauge, Magnet, Play, RotateCcw, Sparkles, Zap } from 'lucide-react';
+import { CalendarDays, Atom, CirclePause, Dices, Gauge, Magnet, Play, RotateCcw, Sparkles, Volume2, VolumeX, Zap } from 'lucide-react';
 import { ABILITIES, abilityUnlocked } from './game/abilities.js';
 import { dailySlot, dateKeyOf, HANDMADE_SLOT, nextMapSlot } from './game/generator.js';
 import { createInput } from './game/input.js';
@@ -14,6 +14,7 @@ import {
   STELLAR_FUEL_TARGET, STELLAR_STABILITY_TARGET,
 } from './game/rules.js';
 import { createScene } from './scene/createScene.js';
+import { createAudio } from './scene/audio.js';
 
 const formatTime = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 const cooldownPercent = (cooldown, duration) => Math.max(0, Math.min(100, (1 - cooldown / duration) * 100));
@@ -70,6 +71,9 @@ export default function App() {
   const sceneRef = useRef(null);
   const inputRef = useRef(null);
   const replayRef = useRef(createReplayAgent());
+  const audioRef = useRef(null);
+  if (!audioRef.current) audioRef.current = createAudio({ muted: true });
+  const [muted, setMuted] = useState(true);
   const [slot, setSlot] = useState(HANDMADE_SLOT);
   const gameRef = useRef(null);
   if (!gameRef.current) gameRef.current = createGame(slot.seed, {}, slot.level);
@@ -107,6 +111,9 @@ export default function App() {
         accumulator -= STEP;
       }
       scene.render(gameRef.current, now / 1000);
+      // 每帧喂一次：水位线在 audio 里推进，静音也照样推进，
+      // 所以中途开声不会把攒下的几十个事件一起放出来。
+      audioRef.current?.notify(gameRef.current);
       if (now - lastUiUpdate > 90 || gameRef.current.status !== lastUiStatus) {
         setView(gameRef.current);
         lastUiUpdate = now;
@@ -126,6 +133,12 @@ export default function App() {
     };
     // 关卡几何在建场时铺好，换图只能整场重建
   }, [slot.level]);
+
+  // 音频跨换图存活：AudioContext 起一次就够，换图时新局的 eventCursor 归零，
+  // 水位线那条规则会自己把它认出来。所以只在真正卸载时才关。
+  useEffect(() => () => audioRef.current?.dispose(), []);
+
+  const toggleMute = () => setMuted(audioRef.current.setMuted(!muted));
 
   const restart = () => {
     replayRef.current?.stop();
@@ -187,6 +200,9 @@ export default function App() {
           {slot.generated && <button className="route-button" onClick={backToHandmade} title="回到手工关">回手工关</button>}
           <button className={`route-button ${replayRef.current?.isActive() ? 'is-active' : ''}`} onClick={toggleReplay} title="自动演示完整通关流程">{replayRef.current?.isActive() ? '演示中' : '自动演示'}</button>
           <span className="timer">{formatTime(view.elapsed)}</span>
+          <button className="icon-button" onClick={toggleMute} title={muted ? '开音效' : '静音'}>
+            {muted ? <VolumeX size={19} /> : <Volume2 size={19} />}
+          </button>
           <button className="icon-button" onClick={() => commit(togglePause(gameRef.current))} title={view.status === 'paused' ? '继续' : '暂停'}>
             {view.status === 'paused' ? <Play size={19} /> : <CirclePause size={19} />}
           </button>
