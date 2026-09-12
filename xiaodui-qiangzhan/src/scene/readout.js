@@ -55,3 +55,21 @@ export const statusLabel = (state) => {
 
 export const rosterLine = (unit) =>
   unit.alive ? `${unit.name} ${Math.ceil(unit.health)}` : `${unit.name} ${Math.ceil(unit.respawnIn)}s`;
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+export const recordLabel = (record) => (record ? '新纪录' : '');
+
+/** 结算后给一句能拿去用的评价：说清这一局赢在哪、输在哪。 */
+export const rewardLabel = (state) => {
+  const { kills, deaths } = state.stats;
+  const win = state.status === 'won';
+  const draw = state.score[TEAM_ALLY] === state.score.enemy;
+  // kills 也要够多才算「带出来的」：0 比 0 拿下的一局是队友抬的。
+  if (win && kills >= 2 && kills >= deaths * 2) return '压着打，这一局是你带出来的';
+  if (win) return '拿下了，交换比再压一点就更稳';
+  if (draw) return '打平，差的就是最后一个人头';
+  if (kills > deaths) return '个人数据不亏，输在团队交换';
+  return '被压住了，多贴掩体、开火前先端稳';
+};
+

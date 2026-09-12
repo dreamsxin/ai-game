@@ -178,9 +178,14 @@ export function stepUnit(arena, unit, intent, target, dt, rng, sink) {
   let recoil = recoverRecoil(unit.recoil, dt);
   if (reloading > 0) {
     reloading = Math.max(0, reloading - dt);
-    if (reloading === 0) ammo = MAG_SIZE;
+    if (reloading === 0) {
+      ammo = MAG_SIZE;
+      sink.effects.push({ type: 'ready', mine: unit.isPlayer });
+    }
   } else if (ammo === 0 || (intent.reload && ammo < MAG_SIZE)) {
     reloading = RELOAD_TIME;
+    // 打空后被迫换弹和趁空档主动换弹是两种处境，dry 把它们分开。
+    sink.effects.push({ type: 'reload', mine: unit.isPlayer, dry: ammo === 0 });
   }
 
   let fired = false;
@@ -190,7 +195,9 @@ export function stepUnit(arena, unit, intent, target, dt, rng, sink) {
     const bullet = spawnBullet(sink.nextBulletId, { ...unit, x: moved.x, y: moved.y }, angle);
     sink.nextBulletId += 1;
     sink.bullets.push(bullet);
-    sink.effects.push({ type: 'shot', x: bullet.x, y: bullet.y, angle, team: unit.team });
+    // mine 区分「我手里这把枪」和「场上别人的枪」：满场交火时两者听起来必须不同，
+    // 否则自己有没有在开枪都分不出来。
+    sink.effects.push({ type: 'shot', x: bullet.x, y: bullet.y, angle, team: unit.team, mine: unit.isPlayer });
     ammo -= 1;
     cooldown = FIRE_INTERVAL;
     recoil = addRecoil(recoil);
@@ -206,7 +213,7 @@ export function stepUnit(arena, unit, intent, target, dt, rng, sink) {
 const respawn = (arena, unit, enemies, effects) => {
   const spawns = unit.team === TEAM_ALLY ? ALLY_SPAWNS : ENEMY_SPAWNS;
   const spot = safestSpawn(arena, spawns, enemies);
-  effects.push({ type: 'spawn', x: spot.x, y: spot.y, team: unit.team });
+  effects.push({ type: 'spawn', x: spot.x, y: spot.y, team: unit.team, mine: unit.isPlayer });
   return {
     ...unit,
     alive: true,
@@ -270,7 +277,16 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     const victim = byId.get(hit.targetId);
     if (!victim?.alive) continue;
     const shooter = byId.get(hit.ownerId);
-    sink.effects.push({ type: 'hit', x: hit.x, y: hit.y, team: hit.team });
+    // mine 是「我打中了」，taken 是「我被打中了」。这两件事在耳朵里必须完全分开，
+    // 否则一场混战里根本判断不出该继续压枪还是该找掩体。
+    sink.effects.push({
+      type: 'hit',
+      x: hit.x,
+      y: hit.y,
+      team: hit.team,
+      mine: Boolean(shooter?.isPlayer),
+      taken: victim.isPlayer,
+    });
     if (shooter?.isPlayer) {
       stats.hits += 1;
       stats.damage += hit.damage;
@@ -289,11 +305,20 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     victim.vx = 0;
     victim.vy = 0;
     score[hit.team] += 1;
-    sink.effects.push({ type: 'kill', x: victim.x, y: victim.y, team: hit.team });
     if (shooter) {
       shooter.kills += 1;
       shooter.streak += 1;
     }
+    // streak 要用加一之后的值，所以这一条排在击杀者结算之后。
+    sink.effects.push({
+      type: 'kill',
+      x: victim.x,
+      y: victim.y,
+      team: hit.team,
+      mine: Boolean(shooter?.isPlayer),
+      lost: victim.isPlayer,
+      streak: shooter?.streak ?? 0,
+    });
     if (shooter?.isPlayer) {
       stats.kills += 1;
       stats.streak = shooter.streak;

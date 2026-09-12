@@ -186,3 +186,76 @@ test('时间耗尽按比分判定，落后就是败', () => {
   assert.equal(after.timeLeft, 0);
   assert.equal(after.status, 'over');
 });
+
+// 下面几条守着反馈层要用的字段。少一个 mine，满场交火时就分不出是谁在开枪。
+test('枪声带 mine：我的枪和别人的枪必须分得开', () => {
+  // effects 只装这一 tick 新发生的事，所以要取开枪那一帧，不是第四帧。
+  const mine = step(solo(1), input({ fire: true }), STEP).effects.filter((e) => e.type === 'shot');
+  assert.ok(mine.length > 0, '开火了却没有 shot 事件');
+  assert.ok(mine.every((e) => e.mine === true));
+  // 机器人也会开枪，那些不是我的。
+  let others = [];
+  let state = startGame(7);
+  for (let i = 0; i < 600 && others.length === 0; i += 1) {
+    state = step(state, idle, STEP);
+    others = state.effects.filter((e) => e.type === 'shot' && !e.mine);
+  }
+  assert.ok(others.length > 0, '跑了 10 秒也没等到机器人开枪');
+});
+
+test('换弹发事件，打空和主动换弹用 dry 分开，上膛完成另发一条', () => {
+  const empty = solo(1);
+  empty.units = empty.units.map((unit) => (unit.isPlayer ? { ...unit, ammo: 0 } : unit));
+  const forced = step(empty, input({ fire: true }), STEP).effects.find((e) => e.type === 'reload');
+  assert.deepEqual(forced, { type: 'reload', mine: true, dry: true });
+
+  const half = solo(1);
+  half.units = half.units.map((unit) => (unit.isPlayer ? { ...unit, ammo: 10 } : unit));
+  const started = step(half, input({ reload: true }), STEP);
+  assert.deepEqual(
+    started.effects.find((e) => e.type === 'reload'),
+    { type: 'reload', mine: true, dry: false },
+  );
+  const done = run(started, Math.ceil(RELOAD_TIME / STEP) + 2, idle);
+  assert.equal(playerUnit(done).ammo, MAG_SIZE);
+  // ready 是换弹那段空窗期结束的唯一凭证，逐帧扫一遍确认它真的发过。
+  let sawReady = false;
+  let scan = started;
+  for (let i = 0; i < Math.ceil(RELOAD_TIME / STEP) + 2; i += 1) {
+    scan = step(scan, idle, STEP);
+    if (scan.effects.some((e) => e.type === 'ready' && e.mine)) sawReady = true;
+  }
+  assert.ok(sawReady, '上膛完成没发 ready');
+});
+
+test('命中和击杀带上「谁打的、谁挨的、第几连杀」', () => {
+  const base = duel(1);
+  const staged = {
+    ...base,
+    units: base.units.map((unit) => (unit.id === 'enemy-0' ? { ...unit, x: 10.5, y: 1.5, health: 5 } : unit)),
+    bullets: [spawnBullet(1, { id: 'ally-0', team: TEAM_ALLY, x: 9.9, y: 1.5 }, 0)],
+  };
+  const after = step(staged, idle, STEP);
+  const hit = after.effects.find((e) => e.type === 'hit');
+  assert.equal(hit.mine, true, '我打中的');
+  assert.equal(hit.taken, false, '不是我挨的');
+  const kill = after.effects.find((e) => e.type === 'kill');
+  assert.equal(kill.mine, true);
+  assert.equal(kill.lost, false);
+  assert.equal(kill.streak, 1, 'streak 要用加一之后的值');
+});
+
+test('我被打死时 taken 和 lost 都立起来', () => {
+  const base = duel(1);
+  const staged = {
+    ...base,
+    units: base.units.map((unit) => (unit.isPlayer ? { ...unit, health: 4 } : unit)),
+    bullets: [spawnBullet(1, { id: 'enemy-0', team: TEAM_ENEMY, x: 9.1, y: 1.5 }, Math.PI)],
+  };
+  const after = step(staged, idle, STEP);
+  assert.equal(after.effects.find((e) => e.type === 'hit').taken, true);
+  const kill = after.effects.find((e) => e.type === 'kill');
+  assert.equal(kill.lost, true);
+  assert.equal(kill.mine, false);
+});
+

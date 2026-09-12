@@ -268,7 +268,10 @@ export function createRenderer(host) {
     // 模拟层每步吐出的表现事件在这里转成粒子，渲染帧率和模拟步长因此解耦。
     notify(effects = []) {
       for (const effect of effects) {
-        particles.push({ ...effect, life: LIFE[effect.type] ?? HIT_SECONDS });
+        // 只有画得出来的事件才进粒子池：换弹这类纯听觉事件没有坐标，
+        // 混进来会落到兜底分支里画出 NaN 圈。
+        if (!(effect.type in LIFE)) continue;
+        particles.push({ ...effect, life: LIFE[effect.type] });
       }
       if (particles.length > 240) particles = particles.slice(-240);
     },
