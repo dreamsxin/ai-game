@@ -94,13 +94,16 @@ const cellsOnLayer = (cube, layer) => {
 };
 
 /**
- * 在**打乱之后**的塔里放起点和出口：起点必须在底层、出口必须在顶层，
+ * 在**打乱之后**的塔里放起点和出口：起点必须在底层、出口必须在 exitLayer 那一层，
  * 而且两者此刻**不能连通** —— 否则开局就已经通关了。
  *
- * 一次洪泛就能拿到某个起点的整个可达集，所以「顶层里哪些格子还走不到」是一次算完的，
- * 不用逐个候选去试。挑平面上离起点最远的那个，爬起来才有穿过整座塔的感觉。
+ * exitLayer 是热身塔的关键：第一座给 0，出口就在脚下这一层，于是它是个纯平面谜题，
+ * 玩家先只学「推砖对门」。出口在顶层是第三座起才有的事。
+ *
+ * 一次洪泛就能拿到某个起点的整个可达集，所以「那一层里哪些格子还走不到」是一次算完的，
+ * 不用逐个候选去试。挑平面上离起点最远的那个，走起来才有穿过整座塔的感觉。
  */
-function placeEnds(rng, cube) {
+function placeEnds(rng, cube, exitLayer) {
   const last = cube.order - 1;
   const corners = [
     { col: 0, row: 0 },
@@ -114,13 +117,17 @@ function placeEnds(rng, cube) {
   ];
   for (const start of starts) {
     const reach = floodFrom(cube, start).distance;
-    const options = cellsOnLayer(cube, last).filter((cell) => !reach.has(cellKey(cell)));
+    const options = cellsOnLayer(cube, exitLayer)
+      .filter((cell) => !reach.has(cellKey(cell)))
+      // 出口和起点同层时，别把出口放在起点自己那一格上。
+      .filter((cell) => cellKey(cell) !== cellKey(start));
     if (options.length === 0) continue;
     options.sort((a, b) => spread(b, start) - spread(a, start));
     return { start, exit: options[0] };
   }
   return null;
 }
+
 
 const invertMoves = (moves) => moves.map(invertAction).reverse();
 
@@ -134,7 +141,7 @@ export function buildTower(recipe) {
   carveCube(rng, solvedCube);
   addLoops(rng, solvedCube, recipe.loops);
   const scrambled = scrambleCube(rng, solvedCube, recipe.scramble);
-  const ends = placeEnds(rng, scrambled.cube);
+  const ends = placeEnds(rng, scrambled.cube, recipe.exitLayer);
   if (!ends) return null;
   const solution = invertMoves(scrambled.moves);
   // 保底解法把砖阵推回解开态，同时把两头也带回去。解开态是挖通的，
@@ -144,6 +151,7 @@ export function buildTower(recipe) {
     seed: recipe.seed,
     index: recipe.index,
     order: recipe.order,
+    exitLayer: recipe.exitLayer,
     cube: scrambled.cube,
     solvedCube,
     start: ends.start,
@@ -170,7 +178,7 @@ export function validateTower(tower) {
   }
   if (tower.scramble < 1) issues.push('打乱步数为零');
   if (tower.start.layer !== 0) issues.push('起点不在底层');
-  if (tower.exit.layer !== tower.order - 1) issues.push('出口不在顶层');
+  if (tower.exit.layer !== tower.exitLayer) issues.push('出口不在配方指定的那一层');
   if (canReach(tower.cube, tower.start, tower.exit)) issues.push('初始态已经通关');
   const end = replay(tower.cube, tower.start, tower.exit, tower.solution);
   if (!canReach(end.cube, end.cell, end.exit)) issues.push('保底解法走不到出口');

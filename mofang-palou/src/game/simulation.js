@@ -9,6 +9,7 @@ import {
   VIEW_ORBIT,
   VIEW_SIDE,
   VIEW_TOP,
+  floorsClimbed,
   sameCell,
   toCell,
   towerScore,
@@ -185,11 +186,13 @@ export function walkTo(state, cell) {
       effects,
     );
   }
-  const gained = towerScore(state.tower.order, state.shifts, state.tower.par);
+  const gained = towerScore(state.tower.exitLayer, state.shifts, state.tower.par);
   const score = state.score + gained;
+  const climbed = floorsClimbed(state.tower.exitLayer);
   effects.push({
     type: 'cleared',
     order: state.tower.order,
+    climbed,
     shifts: state.shifts,
     par: state.tower.par,
     gained,
@@ -202,7 +205,7 @@ export function walkTo(state, cell) {
       activeLayer: player.layer,
       sliceRow: player.row,
       status: 'cleared',
-      floors: state.floors + state.tower.order,
+      floors: state.floors + climbed,
       towersCleared: state.towersCleared + 1,
       score,
       best: Math.max(state.best, score),

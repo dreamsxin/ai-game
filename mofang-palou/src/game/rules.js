@@ -76,42 +76,77 @@ export const MAX_ORDER = 6;
 // 同一阶连爬两座再升阶：一座用来学、一座用来熟。
 export const TOWERS_PER_ORDER = 2;
 
+/**
+ * 前两座是**热身塔**：塔还是三阶三层，但把出口放在低层。
+ *
+ * 第 1 座出口就在脚下那一层 —— 于是它是个纯平面谜题，只用横滑竖滑推行列就能解，
+ * 玩家先学会「推砖对门」这一件事。第 2 座出口抬到第 2 层，柱这一维才登场。
+ * 第 3 座起出口回到顶层，才是完整的爬楼。
+ *
+ * 早先第 1 座就是「三层 + 出口在顶层」，玩家一上来同时面对三条轴、三层遮挡和一个
+ * 看不见的终点 —— 实测确实不知道从哪下手。热身塔比任何文字引导都管用。
+ */
+export const WARMUP_EXIT_LAYERS = [0, 1];
+
 export const orderForTower = (index) => {
-  const step = Math.floor(Math.max(0, Math.trunc(index) || 0) / TOWERS_PER_ORDER);
+  const at = Math.max(0, Math.trunc(index) || 0);
+  if (at < WARMUP_EXIT_LAYERS.length) return MIN_ORDER;
+  const step = Math.floor((at - WARMUP_EXIT_LAYERS.length) / TOWERS_PER_ORDER);
   return Math.min(MAX_ORDER, MIN_ORDER + step);
 };
+
+/** 这一座的出口该放在第几层。热身塔压低，其余一律顶层。 */
+export const exitLayerForTower = (index) => {
+  const at = Math.max(0, Math.trunc(index) || 0);
+  if (at < WARMUP_EXIT_LAYERS.length) return WARMUP_EXIT_LAYERS[at];
+  return orderForTower(at) - 1;
+};
+
 
 // 到六阶就没有更高的阶了，之后靠打乱步数继续加压，封顶 40 —— 再深下去
 // 一座塔要磨掉十几分钟，无尽模式的节奏会断。
 export const SCRAMBLE_BASE = { 3: 4, 4: 7, 5: 10, 6: 14 };
 export const SCRAMBLE_CAP = 40;
-export const TOWERS_TO_MAX_ORDER = (MAX_ORDER - MIN_ORDER) * TOWERS_PER_ORDER;
+// 热身塔打乱得很浅：第一座只推两下就能解开，玩家才看得清「刚才那下改了什么」。
+export const WARMUP_SCRAMBLE = [2, 3];
+export const TOWERS_TO_MAX_ORDER =
+  WARMUP_EXIT_LAYERS.length + (MAX_ORDER - MIN_ORDER) * TOWERS_PER_ORDER;
 
 export const scrambleForTower = (index) => {
   const at = Math.max(0, Math.trunc(index) || 0);
+  if (at < WARMUP_SCRAMBLE.length) return WARMUP_SCRAMBLE[at];
   const order = orderForTower(at);
   const extra = order === MAX_ORDER ? (at - TOWERS_TO_MAX_ORDER) * 2 : 0;
   return Math.min(SCRAMBLE_CAP, SCRAMBLE_BASE[order] + extra);
 };
 
-// 额外开门率：越往上越少，路越容易断。三阶给得宽松，六阶压到只剩骨架。
+// 额外开门率：越往上越少，路越容易断。热身塔和三阶给得宽松，六阶压到只剩骨架。
 export const loopsForTower = (index) => {
-  const order = orderForTower(index);
-  return { 3: 0.24, 4: 0.19, 5: 0.14, 6: 0.1 }[order];
+  const at = Math.max(0, Math.trunc(index) || 0);
+  if (at < WARMUP_EXIT_LAYERS.length) return 0.26;
+  return { 3: 0.24, 4: 0.19, 5: 0.14, 6: 0.1 }[orderForTower(at)];
 };
 
 /** 一座塔的配方。生成器只认这个对象。 */
 export const towerRecipe = (index) => {
   const at = Math.max(0, Math.trunc(index) || 0);
-  const order = orderForTower(at);
-  return { index: at, order, scramble: scrambleForTower(at), loops: loopsForTower(at) };
+  return {
+    index: at,
+    order: orderForTower(at),
+    exitLayer: exitLayerForTower(at),
+    scramble: scrambleForTower(at),
+    loops: loopsForTower(at),
+  };
 };
 
-// 记分：爬上去的楼层是主分，一座 N 阶塔就是 N 层。步数不超过打乱步数再给一笔效率分。
+// 记分：**爬上去的楼层**是主分 —— 出口在第几层就算爬了几层，热身塔的第一座只算一层，
+// 这比「一座塔一律算 N 层」诚实。步数不超过打乱步数再给一笔效率分。
 export const FLOOR_BONUS = 100;
 export const PAR_BONUS = 200;
-export const towerScore = (order, shifts, par) =>
-  order * FLOOR_BONUS + (shifts <= par ? PAR_BONUS : 0);
+export const floorsClimbed = (exitLayer) => Math.max(1, (Math.trunc(exitLayer) || 0) + 1);
+export const towerScore = (exitLayer, shifts, par) =>
+  floorsClimbed(exitLayer) * FLOOR_BONUS + (shifts <= par ? PAR_BONUS : 0);
+
 
 // 撤销上限。无尽模式里一座塔最多几十步，四十步的历史足够回头。
 export const HISTORY_LIMIT = 40;

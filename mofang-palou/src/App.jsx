@@ -42,10 +42,10 @@ import {
   nextTowerLabel,
   scoreLabel,
   shiftsLabel,
-  statusLabel,
   towerLabel,
   undoLabel,
   viewButtonLabel,
+  whereLabel,
 } from './scene/readout.js';
 import { createAudio, vibrate, vibrationFor } from './scene/audio.js';
 
@@ -212,7 +212,7 @@ export default function App() {
       <header className="top">
         <div className="tower">
           <strong>{towerLabel(game)}</strong>
-          <span>{floorsLabel(game)} · {statusLabel(game)}</span>
+          <span>{whereLabel(game)}</span>
         </div>
         <div className="shifts">
           <strong>{shiftsLabel(game)}</strong>
@@ -221,6 +221,7 @@ export default function App() {
         <div className="score">
           <Trophy size={13} aria-hidden="true" />
           <strong>{scoreLabel(game)}</strong>
+          <span>{floorsLabel(game)}</span>
         </div>
       </header>
 

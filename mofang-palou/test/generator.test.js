@@ -1,25 +1,48 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  FLOOR_BONUS,
   MAX_ORDER,
   MIN_ORDER,
+  PAR_BONUS,
   TOWERS_PER_ORDER,
+  WARMUP_EXIT_LAYERS,
+  exitLayerForTower,
+  floorsClimbed,
   loopsForTower,
   orderForTower,
   scrambleForTower,
   towerRecipe,
+  towerScore,
 } from '../src/game/rules.js';
 import { canReach } from '../src/game/cube.js';
 import { buildTower, generateTower, validateTower } from '../src/game/generator.js';
 import { replay } from '../src/game/solver.js';
 
-test('阶数从三阶爬到六阶，每阶连爬两座', () => {
+test('阶数从三阶爬到六阶，前两座是热身塔', () => {
   assert.equal(orderForTower(0), MIN_ORDER);
-  assert.equal(orderForTower(TOWERS_PER_ORDER - 1), MIN_ORDER);
-  assert.equal(orderForTower(TOWERS_PER_ORDER), MIN_ORDER + 1);
+  assert.equal(orderForTower(1), MIN_ORDER);
+  // 热身塔之后才开始「同一阶两座」的节奏。
+  assert.equal(orderForTower(WARMUP_EXIT_LAYERS.length), MIN_ORDER);
+  assert.equal(orderForTower(WARMUP_EXIT_LAYERS.length + TOWERS_PER_ORDER), MIN_ORDER + 1);
   assert.equal(orderForTower(100), MAX_ORDER, '六阶封顶，不会有七阶');
   assert.equal(orderForTower(-5), MIN_ORDER, '负数当第一座');
 });
+
+test('热身塔把出口压低：第一座就在脚下那一层，第三座起才回顶层', () => {
+  assert.equal(exitLayerForTower(0), 0, '出口同层 = 纯平面谜题，先只学推行推列');
+  assert.equal(exitLayerForTower(1), 1);
+  assert.equal(exitLayerForTower(2), orderForTower(2) - 1, '热身结束，出口回顶层');
+  assert.equal(exitLayerForTower(30), orderForTower(30) - 1);
+});
+
+test('爬了几层按出口那一层算，不是一律算 N 层', () => {
+  assert.equal(floorsClimbed(0), 1, '出口同层也算爬了一层');
+  assert.equal(floorsClimbed(2), 3);
+  assert.equal(towerScore(0, 2, 2), FLOOR_BONUS + PAR_BONUS);
+  assert.equal(towerScore(2, 99, 5), 3 * FLOOR_BONUS, '超步就没有效率分');
+});
+
 
 test('难度曲线单调：打乱步数只增不减，额外开门率只减不增', () => {
   let lastScramble = 0;
@@ -53,13 +76,22 @@ test('每座塔都过体检，且是第一次尝试就过居多', () => {
   assert.ok(attempts / count < 1.6, `平均尝试 ${(attempts / count).toFixed(2)} 次，太高了`);
 });
 
-test('起点钉在底层、出口钉在顶层，这是「爬楼」的最低要求', () => {
+test('起点钉在底层、出口钉在配方指定的那一层', () => {
   for (let index = 0; index < 16; index += 1) {
     const { tower } = generateTower(index, 77 + index * 909);
     assert.equal(tower.start.layer, 0, `第 ${index} 座的起点不在底层`);
-    assert.equal(tower.exit.layer, tower.order - 1, `第 ${index} 座的出口不在顶层`);
+    assert.equal(tower.exit.layer, exitLayerForTower(index), `第 ${index} 座的出口层不对`);
   }
 });
+
+test('第一座是纯平面谜题：出口和起点同层，不推柱也能解', () => {
+  const { tower } = generateTower(0, 20260912);
+  assert.equal(tower.start.layer, 0);
+  assert.equal(tower.exit.layer, 0);
+  assert.notDeepEqual(tower.start, tower.exit, '出口不能压在起点自己那一格上');
+  assert.ok(tower.scramble <= 3, '热身塔打乱要浅，玩家才看得清刚才那下改了什么');
+});
+
 
 test('初始态一定还没通，否则这座塔白给', () => {
   for (let index = 0; index < 16; index += 1) {
@@ -96,6 +128,6 @@ test('体检拦得住被改坏的塔', () => {
   const { tower } = generateTower(0, 12345);
   assert.equal(validateTower(null).ok, false, '生成失败要能说清');
   assert.equal(validateTower({ ...tower, start: { ...tower.start, layer: 1 } }).ok, false);
-  assert.equal(validateTower({ ...tower, exit: { ...tower.exit, layer: 0 } }).ok, false);
+  assert.equal(validateTower({ ...tower, exit: { ...tower.exit, layer: 2 } }).ok, false);
   assert.equal(validateTower({ ...tower, solution: [] }).ok, false, '空解法救不了打乱过的塔');
 });

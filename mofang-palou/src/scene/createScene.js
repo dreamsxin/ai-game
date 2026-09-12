@@ -93,6 +93,8 @@ const MATERIALS = {
   near: { color: 0x5f7ae0, emissive: 0x1a2450 },
   line: { color: 0xe0a83c, emissive: 0x4a3208 },
   picked: { color: 0xffd479, emissive: 0x5c4410 },
+  // 出口那一层在俯视里画成一层暗幽灵 —— 不画的话「出口在哪」根本看不见。
+  ghost: { color: 0x1b2440, emissive: 0x0c1730 },
 };
 
 const lineHasCell = (axis, anchor, cell) => {
@@ -154,6 +156,17 @@ export function createScene(canvas) {
   exitMesh.rotation.x = Math.PI / 2;
   scene.add(exitMesh);
 
+  /**
+   * 出口光柱：从底层一直竖到出口那一格。
+   * 三个视角里都画，它回答的是「出口在哪一列哪一排、在第几层」——
+   * 只靠一个悬空的绿环，玩家看不出它到底在塔的什么位置。
+   */
+  const beaconMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(TILE_SPAN * 0.06, 1, TILE_SPAN * 0.06),
+    new THREE.MeshBasicMaterial({ color: 0x8dff6a, transparent: true, opacity: 0.34 }),
+  );
+  scene.add(beaconMesh);
+
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
 
@@ -191,11 +204,22 @@ export function createScene(canvas) {
     return Math.max(0, done);
   };
 
-  /** 这一格在这个视角下画不画。 */
-  const visibleIn = (clip, state, cell) => {
-    if (clip === 'below') return cell.layer <= state.activeLayer;
-    if (clip === 'slice') return cell.row === state.sliceRow;
-    return true;
+  /**
+   * 这一格在这个视角下怎么画。
+   *
+   * 俯视原来是「只画激活层及以下」，于是开局站在第 1 层时，出口所在的第 3 层整层都不画 ——
+   * 玩家看到的是一个悬空的绿环，既不知道它在哪一层，也看不见通向它的路。这是「看不到出口」
+   * 的根源。改成：激活层画实的，**出口那一层永远画一层暗幽灵**，其余层不画。
+   * 最多两层，六阶也读得清，又保证出口一定在画面里。
+   */
+  const drawModeFor = (clip, state, cell) => {
+    if (clip === 'slice') return cell.row === state.sliceRow ? 'solid' : 'hidden';
+    if (clip === 'focus') {
+      if (cell.layer === state.activeLayer) return 'solid';
+      if (cell.layer === state.exit.layer) return 'ghost';
+      return 'hidden';
+    }
+    return 'solid';
   };
 
   const place = (object, order, cell, progress) => {
@@ -204,7 +228,8 @@ export function createScene(canvas) {
     object.position.set(x, y, z);
   };
 
-  const materialFor = (state, cell, axes, anchor) => {
+  const materialFor = (state, cell, axes, anchor, mode) => {
+    if (mode === 'ghost') return materials.ghost;
     if (state.selection
       && state.selection.layer === cell.layer
       && state.selection.col === cell.col
@@ -252,13 +277,17 @@ export function createScene(canvas) {
 
       let slot = 0;
       for (const cell of cells) {
-        if (!visibleIn(shot.clip, state, cell)) continue;
+        const mode = drawModeFor(shot.clip, state, cell);
+        if (mode === 'hidden') continue;
         const mesh = pool[slot];
         slot += 1;
         mesh.visible = true;
         mesh.geometry = geometryCache[cell.tile & 63];
-        mesh.material = materialFor(state, cell, axes, anchor);
-        mesh.userData.cell = cell;
+        mesh.material = materialFor(state, cell, axes, anchor, mode);
+        // 幽灵层缩小一点，读起来才像「在后面」，也不会挡住实层的门。
+        mesh.scale.setScalar(mode === 'ghost' ? 0.82 : 1);
+        // 幽灵层不该被点到：点它会选中一个你现在根本不在操作的面。
+        mesh.userData.cell = mode === 'ghost' ? null : cell;
         place(mesh, order, cell, progress);
       }
       for (let index = slot; index < pool.length; index += 1) {
@@ -287,6 +316,12 @@ export function createScene(canvas) {
       exitMesh.position.y += open ? Math.abs(Math.sin(time * 3.2)) * 0.07 : 0;
       exitMesh.scale.setScalar(open ? 1 + Math.sin(time * 5) * 0.06 : 1);
 
+      // 光柱从最底层竖到出口那一格，跟着出口一起横向滑动。
+      const bottomY = cellPosition(order, { layer: 0, col: 0, row: 0 })[1];
+      const height = Math.max(0.1, exitMesh.position.y - bottomY);
+      beaconMesh.scale.set(1, height, 1);
+      beaconMesh.position.set(exitMesh.position.x, bottomY + height / 2, exitMesh.position.z);
+
       renderer.render(scene, camera);
     },
 
@@ -309,6 +344,8 @@ export function createScene(canvas) {
       playerMesh.material.dispose();
       exitMesh.geometry.dispose();
       exitMesh.material.dispose();
+      beaconMesh.geometry.dispose();
+      beaconMesh.material.dispose();
       renderer.dispose();
     },
   };

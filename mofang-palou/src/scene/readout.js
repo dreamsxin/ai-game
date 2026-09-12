@@ -78,7 +78,8 @@ export const undoLabel = (state) =>
   state.history.length > 0 ? `撤销 ${state.history.length}` : '撤销';
 
 export const TUTORIAL_STEPS = [
-  { title: '目标', detail: '从底层出发，走到顶层那道绿色门拱，这一座就通了。' },
+  { title: '目标', detail: '走到绿色门拱那一格就算通了。绿色光柱指着它在哪一列哪一排。' },
+  { title: '前两座是热身', detail: '第 1 座的出口就在你脚下那一层，只用推行推列；第 2 座才抬到楼上。' },
   { title: '推砖', detail: '横滑推动一整行，竖滑推动一整列，掉出边界的砖从对面绕回来。' },
   { title: '推柱', detail: '切到侧视再竖滑，推的就是一整根柱 —— 砖在楼层之间上下搬，这是第三条轴。' },
   { title: '视角', detail: '视角就是轴选择器：转到哪一面就推那一面，跟拧魔方一样。转台只看不推。' },
@@ -86,12 +87,25 @@ export const TUTORIAL_STEPS = [
   { title: '爬楼', detail: '通一座接一座，阶数从三阶涨到六阶。没有失败，只看你能爬多高。' },
 ];
 
+/** 你在第几层、出口在第几层。这一行是「看不到出口」的直接答案，任何视角都显示。 */
+export const whereLabel = (state) =>
+  state.player.layer === state.exit.layer
+    ? `同在第 ${state.player.layer + 1} 层`
+    : `你在第 ${state.player.layer + 1} 层 · 出口在第 ${state.exit.layer + 1} 层`;
+
 /** 第一座且还没推过的时候贴一句话，比任何图示都直接。 */
 export const coachLine = (state) => {
   if (state.status !== 'climbing') return null;
-  if (state.towerIndex > 0 || state.shifts > 0) return null;
-  return '横滑推整行，竖滑推整列，把门对上';
+  if (state.shifts > 0) return null;
+  // 前两座是热身：第一座出口就在脚下这一层，第二座才抬到楼上。
+  if (state.towerIndex === 0) return '出口就在这一层：横滑推整行，竖滑推整列，把门对上';
+  if (state.towerIndex === 1) return '出口在楼上了：切「侧视」，竖滑就是推整根柱';
+  return null;
 };
+
+export const gainLabel = (effect) =>
+  effect ? `+${effect.climbed} 层 · +${effect.gained} 分` : '';
+
 
 /** 通关点评。不超打乱步数才夸「利落」，超了也不说难听话 —— 无尽模式没有失败。 */
 export function clearRemark(effect) {
@@ -101,10 +115,6 @@ export function clearRemark(effect) {
   if (over <= 3) return `${effect.shifts} 步登顶，就差 ${over} 步拿效率分`;
   return `${effect.shifts} 步登顶，下一座试试少绕几圈`;
 }
-
-
-export const gainLabel = (effect) =>
-  effect ? `+${effect.order} 层 · +${effect.gained} 分` : '';
 
 /** 下一座会不会升阶，直接问配方表，别在这儿拿 index 去猜。 */
 export const nextTowerLabel = (state) => {
@@ -145,8 +155,9 @@ export function cameraFor(view, order, aspect = 1, spin = 0) {
     return {
       position: [0, Math.sin(tilt) * distance, Math.cos(tilt) * distance],
       target: [0, 0, 0],
-      // 俯视只画激活层和它下面的，往上的层会挡住视线。
-      clip: 'below',
+      // 俯视画激活层 + 出口那一层的幽灵。原来是「只画激活层及以下」，
+      // 结果开局站在底层时出口那一层整层都不画，玩家只看见一个悬空的绿环。
+      clip: 'focus',
     };
   }
   if (view === VIEW_SIDE) {

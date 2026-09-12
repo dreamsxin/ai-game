@@ -8,6 +8,7 @@ import {
   VIEW_SIDE,
   VIEW_TOP,
   axesForView,
+  floorsClimbed,
   towerScore,
 } from '../src/game/rules.js';
 import { canReach } from '../src/game/cube.js';
@@ -42,18 +43,20 @@ const solveTower = (start) => {
   return current;
 };
 
-test('开局：三阶、站在底层起点、零步、出口在顶层', () => {
+test('开局：三阶、站在底层起点、零步，第一座的出口就在同一层', () => {
   const state = fresh();
   assert.equal(state.tower.order, 3);
   assert.equal(state.towerIndex, 0);
   assert.deepEqual(state.player, state.tower.start);
   assert.equal(state.player.layer, 0);
-  assert.equal(state.exit.layer, state.cube.order - 1);
+  assert.equal(state.exit.layer, 0, '第一座是热身：出口同层，不推柱也能解');
   assert.equal(state.shifts, 0);
   assert.equal(state.floors, 0);
   assert.equal(state.status, 'climbing');
   assert.equal(exitReachable(state), false, '开局不该已经通了');
   assert.equal(state.view, VIEW_TOP);
+  // 「看不到出口」的根源之一：出口那一格必须在派生视图里，渲染层才画得出来。
+  assert.ok(boardView(state).some((cell) => cell.isExit));
 });
 
 test('同 seed 开出同一趟 run', () => {
@@ -145,16 +148,18 @@ test('作用线的锚点：按住的格子优先，其次选中，最后玩家�
   assert.deepEqual(shiftAnchor(picked, { layer: 2, col: 2, row: 2 }), { layer: 2, col: 2, row: 2 });
 });
 
-test('照保底解法推完就能走到出口，通关结算加楼层和分数', () => {
+test('照保底解法推完就能走到出口，通关结算按爬了几层加分', () => {
   const state = fresh(31415);
   const pushed = solveTower(state);
   assert.equal(pushed.shifts, state.tower.solution.length);
   assert.equal(exitReachable(pushed), true, '保底解法推完必须通');
   const won = walkTo(pushed, pushed.exit);
   assert.equal(won.status, 'cleared');
-  assert.equal(won.floors, state.tower.order, '一座 N 阶塔算 N 层');
+  const climbed = floorsClimbed(state.tower.exitLayer);
+  assert.equal(won.floors, climbed, '爬了几层按出口那一层算');
+  assert.equal(climbed, 1, '第一座是热身塔，出口同层，只算一层');
   assert.equal(won.towersCleared, 1);
-  assert.equal(won.score, towerScore(state.tower.order, pushed.shifts, state.tower.par));
+  assert.equal(won.score, towerScore(state.tower.exitLayer, pushed.shifts, state.tower.par));
   assert.ok(won.effects.some((effect) => effect.type === 'cleared'));
   assert.equal(won.best, won.score);
 });

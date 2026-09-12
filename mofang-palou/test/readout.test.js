@@ -34,6 +34,7 @@ import {
   statusLabel,
   towerLabel,
   undoLabel,
+  whereLabel,
 } from '../src/scene/readout.js';
 
 const CELL = (layer, col, row) => ({ layer, col, row });
@@ -94,36 +95,51 @@ test('提示文案说清推哪条线、往哪推；柱要说清是上还是下',
   assert.match(pillar, /第 2 列第 3 排那根柱.*往上/, '柱是跨层的，不能说成第几层');
 });
 
-test('引导六步讲完，柱和视角各占一步 —— 不讲清楚玩家会当成 bug', () => {
-  assert.equal(TUTORIAL_STEPS.length, 6);
+test('引导七步讲完，热身塔、柱和视角各占一步 —— 不讲清楚玩家会当成 bug', () => {
+  assert.equal(TUTORIAL_STEPS.length, 7);
   for (const step of TUTORIAL_STEPS) {
     assert.ok(step.title.length > 0);
     assert.ok(step.detail.length > 10, `「${step.title}」的说明太短`);
   }
   assert.ok(TUTORIAL_STEPS.some((step) => step.detail.includes('柱')));
   assert.ok(TUTORIAL_STEPS.some((step) => step.detail.includes('视角')));
+  assert.ok(TUTORIAL_STEPS.some((step) => step.detail.includes('脚下')), '得说清第一座出口就在同层');
 });
 
-test('新手提示只在第一座且还没推过的时候出现', () => {
+test('前两座各贴一句针对性的话：第一座教推行列，第二座教推柱', () => {
   const start = { status: 'climbing', towerIndex: 0, shifts: 0 };
-  assert.ok(coachLine(start));
-  assert.equal(coachLine({ ...start, shifts: 1 }), null);
-  assert.equal(coachLine({ ...start, towerIndex: 1 }), null);
+  assert.match(coachLine(start), /这一层/, '第一座出口同层，先只教平面推移');
+  assert.match(coachLine({ ...start, towerIndex: 1 }), /柱/, '第二座出口在楼上，该教柱了');
+  assert.equal(coachLine({ ...start, towerIndex: 2 }), null, '第三座起不再唠叨');
+  assert.equal(coachLine({ ...start, shifts: 1 }), null, '推过一下就收起来');
   assert.equal(coachLine({ ...start, status: 'cleared' }), null);
 });
+
+test('顶栏那行字直接回答「出口在哪」——「看不到出口」得先有个文字答案', () => {
+  const base = { player: { layer: 0, col: 0, row: 0 }, exit: { layer: 2, col: 1, row: 1 } };
+  assert.match(whereLabel(base), /你在第 1 层.*出口在第 3 层/);
+  assert.match(
+    whereLabel({ ...base, exit: { layer: 0, col: 2, row: 2 } }),
+    /同在第 1 层/,
+    '同层时不该说两遍层号',
+  );
+});
+
 
 test('通关点评：不超打乱步数才夸，超了也不说难听话', () => {
   assert.match(clearRemark({ shifts: 6, par: 7, order: 3, gained: 500 }), /利落/);
   assert.match(clearRemark({ shifts: 9, par: 7, order: 3, gained: 300 }), /差 2 步/);
   assert.match(clearRemark({ shifts: 20, par: 7, order: 3, gained: 300 }), /少绕几圈/);
   assert.equal(clearRemark(null), '');
-  assert.equal(gainLabel({ order: 4, gained: 600 }), '+4 层 · +600 分');
+  assert.equal(gainLabel({ climbed: 4, gained: 600 }), '+4 层 · +600 分');
+  assert.equal(gainLabel({ climbed: 1, gained: 300 }), '+1 层 · +300 分', '热身塔只算一层');
 });
 
 test('下一座会不会升阶是问配方表，不是拿 index 猜', () => {
-  // 第 0 座三阶，第 1 座还是三阶，第 2 座才升四阶。
+  // 前两座是热身塔，都是三阶；第 3、4 座还是三阶，第 5 座才升四阶。
   assert.match(nextTowerLabel({ towerIndex: 0, tower: { order: 3 } }), /^进第 2 座$/);
-  assert.match(nextTowerLabel({ towerIndex: 1, tower: { order: 3 } }), /升到四阶/);
+  assert.match(nextTowerLabel({ towerIndex: 2, tower: { order: 3 } }), /^进第 4 座$/);
+  assert.match(nextTowerLabel({ towerIndex: 3, tower: { order: 3 } }), /升到四阶/);
   assert.match(nextTowerLabel({ towerIndex: 20, tower: { order: 6 } }), /^进第 22 座$/, '六阶封顶不再说升阶');
 });
 
@@ -139,7 +155,7 @@ test('取景两边都算：竖屏比例下光按高度取会横向溢出', () =>
 
 test('三个视角各给相机位置、目标和裁剪策略', () => {
   const top = cameraFor(VIEW_TOP, 4, 0.46);
-  assert.equal(top.clip, 'below', '俯视只画激活层及以下，上面的会挡视线');
+  assert.equal(top.clip, 'focus', '俯视画激活层 + 出口那一层的幽灵，不能把出口整层藏起来');
   assert.ok(top.position[1] > 0 && top.position[2] > 0, '压成仰角，纯垂直看不见砖侧面的门');
   const side = cameraFor(VIEW_SIDE, 4, 0.46);
   assert.equal(side.clip, 'slice');
