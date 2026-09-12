@@ -48,3 +48,17 @@ export const progressRatio = (state) =>
   Math.min(1, Math.max(0, (state.player.x + state.player.w / 2) / Math.max(1, state.width - 6)));
 
 export const resultTitle = (status) => (status === 'won' ? '全线通关' : '游戏结束');
+
+// 只有真刷掉旧的最高分才报新纪录，否则每局都报喜就不值钱了。
+export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+// 星级点评按拿到几颗给，通关本身不该被挑刺。
+export const rewardLabel = (stars) => {
+  if (stars >= 3) return '满星通关';
+  if (stars === 2) return '再多踩几只就是满星';
+  if (stars === 1) return '走到底了，下次多攒连踩';
+  return '这一趟没走完，再来一次';
+};
+

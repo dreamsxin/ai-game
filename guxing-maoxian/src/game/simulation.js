@@ -207,7 +207,8 @@ function playerHits(state, prevPlayer, effects) {
           jumping: high,
         },
       };
-      effects.push({ type: 'stomp', x: enemy.x, y: enemy.y });
+      effects.push({ type: 'stomp', x: enemy.x, y: enemy.y, chain });
+
       continue;
     }
 

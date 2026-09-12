@@ -1,27 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Coins, Heart, Pause, Play, RotateCcw, Rocket, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Coins, Heart, Pause, Play, RotateCcw, Rocket, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { createInput, mergeInput } from './game/input.js';
 import { STEP, createGame, startGame, step, togglePause } from './game/simulation.js';
 import { createRenderer } from './scene/render.js';
+import { VIBRATION, createAudio, vibrate, vibrationFor, winSound } from './scene/audio.js';
 import {
   formatScore,
   formatTime,
   levelLabel,
+  muteLabel,
   powerLabel,
   progressLabel,
   progressRatio,
+  recordLabel,
   resultTitle,
+  rewardLabel,
   starLabel,
   statusLabel,
 } from './scene/readout.js';
 
 const BEST_KEY = 'guxing-maoxian:best';
+const MUTE_KEY = 'guxing-maoxian:muted';
 
 const readBest = () => {
   try {
     return Number(localStorage.getItem(BEST_KEY)) || 0;
   } catch {
     return 0;
+  }
+};
+
+const readMuted = () => {
+  try {
+    return localStorage.getItem(MUTE_KEY) === 'true';
+  } catch {
+    return false;
   }
 };
 
@@ -33,18 +46,49 @@ const writeBest = (score) => {
   }
 };
 
+const writeMuted = (muted) => {
+  try {
+    localStorage.setItem(MUTE_KEY, String(muted));
+  } catch {
+    // 同上：存不下静音偏好也不该影响这一局。
+  }
+};
+
+
 export default function App() {
   const hostRef = useRef(null);
   const gameRef = useRef(createGame(0));
   const padRef = useRef(null);
+  // 音频引擎不参与渲染，放进 state 只会白白多一轮重渲染。
+  const audioRef = useRef(null);
   const [view, setView] = useState(gameRef.current);
   const [best, setBest] = useState(readBest);
+  const [muted, setMuted] = useState(readMuted);
   const [banner, setBanner] = useState('');
+  // 最高分在结算时才写盘，但仍要拿开局那一刻的旧纪录比，重开一局才不会误报破纪录。
+  const bestAtStartRef = useRef(readBest());
+
+  const sound = useCallback((name) => {
+    if (!audioRef.current) audioRef.current = createAudio({ muted });
+    return audioRef.current.play(name);
+  }, [muted]);
 
   const restart = useCallback(() => {
+    bestAtStartRef.current = best;
     gameRef.current = startGame(0);
     setView(gameRef.current);
     setBanner('');
+    // 面板上的按钮是本局第一个用户手势，正好拿它把 AudioContext 解锁。
+    sound('coin');
+  }, [best, sound]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((current) => {
+      const next = !current;
+      writeMuted(next);
+      if (audioRef.current) audioRef.current.setMuted(next);
+      return next;
+    });
   }, []);
 
   const pause = useCallback(() => {
@@ -54,13 +98,16 @@ export default function App() {
       return;
     }
     if (state.status === 'ready') {
+      bestAtStartRef.current = best;
       gameRef.current = { ...state, status: 'playing' };
       setView(gameRef.current);
+      sound('coin');
       return;
     }
     gameRef.current = togglePause(state);
     setView(gameRef.current);
-  }, [restart]);
+  }, [best, restart, sound]);
+
 
   useEffect(() => {
     const host = hostRef.current;
@@ -89,8 +136,12 @@ export default function App() {
         }
         gameRef.current = step(gameRef.current, merged, STEP);
         renderer.notify(gameRef.current.effects);
+        // 跳、踩、金币都从这一个出口出声，和渲染层读的是同一批 effects。
+        audioRef.current?.notify(gameRef.current.effects);
+        vibrate(vibrationFor(gameRef.current.effects));
         accumulator -= STEP;
       }
+
       renderer.render(gameRef.current, frameDelta);
       if (now - lastUiUpdate > 90 || gameRef.current.status !== lastUiStatus) {
         setView(gameRef.current);
@@ -121,6 +172,24 @@ export default function App() {
     setBest(view.score);
     writeBest(view.score);
   }, [view.status, view.score, best]);
+
+  // 卸载时关掉 AudioContext。浏览器对同时存在的 context 有上限，热更新时不关会攒着。
+  useEffect(() => () => audioRef.current?.dispose(), []);
+
+  // over 和 won 是状态跳转而不是 effect（afterDeath / afterClear 都把 effects 清空了），
+  // 所以这两声在这里补。
+  useEffect(() => {
+    if (view.status === 'won') {
+      sound(winSound(view.stars));
+      vibrate(VIBRATION.win);
+      return;
+    }
+    if (view.status === 'over') {
+      sound('over');
+      vibrate(VIBRATION.over);
+    }
+  }, [view.status, view.stars, sound]);
+
 
   // 进新关或复活时闪一下关卡名，让玩家知道自己在哪。
   useEffect(() => {
@@ -156,6 +225,9 @@ export default function App() {
   const ready = view.status === 'ready';
   const finished = view.status === 'over' || view.status === 'won';
   const overlay = ready || paused || finished;
+  // 拿开局那一刻的旧纪录比，而不是拿已经被本局刷过的 best 比。
+  const record = finished && view.score > bestAtStartRef.current;
+
 
   return (
     <div className="app">
@@ -203,23 +275,47 @@ export default function App() {
         {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
       </button>
 
+      <button
+        type="button"
+        className="mute-key"
+        onClick={toggleMute}
+        aria-pressed={muted}
+        aria-label={muteLabel(muted)}
+      >
+        {muted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
+      </button>
+
       {overlay && (
         <div className="overlay" role="dialog" aria-modal="true">
-          <div className="panel">
+          <div className={`panel${finished ? ' panel-settle' : ''}`}>
             <h1>{finished ? resultTitle(view.status) : '菇星冒险'}</h1>
             <p className="panel-status">{statusLabel(view.status)}</p>
             {ready && (
               <ul className="panel-tips">
                 <li>左半屏按住拖动跑，拖得越远跑得越快</li>
                 <li>右半屏点一下起跳，按住不放跳得更高</li>
-                <li>踩敌人得分，连续踩不落地分数翻倍</li>
+                <li>踩敌人得分，连续踩不落地分数翻倍——音高也跟着往上爬</li>
                 <li>顶问号块出蘑菇变大，星星块进入短暂无敌</li>
               </ul>
             )}
             {finished && (
               <>
+                {record && <p className="panel-badge">{recordLabel(record)}</p>}
                 <p className="panel-score">{formatScore(view.score)}</p>
-                <p className="panel-stars">{starLabel(view.stars)}</p>
+                {/* 星星逐颗弹出来，一次性全亮就没有「攒到了」的感觉。 */}
+                <p className="panel-stars" aria-label={`获得 ${view.stars} 星`}>
+                  {starLabel(view.stars).split('').map((mark, index) => (
+                    <i
+                      key={index}
+                      className={mark === '★' ? 'star-on' : 'star-off'}
+                      style={{ animationDelay: `${index * 180}ms` }}
+                      aria-hidden="true"
+                    >
+                      {mark}
+                    </i>
+                  ))}
+                </p>
+                <p className="panel-detail">{rewardLabel(view.stars)}</p>
                 <p className="panel-detail">
                   {levelLabel(view)} · 金币 {view.coins} · 用时 {formatTime(view.elapsed)}
                 </p>
@@ -228,6 +324,7 @@ export default function App() {
                 </p>
               </>
             )}
+
             {!finished && !ready && <p className="panel-detail">{levelLabel(view)}</p>}
             <button type="button" className="panel-action" onClick={finished || ready ? restart : pause}>
               {finished ? <RotateCcw size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
