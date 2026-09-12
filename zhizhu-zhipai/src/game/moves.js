@@ -73,6 +73,20 @@ export function completedRun(pile, suits) {
   return isRun(pile, start, suits);
 }
 
+/**
+ * 往 target 上再接 moved 张，是不是正好凑满一门 K→A。
+ *
+ * 只在「同门且点数衔接」已经成立时调用，所以这里只要数两件事：目标那一段从 K 起，
+ * 而且两段加起来正好 13 张。剩下的由调用方那两条保证——搬的那一段本身是同门递减的，
+ * 接口又对得上，凑满 13 张就必然一路排到 A。
+ */
+function completesWith(target, moved, suits) {
+  if (isEmpty(target)) return false;
+  const start = runStart(target, suits);
+  if (target.cards.length - start + moved !== RUN_LENGTH) return false;
+  return rankOf(target.cards[start]) === RUN_LENGTH;
+}
+
 /** 牌库还能不能发：牌发完了不行，场上有空摞也不行（经典规则）。 */
 export const canDeal = (state) =>
   state.stock.length > 0 && state.piles.every((pile) => !isEmpty(pile));
@@ -84,6 +98,10 @@ export const canDeal = (state) =>
  * 权重的排序就是蜘蛛纸牌的基本功：腾空一摞 > 翻出背面牌 > 把同门的牌串起来 >
  * 落在实牌上（而不是浪费空位）。最后那条负分很关键：把一张牌挪到另一个异花牌上、
  * 既不翻牌也不腾空，那是纯粹的原地打转，提示给这种走法等于骗人。
+ *
+ * 每一步还带一个 `productive` 标记：这一步到底有没有推进牌局。
+ * 权重是**相对**的（一堆废棋里也会有个最高分），`productive` 是**绝对**的——
+ * 提示要用它决定该不该改口劝玩家发牌，那件事光看权重排名答不了。
  */
 export function rankedMoves(piles, suits) {
   const scored = [];
@@ -106,14 +124,27 @@ export function rankedMoves(piles, suits) {
         // 经典规则允许这么走（targetsFor 照给落点），但提示和双击绝不该推荐它。
         const relocates = emptiesPile && !onCard;
         const idle = !emptiesPile && !opensDown && !buildsRun;
-        const weight = (emptiesPile ? 400 : 0)
+        // 这一步直接凑满一门 K→A。收门是这游戏唯一的得分动作，权重表里必须有它，
+        // 不然「接上就能收走」和「随便接一下同门」在提示眼里一样重。
+        const completes = buildsRun && completesWith(piles[to], moved, suits);
+        const weight = (completes ? 1000 : 0)
+          + (emptiesPile ? 400 : 0)
           + (opensDown ? 200 : 0)
           + (buildsRun ? 120 : 0)
           + (onCard ? 50 : 0)
           + moved
           - (idle ? 100 : 0)
           - (relocates ? 1000 : 0);
-        scored.push({ from, to, index, count: moved, weight });
+        // 「有进展」是个比权重严得多的判据，三条各有各的理由：
+        // - 腾空一摞只有落在实牌上才算，落进另一个空位是换位置；
+        // - 翻出背面牌永远算，那是这游戏唯一的新信息；
+        // - 接同门必须从**整段的起点**接。从一段的中间切一截出来接到别处，
+        //   拆掉一个同门接头又接上一个，同门连接数一点没变，那也是白走一步。
+        const productive = completes
+          || (emptiesPile && onCard)
+          || opensDown
+          || (buildsRun && index === start);
+        scored.push({ from, to, index, count: moved, weight, productive });
       }
     }
   }
@@ -125,6 +156,18 @@ export function rankedMoves(piles, suits) {
 export function findMove(piles, suits) {
   const ranked = rankedMoves(piles, suits);
   return ranked.length > 0 ? ranked[0] : null;
+}
+
+/**
+ * 真能推进牌局的那一步，没有就是 null。
+ *
+ * 和 findMove 的分工是这样的：findMove 答「还动得了吗」（死局判断要的是这个），
+ * 这个函数答「还有值得走的吗」。量过一组牌局：照权重一直走下去，四花色下一门都收不到，
+ * 因为一堆废棋里总有个最高分，机器人就一直在那儿挪牌。
+ * 玩家跟着提示走会踩同一个坑——所以提示必须分得清这两件事。
+ */
+export function productiveMove(piles, suits) {
+  return rankedMoves(piles, suits).find((move) => move.productive) ?? null;
 }
 
 /**

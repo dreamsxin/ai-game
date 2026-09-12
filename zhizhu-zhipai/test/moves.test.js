@@ -9,6 +9,7 @@ import {
   isEmpty,
   isRun,
   mobility,
+  productiveMove,
   rankedMoves,
   runStart,
   targetsFor,
@@ -106,6 +107,55 @@ test('凑齐 K 到 A 才算一门，差一张都不算', () => {
   // 背面牌盖着的部分不能算进这一门
   const buried = pile(full.cards, 1);
   assert.equal(completedRun(buried, 4), false, '整门里有背面牌就不该被收走');
+});
+
+test('收门那一步权重最高：收门是这游戏唯一的得分动作', () => {
+  // 第 0 摞已经是黑桃 K→2 的十二张，第 1 摞就剩一张黑桃 A。
+  const target = Array.from({ length: RANKS - 1 }, (unused, i) => SPADE(RANKS - i));
+  const piles = [pile(target), pile([SPADE(1)])];
+  const ranked = rankedMoves(piles, 4);
+  const best = ranked[0];
+  assert.deepEqual({ from: best.from, to: best.to }, { from: 1, to: 0 });
+  assert.equal(best.productive, true);
+  assert.ok(best.weight > 1000, '凑满一门的权重该甩开所有别的走法');
+  // 差一张 K 的时候，A 照样接得上那个 2——但那一步收不了门，
+  // 所以权重里不该有那 1000 分。「接上同门」和「凑满一门」是两件事。
+  const short = rankedMoves([pile(target.slice(1)), pile([SPADE(1)])], 4);
+  assert.equal(short.length, 1, 'A 还是压得到 2 上');
+  assert.ok(short[0].weight < 1000, '没收到门就不该拿收门的分');
+});
+
+test('从一段的中间切一截出来接同门，不算有进展', () => {
+  // 第 0 摞是 红5 / 黑8-黑7-黑6：整段的起点在下标 1。
+  // 把下标 2 那截（黑7-黑6）搬到另一张黑8 上，拆掉一个同门接头又接上一个，
+  // 同门连接数一点没变——合法，但白走一步。
+  const piles = [
+    pile([HEART(5), SPADE(8), SPADE(7), SPADE(6)]),
+    pile([SPADE(8) + RANKS * 4]),      // 第二副牌里的黑桃 8
+    pile([SPADE(2)]),
+    pile([SPADE(2) + RANKS * 4]),
+  ];
+  assert.equal(runStart(piles[0], 4), 1, '整段从黑桃 8 起');
+  const ranked = rankedMoves(piles, 4);
+  assert.equal(ranked.length, 1, '这个局面只有一步可走');
+  assert.deepEqual({ from: ranked[0].from, to: ranked[0].to, index: ranked[0].index },
+    { from: 0, to: 1, index: 2 });
+  assert.equal(ranked[0].productive, false, '同门接头一进一出，净变化是零');
+  assert.equal(productiveMove(piles, 4), null);
+});
+
+test('productiveMove 和 findMove 分工不同：一个答「值得走吗」，一个答「还动得了吗」', () => {
+  // 黑桃 K-Q 摆着，唯一能接的是红桃 K（异花），另有一个空位（占了也白占）。
+  const piles = [pile([SPADE(13), SPADE(12)]), emptyPile(), pile([HEART(13)])];
+  assert.ok(findMove(piles, 4), '有合法走法，所以不是死局');
+  assert.equal(productiveMove(piles, 4), null, '但一步有进展的都没有');
+
+  // 底下压着背面牌就完全不一样了：搬走能翻出新牌。
+  const covered = [pile([SPADE(5), SPADE(13), SPADE(12)], 1), emptyPile()];
+  const move = productiveMove(covered, 4);
+  assert.ok(move, '翻出背面牌永远算进展');
+  assert.equal(move.productive, true);
+  assert.equal(move.index, 1, '搬走明牌那一段才翻得出底下那张');
 });
 
 test('发牌要求牌库有牌且场上没有空摞', () => {

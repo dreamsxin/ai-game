@@ -21,6 +21,7 @@ import {
   isEmpty,
   isRun,
   mobility,
+  productiveMove,
   runStart,
   targetsFor,
   topOf,
@@ -249,12 +250,21 @@ export function undo(state) {
   );
 }
 
-/** 提示：把 findMove 的结果原样交出去，并顺手把那一段选中。 */
+/**
+ * 提示：把建议的一步交出去，并顺手把那一段选中。
+ *
+ * `productive` 是这里最要紧的一个字段。以前提示只会给「权重最高的一步」，
+ * 但一堆废棋里也总有个最高分——量过一组牌局，照这个建议一直走下去四花色下一门都收不到，
+ * 机器人全程在原地挪牌。玩家跟着走会踩同一个坑，所以提示必须说实话：
+ * 这一步只是挪个位置，还是真在推进牌局。文案怎么改口是 readout 的事。
+ */
 export function hint(state) {
-  if (state.status === 'won') return { state, move: null };
-  const move = findMove(state.piles, state.suits);
-  if (!move) return { state, move: null };
-  return { state: select(state, move.from, move.index), move };
+  if (state.status === 'won') return { state, move: null, productive: false };
+  const move = productiveMove(state.piles, state.suits) ?? findMove(state.piles, state.suits);
+  if (!move) return { state, move: null, productive: false };
+  // 只有真值得走的一步才顺手选上。劝玩家发牌的同时又把一段废棋高亮起来，是自相矛盾的。
+  if (!move.productive) return { state, move, productive: false };
+  return { state: select(state, move.from, move.index), move, productive: true };
 }
 
 /** 派生给渲染层：每摞的明牌起点、是否被选中、可落点集合。 */

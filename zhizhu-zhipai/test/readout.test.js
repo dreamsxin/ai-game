@@ -99,6 +99,18 @@ test('提示文案说清搬哪一摞去哪一摞，给不出答案时说清为�
   assert.match(hintLabel(null, false), /撤销|重开/);
 });
 
+test('有得走但走了也没用时，提示改口劝发牌', () => {
+  const move = { from: 0, to: 2, count: 1 };
+  // 场上一堆废棋里总有个权重最高的，早先的提示就把它当答案报出来，
+  // 玩家照着走一步，局面没变、分数掉一分。这种时候正确的建议是发牌。
+  assert.match(hintLabel(move, true, false), /发一轮/);
+  assert.doesNotMatch(hintLabel(move, true, false), /第 1 摞/, '别再报那一步的坐标了');
+  // 连牌都发不了，那只能往回退。
+  assert.match(hintLabel(move, false, false), /撤销/);
+  // productive 省略时按「有进展」算，老调用点不受影响。
+  assert.equal(hintLabel(move, true), hintLabel(move, true, true));
+});
+
 test('只有真刷掉旧成绩才报新纪录，通关点评一星也不说难听话', () => {
   assert.equal(recordLabel(true), '新纪录');
   assert.equal(recordLabel(false), null);

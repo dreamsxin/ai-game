@@ -62,7 +62,16 @@ export const rewardLabel = (stars) => {
 export const bestLabel = (best) => (best > 0 ? `最佳 ${formatScore(best)}` : '还没有成绩');
 
 // 提示按钮的文案：给不出答案时也要说清是为什么。
-export function hintLabel(move, canDealNow) {
+//
+// productive 那一支是这段最要紧的地方：场上常常「有得走，但走了也没用」——
+// 一堆废棋里总有个权重最高的，早先的提示就把它当答案报出来，玩家照着走一步，
+// 局面没变、分数掉了一分。这种时候正确的建议是发牌，提示得改口。
+export function hintLabel(move, canDealNow, productive = true) {
+  if (move && !productive) {
+    return canDealNow
+      ? '这一步只是挪个位置，不如发一轮新牌'
+      : '剩下的都是白走一步，撤销回去换条路';
+  }
   if (move) {
     const from = move.from + 1;
     const to = move.to + 1;

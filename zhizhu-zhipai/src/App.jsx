@@ -224,7 +224,7 @@ export default function App() {
     ensureAudio();
     const result = hint(game);
     setGame(result.state);
-    setAdvice(hintLabel(result.move, dealNow));
+    setAdvice(hintLabel(result.move, dealNow, result.productive));
   };
 
   return (
