@@ -9,6 +9,7 @@ import {
   isEmpty,
   isRun,
   mobility,
+  rankedMoves,
   runStart,
   targetsFor,
   topOf,
@@ -62,18 +63,31 @@ test('落点：空摞什么都收，实牌只收小一点的', () => {
   ];
   // 把第 0 摞的黑桃 Q（下标 1）搬走：红桃 K 收得下，黑桃 2 收不下，空摞收得下
   assert.deepEqual(targetsFor(piles, 0, 1, 4), [1, 2]);
-  // 整段黑桃 K-Q 无处可去：没有比 K 更大的牌，而它已经是整摞明牌，
-  // 搬到空摞等于原地打转（下一条测试专门盯这件事）。
-  assert.deepEqual(targetsFor(piles, 0, 0, 4), []);
+  // 整段黑桃 K-Q 只有空摞收得下：没有比 K 更大的牌。
+  // 这一步没有进展，但经典规则允许，落点照给——不推荐是提示的事。
+  assert.deepEqual(targetsFor(piles, 0, 0, 4), [2]);
 });
 
-test('把整摞明牌搬到空位不算落点：那是原地打转', () => {
+test('整摞搬进空位是合法的，但提示永远不推荐', () => {
   const piles = [pile([SPADE(13), SPADE(12)]), emptyPile()];
-  assert.deepEqual(targetsFor(piles, 0, 0, 4), [], '整摞搬过去没有任何进展');
-  // 底下压着背面牌就不一样了：搬走能翻出新牌
+  assert.deepEqual(targetsFor(piles, 0, 0, 4), [1], '经典规则里空列收任意合法一段');
+  // 唯一的走法也得给出来，不然玩家会以为游戏卡了；但它的权重必须是负的。
+  const only = findMove(piles, 4);
+  assert.deepEqual({ from: only.from, to: only.to }, { from: 0, to: 1 });
+  assert.ok(only.weight < 0, '换个位置而已，权重不该是正的');
+
+  // 有别的走法时，换位置那一步必须排在最后。
+  const better = [pile([SPADE(13), SPADE(12)]), emptyPile(), pile([HEART(13)])];
+  const ranked = rankedMoves(better, 4);
+  assert.deepEqual({ from: ranked[0].from, to: ranked[0].to }, { from: 0, to: 2 }, '接到红桃 K 上更值');
+  assert.equal(ranked[ranked.length - 1].to, 1, '搬进空位垫底');
+
+  // 底下压着背面牌就完全不一样了：搬走能翻出新牌，这是实打实的进展。
   const covered = [pile([SPADE(5), SPADE(13), SPADE(12)], 1), emptyPile()];
   assert.deepEqual(targetsFor(covered, 0, 1, 4), [1]);
+  assert.ok(findMove(covered, 4).weight > 0);
 });
+
 
 test('断开的一段根本没有落点', () => {
   const piles = [pile([SPADE(13), HEART(12)]), pile([CLUB(13)])];

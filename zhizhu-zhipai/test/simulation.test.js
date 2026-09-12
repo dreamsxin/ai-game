@@ -198,7 +198,9 @@ test('双击直接搬到最好的落点，优先落在实牌上而不是占空�
 });
 
 test('没有落点时双击只出一条 invalid', () => {
-  const game = staged([{ cards: [SPADE(13)] }]);
+  // 十摞各一张 K：没有比 K 更大的牌，也没有空摞——这才是真的无处可去。
+  // （只留一摞的话，经典规则下 K 可以搬进空列，那就不是「没有落点」了。）
+  const game = staged(Array.from({ length: PILE_COUNT }, () => ({ cards: [SPADE(13)] })));
   const stuck = autoMove(game, 0);
   assert.equal(stuck.moves, 0);
   assert.equal(stuck.effects[0].type, 'invalid');

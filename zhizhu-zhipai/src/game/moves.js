@@ -46,6 +46,10 @@ export const canDrop = (pile, moving) =>
 /**
  * 把 from 摞从 index 起的那一段，能放到哪些摞上。
  * 返回下标数组，已经排除了原摞自己。
+ *
+ * 合法性完全照 Windows 经典蜘蛛纸牌：空摞收任意单张或任意一段同花连续牌，
+ * 包括「把一整摞搬进另一个空位」——那一步没有进展，但规则允许，玩家想走就该走得了。
+ * 「不推荐没进展的走法」是提示的事，归 rankedMoves 管，不该混进合法性判定里。
  */
 export function targetsFor(piles, from, index, suits) {
   const source = piles[from];
@@ -54,8 +58,6 @@ export function targetsFor(piles, from, index, suits) {
   const targets = [];
   for (let i = 0; i < piles.length; i += 1) {
     if (i === from) continue;
-    // 整摞明牌都搬到空位上等于原地打转，没有进展，不给这种落点。
-    if (isEmpty(piles[i]) && index === source.down && source.down === 0) continue;
     if (canDrop(piles[i], moving)) targets.push(i);
   }
   return targets;
@@ -100,13 +102,17 @@ export function rankedMoves(piles, suits) {
         const onCard = target !== null;
         // 落点和被搬的牌同门，说明这一步在把一门顺子接起来——离收门更近了。
         const buildsRun = onCard && suitOf(target, suits) === suitOf(moving, suits);
+        // 把一整摞搬进另一个空位：空摞数没变、没翻出牌、也没接上同门，只是换了个位置。
+        // 经典规则允许这么走（targetsFor 照给落点），但提示和双击绝不该推荐它。
+        const relocates = emptiesPile && !onCard;
         const idle = !emptiesPile && !opensDown && !buildsRun;
         const weight = (emptiesPile ? 400 : 0)
           + (opensDown ? 200 : 0)
           + (buildsRun ? 120 : 0)
           + (onCard ? 50 : 0)
           + moved
-          - (idle ? 100 : 0);
+          - (idle ? 100 : 0)
+          - (relocates ? 1000 : 0);
         scored.push({ from, to, index, count: moved, weight });
       }
     }
