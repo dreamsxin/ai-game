@@ -260,3 +260,82 @@ body {
     width: 100%;
   }
 }
+
+/* 静音开关放在暂停键正上方：都是「随时可能要按一下」的悬浮键。 */
+.mute-key {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 80px);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.mute-key[aria-pressed='true'] {
+  color: var(--muted);
+}
+
+/* 键盘 Tab 过来时要看得见落在哪：鼠标点击不会触发 :focus-visible。 */
+.pause-key:focus-visible,
+.mute-key:focus-visible,
+.panel-action:focus-visible,
+.panel-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.panel-badge {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 2px;
+  animation: badge-glow 1.6s ease-in-out infinite;
+}
+
+.panel-reward {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.panel-settle {
+  animation: panel-rise 0.28s ease-out;
+}
+
+@keyframes badge-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(77, 225, 255, 0);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(77, 225, 255, 0.4);
+  }
+}
+
+@keyframes panel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-badge,
+  .panel-settle {
+    animation: none;
+  }
+}
+

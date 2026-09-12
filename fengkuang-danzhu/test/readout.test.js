@@ -15,6 +15,9 @@ import {
   formatScore,
   formatTime,
   hpLabel,
+  muteLabel,
+  recordLabel,
+  rewardLabel,
   stageLabel,
   statusLabel,
   turnLabel,
@@ -91,3 +94,22 @@ test('阶段常量与文案对得上', () => {
   assert.equal(stageLabel(1), '第 1 阶段');
   assert.ok(STAGE_TURNS > 1);
 });
+
+test('静音和纪录的文案', () => {
+  assert.equal(muteLabel(true), '音效已关');
+  assert.equal(muteLabel(false), '音效已开');
+  assert.equal(recordLabel(true), '新纪录');
+  assert.equal(recordLabel(false), '');
+});
+
+test('结算评价按最突出的那一项说话，并且每种情况都有话说', () => {
+  const state = (over = {}) => ({ bestCombo: 0, ballCount: 1, pickups: 0, turn: 1, ...over });
+  assert.equal(rewardLabel(state({ bestCombo: 14 })), '一串连爆带走一片，这手瞄得很准');
+  assert.equal(rewardLabel(state({ ballCount: 33 })), '弹珠攒得够多了，下次早点开始扫加珠');
+  assert.equal(rewardLabel(state({ pickups: 9 })), '加珠吃得不错，再多留意炸弹砖的位置');
+  assert.equal(rewardLabel(state({ turn: 25 })), '撑得够久，接下来该想办法把下压压回去');
+  assert.equal(rewardLabel(state()), '先盯着绿色加珠打，弹珠多了才砸得开');
+  // 连爆最能说明问题，同时满足几条时它优先。
+  assert.equal(rewardLabel(state({ bestCombo: 14, ballCount: 40, pickups: 20, turn: 40 })), '一串连爆带走一片，这手瞄得很准');
+});
+

@@ -163,3 +163,24 @@ test('同 seed 同输入逐字段一致，重开会换一局', () => {
   const first = startGame(5);
   assert.notEqual(restart(first).seed, first.seed);
 });
+
+test('每颗球出膛都发一条 launch：那串「哒哒哒」是反馈层唯一的依据', () => {
+  // 开局只有一颗，看不出那串节奏，所以手动攒一串再射。
+  const volley = 6;
+  let state = fire({ ...startGame(3), ballCount: volley });
+  const launched = [];
+  const frames = Math.ceil((volley * FIRE_INTERVAL) / STEP) + 4;
+  for (let i = 0; i < frames; i += 1) {
+    state = step(state, EMPTY_INPUT, STEP);
+    for (const effect of state.effects) if (effect.type === 'launch') launched.push(effect);
+    if (state.phase === 'aim') break;
+  }
+  assert.equal(launched.length, volley, '出膛条数要和这一串的弹珠数对得上');
+  assert.equal(launched.at(-1).remaining, 0, '最后一颗出膛后就没有排队的了');
+  for (let i = 1; i < launched.length; i += 1) {
+    assert.ok(launched[i].remaining < launched[i - 1].remaining, 'remaining 应该一路递减');
+  }
+  assert.equal(step(startGame(3), EMPTY_INPUT, STEP).effects.length, 0, '没开火就不该有出膛声');
+});
+
+

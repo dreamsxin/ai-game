@@ -94,6 +94,7 @@ function releaseBalls(state, dt) {
   if (state.queued <= 0) return { ...state, fireTimer: Math.max(0, state.fireTimer - dt) };
   let { queued, fireTimer } = state;
   const balls = [...state.balls];
+  const effects = [...state.effects];
   fireTimer -= dt;
   while (queued > 0 && fireTimer <= 0) {
     balls.push({
@@ -104,8 +105,10 @@ function releaseBalls(state, dt) {
     });
     queued -= 1;
     fireTimer += FIRE_INTERVAL;
+    // 一颗颗出膛的「哒哒哒」是这类玩法的招牌节奏，得让反馈层听得见。
+    effects.push({ type: 'launch', remaining: queued });
   }
-  return { ...state, balls, queued, fireTimer };
+  return { ...state, balls, queued, fireTimer, effects };
 }
 
 // 一帧的碰撞结算：砖块掉血、拆砖连爆、吃加珠都在这里累计。

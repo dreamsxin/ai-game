@@ -52,3 +52,17 @@ export function turnSummary(last) {
   parts.push(`共 ${last.balls} 颗`);
   return parts.join(' · ');
 }
+
+export const muteLabel = (muted) => (muted ? '音效已关' : '音效已开');
+
+export const recordLabel = (record) => (record ? '新纪录' : '');
+
+/** 结算后给一句能拿去用的评价：说清下一局该往哪使劲。 */
+export const rewardLabel = (state) => {
+  if (state.bestCombo >= 12) return '一串连爆带走一片，这手瞄得很准';
+  if (state.ballCount >= 30) return '弹珠攒得够多了，下次早点开始扫加珠';
+  if (state.pickups >= 8) return '加珠吃得不错，再多留意炸弹砖的位置';
+  if (state.turn >= 20) return '撑得够久，接下来该想办法把下压压回去';
+  return '先盯着绿色加珠打，弹珠多了才砸得开';
+};
+
