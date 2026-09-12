@@ -6,6 +6,7 @@ import {
   TILE_GAP,
   TILE_SPAN,
   WALK_SECONDS_PER_CELL,
+  levelTheme,
 } from '../game/rules.js';
 import { boardView, shiftAnchor } from '../game/simulation.js';
 import { buildVoxelMesh, linearRgb } from './voxel.js';
@@ -90,6 +91,8 @@ export function createScene(host) {
     return geometry;
   };
 
+  // 砖块的材质色会按章节染一次。Lambert 把 material.color 乘在顶点色上，
+  // 所以整章换色的同时，砖内部「地板暗、门框亮、垫子偏粉」的关系一条都不变。
   const tileMaterial = track(new THREE.MeshLambertMaterial({ vertexColors: true }));
   // 非激活层压暗压透，否则上层的地板会把玩家所在的那层全挡住。
   const dimMaterial = track(new THREE.MeshLambertMaterial({
@@ -98,6 +101,9 @@ export function createScene(host) {
     opacity: 0.26,
     depthWrite: false,
   }));
+  // 角色和出口门拱不跟着染：出口必须一眼是绿的，角色必须一眼是青的，
+  // 这两样是玩家找目标的锚点，不能被章节色调洗掉。
+  const propMaterial = track(new THREE.MeshLambertMaterial({ vertexColors: true }));
 
   const tileGroup = new THREE.Group();
   scene.add(tileGroup);
@@ -114,13 +120,13 @@ export function createScene(host) {
 
   const playerMesh = new THREE.Mesh(
     track(geometryFromVoxels(PLAYER_VOXELS, { size: PLAYER_VOXEL, origin: PLAYER_ORIGIN })),
-    tileMaterial,
+    propMaterial,
   );
   scene.add(playerMesh);
 
   const exitMesh = new THREE.Mesh(
     track(geometryFromVoxels(EXIT_VOXELS, { size: EXIT_VOXEL, origin: EXIT_ORIGIN })),
-    tileMaterial,
+    propMaterial,
   );
   scene.add(exitMesh);
   // 高亮是贴在地板上的一层薄片：可达、选中、出口各一个颜色，用实例色区分。
@@ -278,6 +284,10 @@ export function createScene(host) {
       : null;
     let slot = 0;
     for (let layer = 0; layer < layers; layer += 1) {
+      // 只画激活层和它下面的层。四层叠起来时，站在最底层看上去就是一片糊成一团的
+      // 半透明地板，激活层反而被压在最下面看不清——上面的层直接不画最干净。
+      // 出口门拱是独立的 mesh，不受这一条影响，所以「出口在顶层」照旧看得见。
+      if (layer > state.activeLayer) continue;
       const material = layer === state.activeLayer ? tileMaterial : dimMaterial;
       for (let row = 0; row < rows; row += 1) {
         for (let col = 0; col < cols; col += 1) {
@@ -444,9 +454,22 @@ export function createScene(host) {
     plates.instanceColor.needsUpdate = true;
   };
 
+  // 章节配色只在换关时改一次：逐帧 setHex 会让材质每帧都重传一次 uniform。
+  let themedLevel = -1;
+  const applyTheme = (levelIndex) => {
+    if (levelIndex === themedLevel) return;
+    themedLevel = levelIndex;
+    const theme = levelTheme(levelIndex);
+    tileMaterial.color.setHex(theme.tint);
+    dimMaterial.color.setHex(theme.tint);
+    scene.background.setHex(theme.sky);
+    scene.fog.color.setHex(theme.sky);
+  };
+
   const updateCamera = (state) => {
     const { cols, rows, layers } = state.board;
-    const view = cameraDistance(cols, rows, layers);
+    // 取景要吃当前画布的宽高比，否则竖屏手机上左右两列会被切出画面。
+    const view = cameraDistance(cols, rows, layers, camera.aspect);
     // 切层时镜头缓推过去，硬切会让人分不清现在动的是哪一层。
     focusY = mix(focusY, state.activeLayer * LAYER_HEIGHT, 0.12);
     camera.position.set(0, view.height + focusY, view.back);
@@ -456,6 +479,7 @@ export function createScene(host) {
   return {
     render(state, time, focus = null) {
       consume(state, time);
+      applyTheme(state.levelIndex ?? 0);
       layout = {
         cols: state.board.cols,
         rows: state.board.rows,

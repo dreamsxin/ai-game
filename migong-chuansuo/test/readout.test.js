@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AXIS_COL, AXIS_ROW, LEVELS } from '../src/game/rules.js';
 import {
+  CAMERA_FOV,
   TUTORIAL_STEPS,
   cameraDistance,
   coachLine,
@@ -126,6 +127,24 @@ test('棋盘越大相机拉得越远，层数越多抬得越高', () => {
   assert.ok(large.height > small.height);
   assert.ok(large.back > small.back);
   assert.ok(cameraDistance(4, 4, 3).height > cameraDistance(4, 4, 1).height);
+});
+
+test('竖屏要把机位推更远，否则左右两列会被切出画面', () => {
+  const square = cameraDistance(7, 7, 4, 1);
+  const portrait = cameraDistance(7, 7, 4, 0.46);
+  assert.ok(portrait.height > square.height, '窄屏该拉得更远');
+  assert.ok(portrait.back > square.back);
+  // 只许整体推远，不许把机位角度改掉，否则俯视感每换一个屏幕就变一次。
+  const ratio = (view) => view.height / view.back;
+  assert.ok(Math.abs(ratio(portrait) - ratio(square)) < 1e-9);
+
+  // 真的装得下：拿该距离下的水平半视野和半个棋盘宽比一比（7 列的一半是 3.5）。
+  const reach = (view, aspect) =>
+    Math.hypot(view.height, view.back) * Math.tan(((CAMERA_FOV / 2) * Math.PI) / 180) * aspect;
+  assert.ok(reach(portrait, 0.46) >= 3.5, `竖屏只覆盖到 ${reach(portrait, 0.46).toFixed(2)}，装不下 7 列`);
+
+  // 宽屏本来就装得下，不该被无谓地推远。
+  assert.deepEqual(cameraDistance(5, 5, 1, 2), cameraDistance(5, 5, 1, 1.4));
 });
 
 test('作用行列的文案从 1 开始数，和十字键上写的一致', () => {

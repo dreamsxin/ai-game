@@ -181,10 +181,12 @@ export function generateLevel(overrides = {}, maxAttempts = 24) {
       continue;
     }
     // 动作分支数随层数和边长线性涨，深度不压下来单关生成就要几十毫秒。
-    // 搜不到只会让 par 退回保底解法长度，代价可接受。
+    // 大盘（后面几章的 6×6×4、7×7×4）分支上百，只查「一步是不是就够了」；
+    // 搜不到只会让 par 退回保底解法长度，那本身就是一条真能走通的解，代价可接受。
     const branching = 2 * level.layers * (level.cols + level.rows);
+    const maxDepth = branching > 60 ? 1 : branching > 30 ? 2 : 3;
     const search = solve(level.board, level.start, level.exit, {
-      maxDepth: Math.min(level.scramble, branching > 30 ? 2 : 3),
+      maxDepth: Math.min(level.scramble, maxDepth),
       maxStates: 20000,
     });
     const par = search.shifts ?? level.scramble;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AXIS_COL, AXIS_ROW, starsFor } from '../src/game/rules.js';
+import { AXIS_COL, AXIS_ROW, LEVELS, starsFor } from '../src/game/rules.js';
 import { canReach } from '../src/game/grid.js';
 import {
   boardView,
@@ -21,6 +21,14 @@ import {
 
 const fresh = (index = 1, seed = 42) => createGame(index, seed);
 
+// 关卡表会随难度曲线调整，别把「第几关有几层」写死：按层数现找一关更耐改。
+const firstIndexWithLayers = (layers) => {
+  const index = LEVELS.findIndex((level) => level.layers >= layers);
+  assert.ok(index >= 0, `关卡表里没有 ${layers} 层的关卡`);
+  return index;
+};
+const STACKED = firstIndexWithLayers(2);
+
 test('选中、取消选中、切层都留下回执，反馈层才有东西可播', () => {
   const state = fresh();
   const cell = { layer: state.activeLayer, col: 0, row: 0 };
@@ -29,7 +37,7 @@ test('选中、取消选中、切层都留下回执，反馈层才有东西可�
   assert.deepEqual(picked.effects[0].cell, cell);
   assert.equal(selectCell(picked, cell).effects[0].type, 'deselect');
 
-  const stacked = fresh(2, 42);
+  const stacked = fresh(STACKED, 42);
   const moved = setLayer(stacked, stacked.activeLayer === 0 ? 1 : 0);
   assert.equal(moved.effects[0].type, 'layer');
   assert.equal(moved.effects[0].layer, moved.activeLayer);
@@ -172,7 +180,7 @@ test('推完就通路时会额外抛一个 open 特效', () => {
 });
 
 test('切层只在层数范围内生效', () => {
-  const state = fresh(2, 3);
+  const state = fresh(STACKED, 3);
   assert.ok(state.board.layers >= 2);
   const up = setLayer(state, 1);
   assert.equal(up.activeLayer, 1);
@@ -182,7 +190,7 @@ test('切层只在层数范围内生效', () => {
 });
 
 test('推移作用在当前激活层上', () => {
-  const state = setLayer(fresh(2, 3), 1);
+  const state = setLayer(fresh(STACKED, 3), 1);
   const next = shift(state, AXIS_ROW, 0, 1);
   assert.equal(next.effects[0].layer, 1);
   assert.deepEqual(next.board.tiles[0], state.board.tiles[0], '非激活层不该被动到');

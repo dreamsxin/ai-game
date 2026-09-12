@@ -7,6 +7,10 @@
   --accent: #5ce1ff;
   --band: #ffc061;
   --win: #8dff6a;
+  /* 十字键那一条的高度：3 个 46px 键加两道 5px 缝。场景底部要给它让出这么多，
+     否则棋盘最下面一两行会被压在键下面——真机上就是「显示不全」。 */
+  --pad-band: 148px;
+  --pad-gap: max(14px, env(safe-area-inset-bottom));
 }
 
 * {
@@ -18,6 +22,15 @@ body,
 #root {
   height: 100%;
   margin: 0;
+}
+
+/* 移动端浏览器的 100% 会跟着工具栏伸缩，dvh 才是真正可见的那一块。 */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
 }
 
 body {
@@ -39,9 +52,14 @@ body {
 
 .scene {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 底部给十字键让位：棋盘在剩下的这块区域里居中，就不会被按键压住。 */
+  bottom: calc(var(--pad-gap) + var(--pad-band) + 8px);
   touch-action: none;
 }
+
 
 .scene canvas {
   display: block;
@@ -136,13 +154,15 @@ body {
 .toast {
   position: absolute;
   left: 50%;
-  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 162px);
+  bottom: calc(var(--pad-gap) + var(--pad-band) + 14px);
   transform: translateX(-50%);
   margin: 0;
   padding: 7px 14px;
   border-radius: 999px;
   font-size: 13px;
-  white-space: nowrap;
+  /* 窄屏上提示会比屏幕还宽，不许它撑出去。 */
+  max-width: calc(100% - 24px);
+  text-align: center;
   background: var(--panel);
   border: 1px solid var(--edge);
   pointer-events: none;
@@ -182,7 +202,7 @@ body {
 }
 .pad {
   position: absolute;
-  bottom: max(14px, env(safe-area-inset-bottom));
+  bottom: var(--pad-gap);
   left: max(12px, env(safe-area-inset-left));
   right: max(12px, env(safe-area-inset-right));
   display: flex;
@@ -303,6 +323,10 @@ body {
 
 .panel {
   width: min(340px, 100%);
+  /* 矮屏上长面板会被裁掉，而 body 是 overflow: hidden 的，裁掉就再也看不到。 */
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 22px;
   border-radius: 20px;
   background: var(--panel);
@@ -498,6 +522,25 @@ body {
     margin: 0 auto;
   }
 }
+
+/* 矮屏（横屏手机、小屏机）把按键和让位的那条一起收窄，先保住棋盘看得见。 */
+@media (max-height: 640px) {
+  :root {
+    --pad-band: 122px;
+  }
+
+  .pad-key,
+  .dpad-key {
+    width: 38px;
+    height: 38px;
+  }
+
+  .dpad {
+    grid-template-columns: repeat(3, 38px);
+    grid-template-rows: repeat(3, 38px);
+  }
+}
+
 
 /* 关掉动效的人是真的不想看动效，庆祝动画也不例外——内容本身一条都不少。 */
 @media (prefers-reduced-motion: reduce) {

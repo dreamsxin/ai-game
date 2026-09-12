@@ -46,6 +46,7 @@ import {
   effectMessage,
   hintLabel,
   layerLabel,
+  chapterLabel,
   levelLabel,
   lineLabel,
   muteLabel,
@@ -64,8 +65,11 @@ import {
 const STARS_KEY = 'migong-chuansuo:stars';
 const TAUGHT_KEY = 'migong-chuansuo:taught';
 const MUTE_KEY = 'migong-chuansuo:muted';
+// 一百关不记进度就等于每次开 App 都从第 1 关重来。
+const LEVEL_KEY = 'migong-chuansuo:level';
 
 const randomSeed = () => Math.floor(Math.random() * 1_000_000_000) + 1;
+const readLevel = () => Math.max(0, Math.min(LEVEL_COUNT - 1, Number(readJson(LEVEL_KEY, 0)) || 0));
 const readJson = (key, fallback) => {
   try {
     return JSON.parse(localStorage.getItem(key)) ?? fallback;
@@ -84,7 +88,7 @@ const writeJson = (key, value) => {
 
 export default function App() {
   const hostRef = useRef(null);
-  const gameRef = useRef(createGame(0, randomSeed()));
+  const gameRef = useRef(createGame(readLevel(), randomSeed()));
   // 手指按住的格子只喂给渲染层，每帧读一次，不进游戏状态。
   const focusRef = useRef(null);
   // 音频引擎跟着 ref 走：它不参与渲染，放进 state 只会白白多一轮重渲染。
@@ -234,6 +238,11 @@ export default function App() {
     setStars(next);
     writeJson(STARS_KEY, next);
   }, [view.status, view.stars, view.levelIndex, stars]);
+
+  // 记住走到哪一关，下次开 App 直接接着打。
+  useEffect(() => {
+    writeJson(LEVEL_KEY, view.levelIndex);
+  }, [view.levelIndex]);
 
   // 结算面板等角色走完最后一段再弹，不然整段走位动画都被盖在面板后面。
   // 通关和弦、震动也跟着这一拍走：声音先于画面到会显得「还没走到就赢了」。
@@ -408,7 +417,7 @@ export default function App() {
         <div className="overlay" role="dialog" aria-modal="true">
           <div className="panel panel-win">
             <h1>穿越成功</h1>
-            <p className="panel-status">{levelLabel(view.levelIndex)}</p>
+            <p className="panel-status">{levelLabel(view.levelIndex)} · {chapterLabel(view.levelIndex)}</p>
             {record && <p className="panel-badge">{recordLabel(record)}</p>}
             {/* 三颗星逐颗弹出来，一次性全亮就没有「攒到了」的感觉。 */}
             <p className="panel-stars" aria-label={`获得 ${view.stars} 星`}>

@@ -1,9 +1,16 @@
-import { LEVELS, LEVEL_COUNT, TILE_SPAN } from '../game/rules.js';
+import { LEVELS, LEVEL_COUNT, TILE_SPAN, clampLevelIndex, levelRecipe } from '../game/rules.js';
 
 // HUD 文案全部在这里派生，React 组件只负责摆放。
-export const levelName = (index) => LEVELS[Math.max(0, Math.min(LEVEL_COUNT - 1, index))].name;
+export const levelName = (index) => LEVELS[clampLevelIndex(index)].name;
 
 export const levelLabel = (index) => `第 ${index + 1} 关 · ${levelName(index)}`;
+
+// 章节名单独露出来：一百关光看关号说不清进度，说到「第几章」才有坐标感。
+export const chapterLabel = (index) => {
+  const level = levelRecipe(index);
+  return `${level.chapter} · 第 ${level.chapterIndex + 1} 章`;
+};
+
 
 export const shiftLabel = (shifts, par) => `${shifts} / ${par}`;
 
@@ -93,8 +100,24 @@ export const hintLabel = (advice) => {
   return advice.reason ?? '提示';
 };
 
-// 相机高度随棋盘大小走，5×5 也要能整张塞进手机竖屏。
-export const cameraDistance = (cols, rows, layers) => {
+// 相机的垂直视野角，和 createScene 里 PerspectiveCamera 的第一个参数必须一致。
+export const CAMERA_FOV = 50;
+const HALF_FOV_TAN = Math.tan(((CAMERA_FOV / 2) * Math.PI) / 180);
+
+/**
+ * 相机高度随棋盘大小走，5×5 也要能整张塞进手机竖屏。
+ *
+ * aspect 是画布的宽高比，必须传：竖屏手机 aspect≈0.46，水平视野比垂直窄一半多，
+ * 只按边长算距离会把左右两列直接切出画面——这就是真机上「显示不全」的来源。
+ */
+export const cameraDistance = (cols, rows, layers, aspect = 1) => {
   const span = Math.max(cols, rows) * TILE_SPAN;
-  return { height: span * 1.35 + layers * 0.55 + 1.6, back: span * 0.95 + 1.2 };
+  const height = span * 1.35 + layers * 0.55 + 1.6;
+  const back = span * 0.95 + 1.2;
+  // 先算「横着装下整排砖」需要多远，不够就把整个机位按比例推远，机位角度保持不变。
+  const halfWidth = (cols * TILE_SPAN) / 2 + TILE_SPAN * 0.7;
+  const needed = halfWidth / (Math.max(0.2, aspect) * HALF_FOV_TAN);
+  const scale = Math.max(1, needed / Math.hypot(height, back));
+  return { height: height * scale, back: back * scale };
 };
+

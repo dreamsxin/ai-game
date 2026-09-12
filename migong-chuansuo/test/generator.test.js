@@ -86,9 +86,11 @@ test('起点和出口取对角，解法必须横穿整张图', () => {
   assert.equal(level.exit.layer, level.layers - 1);
 });
 
-test('关卡表里六关在连续 12 个 seed 上全部生成通过', () => {
+// 一百关全扫一遍，每关取 4 个 seed。再往上加 seed 数只是线性堆时间，
+// 而生成失败一向是「配方本身偏了」而不是「某个 seed 不巧」，4 个足够把偏了的配方抓出来。
+test('关卡表里每一关在连续 4 个 seed 上都生成通过', () => {
   for (let index = 0; index < LEVELS.length; index += 1) {
-    for (let seed = 1; seed <= 12; seed += 1) {
+    for (let seed = 1; seed <= 4; seed += 1) {
       const { level, attempts, failures } = generateCampaignLevel(index, seed);
       assert.ok(level, `第 ${index + 1} 关 seed ${seed} 生成失败：${JSON.stringify(failures)}`);
       assert.ok(attempts <= 4, `第 ${index + 1} 关 seed ${seed} 重试了 ${attempts} 次`);
@@ -96,6 +98,32 @@ test('关卡表里六关在连续 12 个 seed 上全部生成通过', () => {
     }
   }
 });
+
+// 头几关是新手关，最容易因为「打乱两步就已经通了」而换 seed 重试——3×3 上两次推移
+// 常常自我抵消，这本来就是 generateLevel 换 seed 的用途。这里盯的是「24 个 seed 一个都不能
+// 生成不出来」，重试次数只要不失控就行（一次 3×3 生成是微秒级）。
+test('开局那几关在连续 24 个 seed 上都生成得出来', () => {
+  for (let index = 0; index < 3; index += 1) {
+    for (let seed = 1; seed <= 24; seed += 1) {
+      const { level, attempts } = generateCampaignLevel(index, seed);
+      assert.ok(level, `第 ${index + 1} 关 seed ${seed} 生成失败`);
+      assert.ok(attempts <= 6, `第 ${index + 1} 关 seed ${seed} 重试了 ${attempts} 次`);
+      assert.equal(validateLevel(level).ok, true);
+    }
+  }
+});
+
+test('难度曲线单调：越往后棋盘不变小、打乱不变少', () => {
+  for (let index = 1; index < LEVELS.length; index += 1) {
+    const previous = LEVELS[index - 1];
+    const current = LEVELS[index];
+    const area = (level) => level.cols * level.rows * level.layers;
+    assert.ok(area(current) >= area(previous), `第 ${index + 1} 关比上一关小了`);
+    assert.ok(current.scramble >= previous.scramble, `第 ${index + 1} 关打乱步数比上一关少了`);
+    assert.ok(current.loops <= previous.loops + 1e-9, `第 ${index + 1} 关的额外开门率反而高了`);
+  }
+});
+
 
 test('每格门数落在合理区间，不会全是墙也不会全通', () => {
   const metrics = levelMetrics(generateLevel({ seed: 3, cols: 5, rows: 5, layers: 1, scramble: 4 }).level);

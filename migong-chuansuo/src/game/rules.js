@@ -36,18 +36,64 @@ export const toCell = ({ layer, col, row }) => ({ layer, col, row });
 export const sameCell = (a, b) =>
   Boolean(a) && Boolean(b) && a.layer === b.layer && a.col === b.col && a.row === b.row;
 
-// 六关递进：先教推移，再教跃迁，最后叠到三层。scramble 同时是保底解法长度。
-export const LEVELS = [
-  { name: '初启', cols: 3, rows: 3, layers: 1, scramble: 2, loops: 0.3 },
-  { name: '错位', cols: 4, rows: 4, layers: 1, scramble: 3, loops: 0.24 },
-  { name: '双阙', cols: 4, rows: 4, layers: 2, scramble: 4, loops: 0.2 },
-  { name: '回环', cols: 5, rows: 4, layers: 2, scramble: 5, loops: 0.16 },
-  { name: '叠城', cols: 5, rows: 5, layers: 3, scramble: 6, loops: 0.14 },
-  { name: '终穿', cols: 5, rows: 5, layers: 3, scramble: 7, loops: 0.1 },
+// 十个章节，每章十关，共一百关。
+//
+// 每章只写首尾两个端点，中间八关线性插值——难度曲线因此一定是单调的，
+// 也不用手写一百行配方。tint 是这一章的砖块染色（乘在体素顶点色上，
+// 所以砖内部的明暗关系不变），sky 是背景与雾色。
+export const LEVELS_PER_CHAPTER = 10;
+
+export const CHAPTERS = [
+  { name: '初启', tint: 0xffffff, sky: 0x070b18, cols: [3, 4], rows: [3, 4], layers: [1, 1], scramble: [2, 4], loops: [0.22, 0.21] },
+  { name: '错位', tint: 0xc9d8ff, sky: 0x0a1024, cols: [4, 4], rows: [4, 4], layers: [1, 1], scramble: [4, 6], loops: [0.21, 0.2] },
+  { name: '双阙', tint: 0xffd9c0, sky: 0x150d1f, cols: [4, 5], rows: [4, 4], layers: [2, 2], scramble: [6, 7], loops: [0.2, 0.19] },
+  { name: '回环', tint: 0xc7ffe6, sky: 0x061a18, cols: [5, 5], rows: [4, 5], layers: [2, 2], scramble: [7, 8], loops: [0.19, 0.175] },
+  { name: '叠城', tint: 0xffe6a8, sky: 0x1a1206, cols: [5, 5], rows: [5, 5], layers: [3, 3], scramble: [8, 9], loops: [0.175, 0.16] },
+  { name: '深井', tint: 0xb9c6ff, sky: 0x05091c, cols: [5, 6], rows: [5, 5], layers: [3, 3], scramble: [9, 10], loops: [0.16, 0.145] },
+  { name: '环廊', tint: 0xffc9e8, sky: 0x1a0a18, cols: [6, 6], rows: [5, 6], layers: [3, 3], scramble: [10, 11], loops: [0.145, 0.13] },
+  { name: '穹顶', tint: 0xd6ffcf, sky: 0x0a1a0c, cols: [6, 6], rows: [6, 6], layers: [4, 4], scramble: [11, 12], loops: [0.13, 0.115] },
+  { name: '虚径', tint: 0xcfd4ff, sky: 0x0d0820, cols: [6, 7], rows: [6, 6], layers: [4, 4], scramble: [12, 13], loops: [0.115, 0.1] },
+  { name: '归途', tint: 0xfff0d0, sky: 0x1c1408, cols: [7, 7], rows: [6, 7], layers: [4, 4], scramble: [13, 15], loops: [0.1, 0.085] },
 ];
 
+const ORDINALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+// 端点之间取整插值。步长只有一关时直接取起点，避免除零。
+const lerpStep = (range, step, steps, round) => {
+  const [from, to] = range;
+  const ratio = steps > 1 ? step / (steps - 1) : 0;
+  const value = from + (to - from) * ratio;
+  return round ? Math.round(value) : value;
+};
+
+const buildLevels = () =>
+  CHAPTERS.flatMap((chapter, chapterIndex) =>
+    Array.from({ length: LEVELS_PER_CHAPTER }, (unused, step) => ({
+      name: `${chapter.name} ${ORDINALS[step]}`,
+      chapter: chapter.name,
+      chapterIndex,
+      tint: chapter.tint,
+      sky: chapter.sky,
+      cols: lerpStep(chapter.cols, step, LEVELS_PER_CHAPTER, true),
+      rows: lerpStep(chapter.rows, step, LEVELS_PER_CHAPTER, true),
+      layers: lerpStep(chapter.layers, step, LEVELS_PER_CHAPTER, true),
+      scramble: lerpStep(chapter.scramble, step, LEVELS_PER_CHAPTER, true),
+      // loops 是概率，别取整。
+      loops: Number(lerpStep(chapter.loops, step, LEVELS_PER_CHAPTER, false).toFixed(3)),
+    })),
+  );
+
+export const LEVELS = buildLevels();
+
 export const LEVEL_COUNT = LEVELS.length;
-export const levelRecipe = (index) => LEVELS[Math.max(0, Math.min(LEVEL_COUNT - 1, index))];
+export const clampLevelIndex = (index) => Math.max(0, Math.min(LEVEL_COUNT - 1, Math.trunc(index) || 0));
+export const levelRecipe = (index) => LEVELS[clampLevelIndex(index)];
+// 场景配色跟着章节走：换章就换一次天色和砖色，玩家一眼知道进了新一章。
+export const levelTheme = (index) => {
+  const level = levelRecipe(index);
+  return { tint: level.tint, sky: level.sky };
+};
+
 
 // 三星要求打到 par，二星允许多花一半，剩下都算一星——通关本身不该被判失败。
 export const starsFor = (shifts, par) => {
