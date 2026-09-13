@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 23~25 的圆形启动图标。和方形那张的唯一区别是底和网都裁进了圆——
+  老系统不会自己裁，圆角得画进资源里。桃身再缩一档（0.78），圆形里留边比方形多。
+  同样不能用渐变，理由见 drawable/ic_launcher_background.xml。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group>
+        <clip-path android:pathData="M54,54 m-54,0 a54,54 0 1,0 108,0 a54,54 0 1,0 -108,0" />
+        <path
+            android:fillColor="@color/felt_lit"
+            android:pathData="M0,0h108v108h-108z" />
+        <path
+            android:pathData="M26,26 L108,26 M26,26 L109,60 M26,26 L90,90 M26,26 L60,109 M26,26 L26,108"
+            android:strokeColor="#2A6350"
+            android:strokeAlpha="0.55"
+            android:strokeWidth="1.2"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M56,26 Q51.9,31.2 53.7,37.5 Q47.9,40.7 47.2,47.2 Q40.7,47.9 37.5,53.7 Q31.2,51.9 26,56"
+            android:strokeColor="#2A6350"
+            android:strokeAlpha="0.55"
+            android:strokeWidth="1.2"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M80,26 Q72.6,35.3 75.9,46.7 Q65.5,52.4 64.2,64.2 Q52.4,65.5 46.7,75.9 Q35.3,72.6 26,80"
+            android:strokeColor="#2A6350"
+            android:strokeAlpha="0.55"
+            android:strokeWidth="1.2"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M104,26 Q93.3,39.4 98.1,55.8 Q83,64.1 81.2,81.2 Q64.1,83 55.8,98.1 Q39.4,93.3 26,104"
+            android:strokeColor="#2A6350"
+            android:strokeAlpha="0.55"
+            android:strokeWidth="1.2"
+            android:strokeLineCap="round" />
+    </group>
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.78"
+        android:scaleY="0.78">
+        <path
+            android:fillColor="@color/ink"
+            android:pathData="M54,20.4 C54,20.4 28.4,42.8 28.4,58.8 C28.4,67.8 35.4,74.8 44.4,74.8 C48.2,74.8 51.8,73.5 54,71 C54,71 52.4,81.2 47.6,87.6 L60.4,87.6 C55.6,81.2 54,71 54,71 C56.2,73.5 59.8,74.8 63.6,74.8 C72.6,74.8 79.6,67.8 79.6,58.8 C79.6,42.8 54,20.4 54,20.4 Z" />
+    </group>
+</vector>

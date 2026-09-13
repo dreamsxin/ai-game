@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  开屏（Theme.SplashScreen 的 android:background）。
+  模板给的是一张各密度的 splash.png，和 migong-chuansuo 是同一张图，已经删掉。
+
+  这里用 layer-list 而不是直接铺一个 vector：`android:background` 会把 drawable
+  拉满整屏，vector 会被拉成变形的桃子。layer-list 的底色铺满、桃身按 gravity 居中
+  并钉死 148dp 见方，横竖屏、各种比例都不会变形。
+  item 上的 android:width/height 要 API 23+，本项目 minSdk 正好是 23。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/felt" />
+    <item
+        android:width="148dp"
+        android:height="148dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
+</layer-list>

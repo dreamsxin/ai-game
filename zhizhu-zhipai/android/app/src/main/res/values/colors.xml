@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  牌桌绿的唯一真源，值和 src/styles.css 里的 felt / felt-lit / ink 三个 CSS 变量对齐。
+  （XML 注释里不能出现两个连着的减号，所以这里省掉了变量名前缀。）
+  开屏底色和图标底色都从这里取，改一处就都跟着改。
+
+  注意 styles.xml 里的 colorPrimary 那几个不在这儿——它们由 capacitor-android
+  这个库自己定义，本项目没覆盖。
+-->
+<resources>
+    <color name="felt">#0B2019</color>
+    <color name="felt_lit">#12352A</color>
+    <color name="ink">#F2F7F4</color>
+</resources>

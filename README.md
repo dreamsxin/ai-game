@@ -243,8 +243,10 @@ npm run apk:debug --workspace zhizhu-zhipai
 `sdk.dir` 要指向本机 SDK（该文件按惯例不入库）。完整的坑位清单见
 [`migong-chuansuo/README.md`](migong-chuansuo/README.md) 的「打 Android APK」一节。
 
-实测体积：迷宫穿越 4.1 MB（带 Three.js），蜘蛛纸牌 3.94 MB（牌面是 DOM 真文字，零图片资源，
-几乎就是 Capacitor 壳本身的体积）。
+实测体积：迷宫穿越 4.1 MB（带 Three.js），蜘蛛纸牌 3.90 MB（牌面是 DOM 真文字，前端零图片资源，
+几乎就是 Capacitor 壳本身的体积）。两边的图标不一样：蜘蛛纸牌的启动图标是自己画的
+vector（牌桌绿底 + 黑桃 + 背后一张蛛网），没有沿用 Android Studio 模板那套青绿方格底，
+不然两个游戏装在同一台手机上，桌面会出现两个一模一样的图标。
 
 要给别的游戏也打包，照 `migong-chuansuo` 抄三样东西：`vite.config.js` 里的 `base: './'`、
 `capacitor.config.json`、以及 package.json 里的 `apk:*` 脚本，然后 `npx cap add android`。
