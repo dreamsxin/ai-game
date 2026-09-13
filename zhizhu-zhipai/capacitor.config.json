@@ -1,0 +1,8 @@
+{
+  "appId": "com.aigame.zhizhuzhipai",
+  "appName": "蜘蛛纸牌",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  }
+}

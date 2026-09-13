@@ -98,6 +98,43 @@ npm run test:zhizhu-zhipai
 npm run build:zhizhu-zhipai
 ```
 
+## 打 Android APK
+
+用 Capacitor 把 Vite 产物包进一个 WebView 壳，原生工程在 `android/`（已入版本库，可以直接改）。
+和 `migong-chuansuo` 是同一套做法，两边的 `variables.gradle` 逐字段一致。
+
+```bash
+npm run apk:debug --workspace zhizhu-zhipai     # 产物在 android/app/build/outputs/apk/debug/app-debug.apk
+npm run apk:release --workspace zhizhu-zhipai   # 未签名，需自备 keystore
+```
+
+跑之前要先把两件本机配置指对，否则会卡在很难看懂的报错上：
+
+- **`android/local.properties` 写 SDK 路径**（这个文件按惯例不入库）：
+  ```properties
+  sdk.dir=E\:\\SDK
+  ```
+- **`JAVA_HOME` 指向一个 JDK 17–21**。别用 Android Studio 自带的 `jbr`：它现在是 JDK 25，
+  而 Gradle 8.x 根本不支持 Java 25。本机用的是 `E:\apk\tools\jdk-21\jdk-21.0.5+11`：
+  ```powershell
+  $env:JAVA_HOME = "E:\apk\tools\jdk-21\jdk-21.0.5+11"
+  ```
+
+两处和模板默认值不一样的地方，都是踩过坑才改的：
+
+- `vite.config.js` 里的 `base: './'` 是必须的。Capacitor 把 `dist` 塞进 APK 后是用 `file://` 加载的，
+  绝对路径 `/assets/...` 会直接 404 白屏。相对路径在浏览器里跑一样正常。
+- `gradle-wrapper.properties` 的 `networkTimeout` 从模板默认的 10 秒提到 180 秒，
+  并换成 `-bin.zip`（比 `-all.zip` 少下一半）。
+
+这游戏**整局不碰网**：没有 `fetch`／`WebSocket`，音效是 `AudioContext` 现场合成的，
+存档在 `localStorage`。清单里那条 `INTERNET` 权限是 Capacitor 模板带的，本身用不上。
+
+实测产物：**3.94 MB**，`com.aigame.zhizhuzhipai`，minSdk 23 / targetSdk 35，应用名「蜘蛛纸牌」。
+`assets/public/` 里是相对路径的 `index.html` 加一个 210 KB 的 JS、一个 6.6 KB 的 CSS——
+牌面是 DOM 里的真文字，没有一张图片资源，所以这个壳几乎就是 Capacitor 自己的体积。
+Gradle 发行包已在本机缓存的前提下，全量构建 1 分 10 秒，改完前端再打一次是 12 秒。
+
 ## 一张牌就是一个整数
 
 `src/game/cards.js` 里 id 是 0..103，花色和点数都是纯算术算出来的。关键是 **id 里没有「花色」这一维**，

@@ -8,14 +8,20 @@
     "build": "vite build",
     "start": "vite preview --host 127.0.0.1 --port 4191",
     "preview": "npm run start",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "apk:sync": "vite build && cap sync android",
+    "apk:debug": "npm run apk:sync && cd android && gradlew.bat assembleDebug",
+    "apk:release": "npm run apk:sync && cd android && gradlew.bat assembleRelease"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
     "lucide-react": "^0.468.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
     "@vitejs/plugin-react": "^6.0.5",
     "vite": "^8.2.0"
   },

@@ -229,18 +229,22 @@ npm run build:mofang-palou
 
 ## 打 Android APK
 
-目前只有 `migong-chuansuo` 接了 Capacitor，原生工程在 `migong-chuansuo/android/`（已入版本库）。
+`migong-chuansuo` 和 `zhizhu-zhipai` 接了 Capacitor，原生工程分别在各自的 `android/`（已入版本库）。
 
 ```bash
 $env:JAVA_HOME = "E:\apk\tools\jdk-21\jdk-21.0.5+11"   # 必须是 JDK 17–21
 npm run apk:debug --workspace migong-chuansuo
-# 产物：migong-chuansuo/android/app/build/outputs/apk/debug/app-debug.apk
+npm run apk:debug --workspace zhizhu-zhipai
+# 产物：<游戏>/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 两条最容易卡住的：**Android Studio 自带的 `jbr` 是 JDK 25，用不了**（Gradle 8.x 不支持 Java 25，
 而 AGP 8.7 又还没跟上 Gradle 9），要另找一个 JDK 17–21；以及 `android/local.properties` 里的
 `sdk.dir` 要指向本机 SDK（该文件按惯例不入库）。完整的坑位清单见
 [`migong-chuansuo/README.md`](migong-chuansuo/README.md) 的「打 Android APK」一节。
+
+实测体积：迷宫穿越 4.1 MB（带 Three.js），蜘蛛纸牌 3.94 MB（牌面是 DOM 真文字，零图片资源，
+几乎就是 Capacitor 壳本身的体积）。
 
 要给别的游戏也打包，照 `migong-chuansuo` 抄三样东西：`vite.config.js` 里的 `base: './'`、
 `capacitor.config.json`、以及 package.json 里的 `apk:*` 脚本，然后 `npx cap add android`。
