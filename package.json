@@ -19,7 +19,8 @@
     "nizhe-yuanzheng",
     "chengshi-jianzao",
     "zhizhu-zhipai",
-    "mofang-palou"
+    "mofang-palou",
+    "huanyi-jihua"
   ],
   "scripts": {
     "dev": "npm run dev --workspace wuqizi",
@@ -40,6 +41,7 @@
     "dev:chengshi-jianzao": "npm run dev --workspace chengshi-jianzao",
     "dev:zhizhu-zhipai": "npm run dev --workspace zhizhu-zhipai",
     "dev:mofang-palou": "npm run dev --workspace mofang-palou",
+    "dev:huanyi-jihua": "npm run dev --workspace huanyi-jihua",
     "build": "npm run build --workspaces --if-present",
     "build:wuqizi": "npm run build --workspace wuqizi",
     "build:xiaoyuanmian": "npm run build --workspace xiaoyuanmian",
@@ -58,6 +60,7 @@
     "build:chengshi-jianzao": "npm run build --workspace chengshi-jianzao",
     "build:zhizhu-zhipai": "npm run build --workspace zhizhu-zhipai",
     "build:mofang-palou": "npm run build --workspace mofang-palou",
+    "build:huanyi-jihua": "npm run build --workspace huanyi-jihua",
     "start": "npm run start --workspace wuqizi",
     "start:xiaoyuanmian": "npm run start --workspace xiaoyuanmian",
     "start:nijie-tunshi": "npm run start --workspace nijie-tunshi",
@@ -75,6 +78,7 @@
     "start:chengshi-jianzao": "npm run start --workspace chengshi-jianzao",
     "start:zhizhu-zhipai": "npm run start --workspace zhizhu-zhipai",
     "start:mofang-palou": "npm run start --workspace mofang-palou",
+    "start:huanyi-jihua": "npm run start --workspace huanyi-jihua",
     "test": "npm test --workspaces --if-present",
     "test:wuqizi": "npm test --workspace wuqizi",
     "test:xiaoyuanmian": "npm test --workspace xiaoyuanmian",
@@ -92,6 +96,7 @@
     "test:nizhe-yuanzheng": "npm test --workspace nizhe-yuanzheng",
     "test:chengshi-jianzao": "npm test --workspace chengshi-jianzao",
     "test:zhizhu-zhipai": "npm test --workspace zhizhu-zhipai",
-    "test:mofang-palou": "npm test --workspace mofang-palou"
+    "test:mofang-palou": "npm test --workspace mofang-palou",
+    "test:huanyi-jihua": "npm test --workspace huanyi-jihua"
   }
 }
