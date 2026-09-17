@@ -20,7 +20,9 @@
     "chengshi-jianzao",
     "zhizhu-zhipai",
     "mofang-palou",
-    "huanyi-jihua"
+    "huanyi-jihua",
+    "shuidan-tang",
+    "xuanfeng-kading"
   ],
   "scripts": {
     "dev": "npm run dev --workspace wuqizi",
@@ -42,6 +44,8 @@
     "dev:zhizhu-zhipai": "npm run dev --workspace zhizhu-zhipai",
     "dev:mofang-palou": "npm run dev --workspace mofang-palou",
     "dev:huanyi-jihua": "npm run dev --workspace huanyi-jihua",
+    "dev:shuidan-tang": "npm run dev --workspace shuidan-tang",
+    "dev:xuanfeng-kading": "npm run dev --workspace xuanfeng-kading",
     "build": "npm run build --workspaces --if-present",
     "build:wuqizi": "npm run build --workspace wuqizi",
     "build:xiaoyuanmian": "npm run build --workspace xiaoyuanmian",
@@ -61,6 +65,8 @@
     "build:zhizhu-zhipai": "npm run build --workspace zhizhu-zhipai",
     "build:mofang-palou": "npm run build --workspace mofang-palou",
     "build:huanyi-jihua": "npm run build --workspace huanyi-jihua",
+    "build:shuidan-tang": "npm run build --workspace shuidan-tang",
+    "build:xuanfeng-kading": "npm run build --workspace xuanfeng-kading",
     "start": "npm run start --workspace wuqizi",
     "start:xiaoyuanmian": "npm run start --workspace xiaoyuanmian",
     "start:nijie-tunshi": "npm run start --workspace nijie-tunshi",
@@ -79,6 +85,8 @@
     "start:zhizhu-zhipai": "npm run start --workspace zhizhu-zhipai",
     "start:mofang-palou": "npm run start --workspace mofang-palou",
     "start:huanyi-jihua": "npm run start --workspace huanyi-jihua",
+    "start:shuidan-tang": "npm run start --workspace shuidan-tang",
+    "start:xuanfeng-kading": "npm run start --workspace xuanfeng-kading",
     "test": "npm test --workspaces --if-present",
     "test:wuqizi": "npm test --workspace wuqizi",
     "test:xiaoyuanmian": "npm test --workspace xiaoyuanmian",
@@ -97,6 +105,8 @@
     "test:chengshi-jianzao": "npm test --workspace chengshi-jianzao",
     "test:zhizhu-zhipai": "npm test --workspace zhizhu-zhipai",
     "test:mofang-palou": "npm test --workspace mofang-palou",
-    "test:huanyi-jihua": "npm test --workspace huanyi-jihua"
+    "test:huanyi-jihua": "npm test --workspace huanyi-jihua",
+    "test:shuidan-tang": "npm test --workspace shuidan-tang",
+    "test:xuanfeng-kading": "npm test --workspace xuanfeng-kading"
   }
 }
