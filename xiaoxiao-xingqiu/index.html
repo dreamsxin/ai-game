@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>小小星球摆件 · Little Planet Desk Orrery</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:#05060a; overflow:hidden;
+    font: 13px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif; color:#d8d2c4; }
+  #app { position:fixed; inset:0; }
+  #hud { position:fixed; left:16px; bottom:16px; display:flex; gap:8px; flex-wrap:wrap;
+    padding:10px; border-radius:10px; background:rgba(12,14,20,.72);
+    border:1px solid rgba(197,158,94,.28); backdrop-filter:blur(6px); }
+  #hud button { font:inherit; color:#e8dfcb; cursor:pointer; padding:6px 11px;
+    border-radius:7px; border:1px solid rgba(197,158,94,.35); background:rgba(197,158,94,.10); }
+  #hud button:hover { background:rgba(197,158,94,.22); }
+  #hud button.on { background:#c59e5e; color:#1a1408; border-color:#c59e5e; }
+  #info { position:fixed; right:16px; top:14px; text-align:right; opacity:.75; }
+  #info b { color:#c59e5e; font-weight:600; }
+  #clock { font-variant-numeric:tabular-nums; margin-top:4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="info">
+  <div><b>小小星球</b> · 三座火山 / 猴面包树 / 一朵玫瑰</div>
+  <div>极轴倾角 23.5° · 太阳固定不动，星球自转</div>
+  <div id="clock">房子处 --:-- · --</div>
+</div>
+<div id="hud">
+  <button data-speed="240">慢 4min</button>
+  <button data-speed="120" class="on">中 2min</button>
+  <button data-speed="30">快 30s</button>
+  <button id="dusk">停在黄昏</button>
+  <button id="pause">暂停</button>
+</div>
+<script type="importmap">
+{"imports":{
+  "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const R = 1.2;                                   // 星球半径（对应实物 ø120mm）
+const CENTER = new THREE.Vector3(0, 0.55, 0);    // 星球球心（底座之上）
+const TILT = THREE.MathUtils.degToRad(23.5);     // 极轴倾角
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.18;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(3.4, 2.0, 5.2);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(CENTER);
+controls.enableDamping = true;
+controls.minDistance = 3.0;
+controls.maxDistance = 14;
+
+// 桌面环境光刻意压得很暗：夜面只能靠窗户和火山口自己发光
+scene.add(new THREE.HemisphereLight(0x2b3a60, 0x0c0d10, 0.30));
+
+// 固定的"太阳"——黄铜臂末端一颗聚光 LED，不随星球转
+const SUN_DIR = new THREE.Vector3(1, 0.22, 0.34).normalize();
+const sunPos = CENTER.clone().add(SUN_DIR.clone().multiplyScalar(4.2));
+const sun = new THREE.DirectionalLight(0xfff1d6, 3.2);
+sun.position.copy(sunPos);
+sun.target.position.copy(CENTER);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0009;
+sun.shadow.radius = 3;
+const sc = sun.shadow.camera;
+sc.near = 0.5; sc.far = 9;
+sc.left = sc.bottom = -1.6; sc.right = sc.top = 1.6;
+scene.add(sun, sun.target);
+
+const bulb = new THREE.Mesh(
+  new THREE.SphereGeometry(0.075, 24, 16),
+  new THREE.MeshBasicMaterial({ color: 0xfff3dd })
+);
+bulb.position.copy(sunPos);
+scene.add(bulb);
+// 光晕贴图：不画纹理的 Sprite 会渲染成一个硬边方块
+const glowTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d').createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0.0, 'rgba(255,225,180,1)');
+  g.addColorStop(0.25, 'rgba(255,205,140,0.55)');
+  g.addColorStop(1.0, 'rgba(255,190,110,0)');
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: glowTex, color: 0xffd9a0, transparent: true, opacity: 0.9,
+  blending: THREE.AdditiveBlending, depthWrite: false
+}));
+glow.scale.setScalar(1.3);
+glow.position.copy(sunPos);
+scene.add(glow);
+// ── 星空背景 ────────────────────────────────────────────────
+{
+  const n = 1400, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(40 + Math.random() * 30);
+    pos.set([v.x, v.y, v.z], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({
+    color: 0xbcc6e0, size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.75
+  })));
+}
+
+const brass  = new THREE.MeshStandardMaterial({ color: 0xc09a58, metalness: 0.95, roughness: 0.32 });
+const walnut = new THREE.MeshStandardMaterial({ color: 0x4a2f1e, metalness: 0.05, roughness: 0.75 });
+
+// ── 底座：ø90×35mm 胡桃木壳 + 黄铜压边 ──────────────────────
+{
+  const base = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.95, 0.3, 64), walnut);
+  body.position.y = -0.9;
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.905, 0.905, 0.035, 64), brass);
+  rim.position.y = -0.745;
+  body.receiveShadow = true; rim.receiveShadow = true;
+  base.add(body, rim);
+
+  // 托住极轴的斜支架（跟着 23.5° 倾角走）
+  const yoke = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.95, 20), brass);
+  yoke.position.set(0, -0.28, 0.42);
+  yoke.rotation.x = -TILT;
+  yoke.castShadow = true;
+  base.add(yoke);
+
+  // 伸向太阳的细黄铜臂：从底座边缘斜出去，整段都在星球外侧
+  const armFoot = new THREE.Vector3(0.86, -0.80, 0.34);
+  const armVec = sunPos.clone().sub(armFoot);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, armVec.length(), 16), brass);
+  arm.position.copy(armFoot).add(armVec.clone().multiplyScalar(0.5));
+  arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), armVec.clone().normalize());
+  base.add(arm);
+  scene.add(base);
+}
+
+// ── 星球：planetRoot 负责倾角，planetSpin 负责自转 ───────────
+const planetRoot = new THREE.Group();
+planetRoot.position.copy(CENTER);
+planetRoot.rotation.z = TILT;
+scene.add(planetRoot);
+
+const planetSpin = new THREE.Group();
+planetRoot.add(planetSpin);
+
+// 外露的只有极轴，慢转 <0.5rpm，不夹手
+const axisRod = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 3.0, 16), brass);
+planetRoot.add(axisRod);
+// ── 地形：低频噪声起伏，幅度只有半径的 1~2% ─────────────────
+const bands = [];
+for (let i = 0; i < 12; i++) {
+  bands.push(new THREE.Vector3(Math.sin(i * 2.1), Math.cos(i * 1.7), Math.sin(i * 3.3 + 1))
+    .normalize().multiplyScalar(2.4 + i * 0.85));
+}
+function terrainH(n) {                   // n: 单位法线 → 高度偏移
+  let h = 0;
+  for (let i = 0; i < bands.length; i++) h += Math.sin(n.dot(bands[i]) + i) / (1.7 + i * 0.5);
+  return h * 0.024;
+}
+const surfaceR = n => R + terrainH(n);
+
+{
+  const g = new THREE.SphereGeometry(R, 192, 128);
+  const p = g.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize();
+    v.multiplyScalar(surfaceR(v));
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  const ground = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+    color: 0x7d8663, roughness: 0.92, metalness: 0.03, flatShading: false
+  }));
+  ground.castShadow = true; ground.receiveShadow = true;
+  planetSpin.add(ground);
+
+  // 赤道拼合缝：做成一道贴着地形走的岩脉盖掉
+  const ring = [];
+  for (let i = 0; i <= 220; i++) {
+    const a = i / 220 * Math.PI * 2;
+    const n = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    ring.push(n.multiplyScalar(surfaceR(n) + 0.003));
+  }
+  const seam = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ring, true), 320, 0.007, 8, true),
+    new THREE.MeshStandardMaterial({ color: 0x4d4237, roughness: 0.95 })
+  );
+  planetSpin.add(seam);
+}
+
+// 一层极薄的大气辉光，只为了让晨昏线不那么硬
+{
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(R * 1.035, 64, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0x7fb0e6, transparent: true, opacity: 0.14,
+      side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  planetRoot.add(halo);
+}
+
+// ── 把物件贴到球面上：局部 +Y = 地表法线 ────────────────────
+const UP = new THREE.Vector3(0, 1, 0);
+function normalAt(latDeg, lonDeg) {
+  const lat = THREE.MathUtils.degToRad(latDeg), lon = THREE.MathUtils.degToRad(lonDeg);
+  return new THREE.Vector3(
+    Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)
+  );
+}
+function plant(obj, latDeg, lonDeg, sink = 0) {
+  const n = normalAt(latDeg, lonDeg);
+  obj.quaternion.setFromUnitVectors(UP, n);
+  obj.position.copy(n).multiplyScalar(surfaceR(n) - sink);
+  planetSpin.add(obj);
+  return obj;
+}
+// ── 选址（lat, lon）────────────────────────────────────────
+// 两座休眠火山夹出一块鞍部 → 房子；活火山和猴面包树扔到另一面
+const SITE = {
+  dormantA: [  6, -38],
+  dormantB: [  2,  34],
+  house:    [ 11,  -3],
+  rose:     [ 38, -16],
+  active:   [-14, 158],
+  baobabs:  [[-30, 120], [22, -168], [-6, -136]],
+};
+
+const rock = new THREE.MeshStandardMaterial({ color: 0x77695a, roughness: 0.95, side: THREE.DoubleSide });
+const lava = new THREE.MeshStandardMaterial({
+  color: 0x2a1a12, emissive: 0xff5a14, emissiveIntensity: 1.4, roughness: 0.8, side: THREE.DoubleSide
+});
+
+function volcano({ h = 0.32, r = 0.26, crater = 0.07, active = false }) {
+  const g = new THREE.Group();
+  const prof = [
+    new THREE.Vector2(0.001, -0.06),
+    new THREE.Vector2(r, 0.0),
+    new THREE.Vector2(r * 0.45, h * 0.55),
+    new THREE.Vector2(crater * 1.55, h),
+    new THREE.Vector2(crater, h * 0.9),       // 火山口内壁
+    new THREE.Vector2(0.001, h * 0.82),
+  ];
+  const cone = new THREE.Mesh(new THREE.LatheGeometry(prof, 44), rock);
+  cone.castShadow = true; cone.receiveShadow = true;
+  g.add(cone);
+
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(crater * 0.95, 24),
+    active ? lava : new THREE.MeshStandardMaterial({ color: 0x3a332a, roughness: 0.95 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = h * 0.83;
+  g.add(floor);
+
+  if (active) {
+    const light = new THREE.PointLight(0xff6a1e, 0, 0.9, 2);
+    light.position.y = h * 0.95;
+    g.add(light);
+    g.userData.crater = { light, mat: lava };
+  }
+  return g;
+}
+
+const volcA = plant(volcano({ h: 0.26, r: 0.155, crater: 0.05 }), ...SITE.dormantA, 0.03);
+const volcB = plant(volcano({ h: 0.21, r: 0.13,  crater: 0.045 }), ...SITE.dormantB, 0.03);
+const volcC = plant(volcano({ h: 0.30, r: 0.175, crater: 0.06, active: true }), ...SITE.active, 0.03);
+
+// 原著里火山是用来煎鸡蛋的：休眠的那座口上架一口 2mm 小锅
+{
+  const pan = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 0.014, 20, 1, true), brass);
+  pan.position.y = 0.198;
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.055, 8), brass);
+  handle.rotation.z = Math.PI / 2;
+  handle.position.set(0.05, 0.202, 0);
+  volcB.add(pan, handle);
+}
+// ── 房子 ───────────────────────────────────────────────────
+const nightLights = [];   // 夜面才点亮的发光材质
+function glassMat(color, intensity) {
+  const m = new THREE.MeshStandardMaterial({
+    color: 0x3a2f1e, emissive: color, emissiveIntensity: intensity,
+    roughness: 0.25, metalness: 0.0, transparent: true, opacity: 0.92
+  });
+  nightLights.push({ mat: m, peak: intensity });
+  return m;
+}
+// 底边贴合球面曲率：把底面顶点按球面下沉（实物上是 0.7mm 的弧，但必须有）
+function hugSurface(geo, yBottom, Rs) {
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    if (Math.abs(p.getY(i) - yBottom) > 1e-4) continue;
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, p.getY(i) + Math.sqrt(Math.max(Rs * Rs - x * x - z * z, 0)) - Rs);
+  }
+  p.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+const house = new THREE.Group();
+const houseLamp = new THREE.PointLight(0xffb057, 0, 0.6, 2);   // 窗里漏到地面的光
+{
+  const shell = new THREE.MeshStandardMaterial({ color: 0xa8a093, roughness: 0.6, metalness: 0.08 });
+
+  // 六边形筒屋，微楔形，高 0.20 / 占地 ø0.20（≈22mm / 18mm）
+  const bodyGeo = new THREE.CylinderGeometry(0.098, 0.106, 0.20, 6);
+  bodyGeo.translate(0, 0.10, 0);
+  hugSurface(bodyGeo, 0.0, R);
+  const body = new THREE.Mesh(bodyGeo, shell);
+  body.castShadow = true; body.receiveShadow = true;
+  house.add(body);
+
+  // 单向斜屋顶：朝火山那侧高、朝玫瑰（+Z）那侧低，出檐挑出遮阳
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.128, 0.128, 0.012, 6), brass);
+  roof.rotation.x = 0.30;
+  roof.position.y = 0.215;
+  roof.castShadow = true;
+  house.add(roof);
+
+  // 朝玫瑰的整面观景窗
+  const win = new THREE.Mesh(new THREE.BoxGeometry(0.115, 0.125, 0.016), glassMat(0xffb35c, 1.9));
+  win.position.set(0, 0.105, 0.083);
+  house.add(win);
+
+  // 朝火山的小高窗：排热，也用来看喷发
+  const hiWin = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.032, 0.016), glassMat(0xffa64d, 1.3));
+  hiWin.position.set(0, 0.165, -0.083);
+  house.add(hiWin);
+
+  // 屋顶天窗：躺着看星
+  const sky = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.01, 0.05), glassMat(0xfff0c0, 1.1));
+  sky.position.set(0.03, 0.222, -0.02);
+  sky.rotation.x = 0.30;
+  house.add(sky);
+
+  houseLamp.position.set(0, 0.07, 0.13);
+  house.add(houseLamp);
+
+  plant(house, ...SITE.house, 0.01);
+}
+// 让观景窗（+Z）正对玫瑰
+{
+  const up = house.position.clone().normalize();
+  const target = normalAt(...SITE.rose).multiplyScalar(R);
+  const dir = target.clone().sub(house.position).projectOnPlane(up).normalize();
+  const lz = new THREE.Vector3(0, 0, 1).applyQuaternion(house.quaternion);
+  house.rotateY(Math.atan2(new THREE.Vector3().crossVectors(lz, dir).dot(up), lz.dot(dir)));
+}
+
+// ── 玫瑰 + 可取下的小玻璃罩 ─────────────────────────────────
+{
+  const rose = new THREE.Group();
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.005, 0.075, 8),
+    new THREE.MeshStandardMaterial({ color: 0x3f6b3a, roughness: 0.7 }));
+  stem.position.y = 0.037;
+  rose.add(stem);
+
+  const petalMat = new THREE.MeshStandardMaterial({ color: 0xd8354e, roughness: 0.45 });
+  for (let i = 0; i < 6; i++) {
+    const petal = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), petalMat);
+    petal.scale.set(1, 0.55, 1);
+    const a = i / 6 * Math.PI * 2;
+    petal.position.set(Math.cos(a) * 0.012, 0.079 + Math.sin(a * 2) * 0.004, Math.sin(a) * 0.012);
+    rose.add(petal);
+  }
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 10), petalMat);
+  core.position.y = 0.086;
+  rose.add(core);
+
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(0.058, 28, 20, 0, Math.PI * 2, 0, Math.PI * 0.62),
+    new THREE.MeshPhysicalMaterial({
+      color: 0xdfe9f2, roughness: 0.06, metalness: 0, transparent: true,
+      opacity: 0.22, transmission: 0.85, thickness: 0.01, side: THREE.DoubleSide
+    })
+  );
+  dome.position.y = 0.048;
+  rose.add(dome);
+  plant(rose, ...SITE.rose);
+}
+
+// ── 猴面包树：根会撑裂星球，所以全放在活火山那一面 ───────────
+{
+  const bark = new THREE.MeshStandardMaterial({ color: 0x6b503a, roughness: 0.9 });
+  const leaf = new THREE.MeshStandardMaterial({ color: 0x4a6b3c, roughness: 0.85 });
+  for (const [lat, lon] of SITE.baobabs) {
+    const t = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.042, 0.13, 12), bark);
+    trunk.position.y = 0.065;
+    trunk.castShadow = true;
+    t.add(trunk);
+    for (let i = 0; i < 4; i++) {
+      const c = new THREE.Mesh(new THREE.SphereGeometry(0.038 - i * 0.004, 14, 10), leaf);
+      c.position.set(Math.cos(i * 1.9) * 0.032, 0.15 + (i % 2) * 0.022, Math.sin(i * 1.9) * 0.032);
+      c.castShadow = true;
+      t.add(c);
+    }
+    plant(t, lat, lon, 0.01);
+  }
+}
+// ── 地热铜管：从休眠火山口沿地表走到房子地板下 ───────────────
+{
+  const a = normalAt(...SITE.dormantA), b = normalAt(...SITE.house), pts = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = 0.12 + (i / 24) * 0.88;
+    const n = a.clone().lerp(b, t).normalize();
+    pts.push(n.multiplyScalar(surfaceR(n) + 0.012 + Math.sin(t * Math.PI) * 0.005));
+  }
+  const pipe = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 140, 0.008, 10, false), brass);
+  pipe.castShadow = true;
+  planetSpin.add(pipe);
+}
+
+// ── 昼夜：星球自转，太阳不动，房子自己走过日出/正午/日落/夜 ──
+let period = 120;        // 自转周期（秒）
+let paused = false;
+let tweenTo = null;      // "停在黄昏" 的目标角
+const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const _w = new THREE.Vector3();
+const axisW = new THREE.Vector3();
+const clockEl = document.getElementById('clock');
+
+function houseNormal(theta = null) {
+  const saved = planetSpin.rotation.y;
+  if (theta !== null) planetSpin.rotation.y = theta;
+  planetRoot.updateMatrixWorld(true);
+  house.getWorldPosition(_w).sub(CENTER).normalize();
+  if (theta !== null) { planetSpin.rotation.y = saved; planetRoot.updateMatrixWorld(true); }
+  return _w;
+}
+
+// 扫一圈找出 sun·n 由正转负的那一刻 —— 那就是房子的日落
+function findDusk() {
+  const N = 720;
+  let prev = SUN_DIR.dot(houseNormal(0)), best = 0;
+  for (let i = 1; i <= N; i++) {
+    const th = i / N * Math.PI * 2;
+    const cur = SUN_DIR.dot(houseNormal(th));
+    if (prev > 0 && cur <= 0) { best = th; break; }
+    prev = cur;
+  }
+  return best;
+}
+
+function phaseLabel(x, y) {
+  if (x > 0.35) return '正午前后 · 全亮';
+  if (x > 0.05) return y > 0 ? '上午' : '下午';
+  if (x > -0.06) return y > 0 ? '日出 · 晨昏线上' : '黄昏 · 晨昏线上';
+  return '夜 · 窗户亮起';
+}
+// 开局把房子转到面向观众的一侧，留一点侧光
+{
+  const camDir = camera.position.clone().sub(CENTER).normalize();
+  let best = 0, bestD = -2;
+  for (let i = 0; i < 360; i++) {
+    const th = i / 360 * Math.PI * 2;
+    const d = camDir.dot(houseNormal(th));
+    if (d > bestD) { bestD = d; best = th; }
+  }
+  planetSpin.rotation.y = best - 0.3;
+}
+
+const crater = volcC.userData.crater;
+const clock = new THREE.Clock();
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  if (tweenTo !== null) {                       // 缓慢转到黄昏位并停住
+    let d = ((tweenTo - planetSpin.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const step = Math.sign(d) * Math.min(Math.abs(d), dt * 1.2);
+    planetSpin.rotation.y += step;
+    if (Math.abs(d) < 0.002) { planetSpin.rotation.y = tweenTo; tweenTo = null; paused = true; }
+  } else if (!paused) {
+    planetSpin.rotation.y += dt * Math.PI * 2 / period;
+  }
+
+  // 房子当地的太阳高度
+  const n = houseNormal();
+  axisW.set(0, 1, 0).applyQuaternion(planetRoot.quaternion);
+  const east = new THREE.Vector3().crossVectors(axisW, n).normalize();
+  const x = SUN_DIR.dot(n), y = SUN_DIR.dot(east);
+  const night = smoothstep(0.12, -0.05, x);     // 1 = 完全在夜面
+
+  // 霍尔传感器测相位 → 进夜面自动点亮窗户
+  for (const l of nightLights) l.mat.emissiveIntensity = l.peak * (0.04 + 0.96 * night);
+  houseLamp.intensity = 0.32 * night;
+
+  // 活火山口：低频噪声做呼吸感，不做闪烁（一闪就廉价）
+  const breath = 0.62 + 0.20 * Math.sin(t * 0.7) + 0.12 * Math.sin(t * 1.9 + 1.1)
+                      + 0.06 * Math.sin(t * 4.3);
+  lava.emissiveIntensity = breath * (0.55 + 0.75 * night) * 1.5;
+  crater.light.intensity = breath * (0.3 + 0.7 * night) * 0.55;
+
+  // 正午 = 太阳正对头顶；太阳在东（y>0）是上午，在西是下午
+  const hour = (12 - Math.atan2(y, x) * 12 / Math.PI + 24) % 24;
+  const hh = String(Math.floor(hour)).padStart(2, '0');
+  const mm = String(Math.floor((hour % 1) * 60)).padStart(2, '0');
+  clockEl.textContent = `房子处 ${hh}:${mm} · ${phaseLabel(x, y)}`;
+
+  controls.update();
+  renderer.render(scene, camera);
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const hud = document.getElementById('hud');
+hud.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => {
+  period = +b.dataset.speed;
+  hud.querySelectorAll('[data-speed]').forEach(o => o.classList.toggle('on', o === b));
+  paused = false; tweenTo = null;
+  document.getElementById('pause').textContent = '暂停';
+});
+document.getElementById('dusk').onclick = () => { tweenTo = findDusk(); paused = false; };
+document.getElementById('pause').onclick = e => {
+  paused = !paused; tweenTo = null;
+  e.target.textContent = paused ? '继续' : '暂停';
+};
+</script>
+</body>
+</html>
