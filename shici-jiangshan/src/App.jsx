@@ -19,7 +19,7 @@ const toggle = (list, id) => (list.includes(id) ? list.filter((x) => x !== id) :
 
 const READING = [
   '印章的颜色是朝代：石青唐、石绿宋、赭石元；印文是主题，「别」「思」「山」「戍」「志」「隐」「情」「挽」。',
-  '一枚印章管一处地方（约十二公里见方），不是一首诗：长安、西湖这些地方压着好几首，印章会大一点，点开先出这一处的清单。',
+  '一枚印章管一处地方（约十二公里见方），不是一首诗：长安、杭州这些地方压着好几首，印章会大一点，点开先出这一处的清单。',
   '全卷远看只出印章与古地名；点一枚印章、或者走近一个地区，诗名才在绢色题签上铺开 —— 几百首一起写出来就是一堵字墙。',
   '《静夜思》《锦瑟》这类写作地历来无定说的，不落在图上（硬派一个地方就是编造），但仍在左侧列表里，也搜得到。',
   '地形按《千里江山图》的矿物色标：谷地绢黄、丘陵石绿、两千四百米以上才转石青，再往上越高越淡，最后淡进绢底（画里的"高则明、远则淡"）。天空也是绢色 —— 画里的天就是绢本身。',
@@ -33,7 +33,7 @@ export default function App() {
   const sceneRef = useRef(null);
   const [filter, setFilter] = useState(EMPTY_FILTER);
   const [selectedId, setSelectedId] = useState(null);
-  // 一枚印章底下可能压着几十首（长安、西湖），所以拾取先给出"这一处叫什么、有哪些"
+  // 一枚印章底下可能压着几十首（长安、杭州），所以拾取先给出"这一处叫什么、有哪些"
   const [here, setHere] = useState({ place: '', ids: [] });
   const [hover, setHover] = useState({ place: '', ids: [] });
   const [routeId, setRouteId] = useState(null);

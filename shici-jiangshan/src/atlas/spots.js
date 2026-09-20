@@ -9,14 +9,22 @@
 //   lng, lat  诗词所写或所咏之地的近似经纬度。
 //             **定不住的写 null**：《静夜思》《锦瑟》这类历来无定说的，
 //             硬派一个地点就是编造，所以让它们不落在图上，只进左侧列表与检索。
-
-//   place     古地名
+//   place     古地名。**首段就是印章的身份，细部写在 `·` 之后**（"长安·西市"，不是"长安市"）：
+//             归堆按首段认地方，写成"长安市""长安里巷"就会让长安散成好几枚印章。
+//             城内外的地标一律归城（"长安·大明宫"），隔着几十里的另一处才另起首段（渭城、华清宫、辋川）。
 //   text      诗词全文（原文）
 //   emotion   一句话概括诗中主要情感
 //   context   创作背景（1-2 句）
 //   highlights 2-3 条关键意象或名句赏析
+//
+// 往「唐诗三百首＋宋词三百首＋元曲三百首」走的时候，条目会到九百的量级，
+// 一个文件装不下也不好改，所以按选集分册：本文件是最早的那一批（CORE），
+// 后面每一批各自一个 `spots-*.js`，在文件末尾并成唯一对外的 SPOTS。
 
-export const SPOTS = [
+import { TANG_B } from './spots-tang-b.js';
+import { TANG_C } from './spots-tang-c.js';
+
+const CORE = [
   {
     id: 'libai-jiangjinjiu',
     name: '将进酒',
@@ -50,7 +58,7 @@ export const SPOTS = [
     dynasty: 'tang',
     theme: 'landscape',
     lng: 109.55, lat: 31.04,
-    place: '白帝城·三峡',
+    place: '夔州·白帝城',
     text: '朝辞白帝彩云间，千里江陵一日还。两岸猿声啼不住，轻舟已过万重山。',
     emotion: '劫后余生的轻快与畅快',
     context: '乾元二年李白流放夜郎途中遇赦，从白帝城东下江陵，一路顺流，心境豁然开朗。',
@@ -271,7 +279,7 @@ export const SPOTS = [
     dynasty: 'tang',
     theme: 'nostalgia',
     lng: 108.97, lat: 34.23,
-    place: '乐游原·长安城南',
+    place: '长安·乐游原',
     text: '向晚意不适，驱车登古原。夕阳无限好，只是近黄昏。',
     emotion: '美景将逝的怅惘，暗含晚唐国运之忧',
     context: '李商隐登长安城南乐游原，值晚唐国势衰颓，借夕阳寄托身世与时代之感。',
@@ -336,7 +344,7 @@ export const SPOTS = [
     dynasty: 'tang',
     theme: 'landscape',
     lng: 120.15, lat: 30.25,
-    place: '西湖·杭州',
+    place: '杭州·西湖',
     text: '孤山寺北贾亭西，水面初平云脚低。几处早莺争暖树，谁家新燕啄春泥。乱花渐欲迷人眼，浅草才能没马蹄。最爱湖东行不足，绿杨阴里白沙堤。',
     emotion: '早春游湖的欣喜与流连',
     context: '长庆三年前后白居易任杭州刺史，春日骑马游西湖，写下这首早春行吟。',
@@ -558,7 +566,7 @@ export const SPOTS = [
     dynasty: 'song',
     theme: 'elegy',
     lng: 120.15, lat: 30.28,
-    place: '临安（杭州）',
+    place: '杭州·临安行在',
     text: '寻寻觅觅，冷冷清清，凄凄惨惨戚戚。乍暖还寒时候，最难将息。三杯两盏淡酒，怎敌他晓来风急。雁过也，正伤心，却是旧时相识。满地黄花堆积，憔悴损，如今有谁堪摘？守着窗儿，独自怎生得黑！梧桐更兼细雨，到黄昏、点点滴滴。这次第，怎一个愁字了得！',
     emotion: '国破夫亡、晚年孤苦的极致哀愁',
     context: '南渡之后李清照丈夫赵明诚病逝、家藏散尽，漂泊江南，写下这首千古第一愁词。',
@@ -583,7 +591,7 @@ export const SPOTS = [
     author: '李清照',
     dynasty: 'song',
     theme: 'ambition',
-    lng: 117.39, lat: 31.32,
+    lng: 118.36, lat: 31.62,
     place: '乌江·和州',
     text: '生当作人杰，死亦为鬼雄。至今思项羽，不肯过江东。',
     emotion: '斥责苟安、崇尚气节的刚烈',
@@ -623,7 +631,7 @@ export const SPOTS = [
     dynasty: 'song',
     theme: 'love',
     lng: 120.15, lat: 30.28,
-    place: '临安（杭州）',
+    place: '杭州·临安行在',
     text: '东风夜放花千树。更吹落、星如雨。宝马雕车香满路。凤箫声动，玉壶光转，一夜鱼龙舞。蛾儿雪柳黄金缕。笑语盈盈暗香去。众里寻他千百度。蓦然回首，那人却在，灯火阑珊处。',
     emotion: '繁华中寻得孤独知音的欣然',
     context: '辛弃疾写南宋都城临安上元灯夜，热闹之极处却独立一个不慕繁华的身影。',
@@ -805,7 +813,7 @@ export const SPOTS = [
     dynasty: 'yuan',
     theme: 'love',
     lng: 120.16, lat: 30.26,
-    place: '钱塘（杭州）',
+    place: '杭州·钱塘',
     text: '半窗幽梦微茫，歌罢钱塘，赋罢高唐。风入罗帏，爽入疏棂，月照纱窗。缥缈见梨花淡妆，依稀闻兰麝余香。唤起思量，待不思量，怎不思量！',
     emotion: '梦醒之后挥之不去的思念',
     context: '郑光祖为元曲四大家之一，久居杭州，此曲以梦境写相思，缠绵而清丽。',
@@ -922,7 +930,7 @@ export const SPOTS = [
     dynasty: 'song',
     theme: 'landscape',
     lng: 120.13, lat: 30.24,
-    place: '西湖·杭州',
+    place: '杭州·西湖',
     text: '水光潋滟晴方好，山色空蒙雨亦奇。欲把西湖比西子，淡妆浓抹总相宜。',
     emotion: '晴雨皆好的审美愉悦',
     context: '熙宁六年苏轼任杭州通判，湖上饮酒遇雨，写下西湖最著名的一首题咏。',
@@ -1142,7 +1150,7 @@ export const SPOTS = [
     author: '关汉卿',
     dynasty: 'yuan',
     theme: 'landscape',
-    lng: 120.21, lat: 30.33,
+    lng: 120.16, lat: 30.26,
     place: '杭州·钱塘门',
     text: '普天下锦绣乡，环海内风流地。大元朝新附国，亡宋家旧华夷。水秀山奇，一到处堪游戏，这答儿忒富贵。……百十里街衢整齐，万余家楼阁参差，并无半答儿闲田地。',
     emotion: '看热闹的兴头里夹着一句"亡宋家旧华夷"',
@@ -1221,7 +1229,7 @@ export const SPOTS = [
     dynasty: 'yuan',
     theme: 'love',
     lng: 120.24, lat: 30.28,
-    place: '钱塘（杭州）',
+    place: '杭州·钱塘',
     text: '莺莺燕燕春春，花花柳柳真真，事事风风韵韵。娇娇嫩嫩，停停当当人人。',
     emotion: '满口叠字，像是舍不得把话说完',
     context: '乔吉一生不仕，流寓杭州四十年。这支小令二十八字全用叠字，是元曲文字游戏玩到极处的一例。',
@@ -1247,7 +1255,7 @@ export const SPOTS = [
     dynasty: 'yuan',
     theme: 'elegy',
     lng: 120.11, lat: 30.26,
-    place: '岳王墓·西湖栖霞岭',
+    place: '杭州·栖霞岭岳王墓',
     text: '鄂王坟上草离离，秋日荒凉石兽危。南渡君臣轻社稷，中原父老望旌旗。英雄已死嗟何及，天下中分遂不支。莫向西湖歌此曲，水光山色不胜悲。',
     emotion: '亡国之后再来看忠臣的坟，悲到不敢出声',
     context: '赵孟頫是宋室后裔而仕于元，一生为此受议。他站在岳飞墓前写这首诗，身份本身就是诗的一部分。',
@@ -1324,8 +1332,8 @@ export const SPOTS = [
     author: '崔护',
     dynasty: 'tang',
     theme: 'love',
-    lng: 108.95, lat: 34.18,
-    place: '长安城南',
+    lng: 108.95, lat: 34.26,
+    place: '长安·城南',
     text: '去年今日此门中，人面桃花相映红。人面不知何处去，桃花依旧笑春风。',
     emotion: '同一个门口，桃花还在，人不在了',
     context: '相传崔护清明独游长安城南，求饮于一户人家；次年再去，门已锁，遂题此诗于门上。',
@@ -1507,7 +1515,7 @@ export const SPOTS = [
     dynasty: 'song',
     theme: 'ambition',
     lng: 120.09, lat: 30.22,
-    place: '飞来峰·杭州',
+    place: '杭州·飞来峰',
     text: '飞来山上千寻塔，闻说鸡鸣见日升。不畏浮云遮望眼，自缘身在最高层。',
     emotion: '登高之后的自信，已经带着变法者的口气',
     context: '皇祐二年王安石三十岁，任鄞县知县满后归临川，途经杭州登飞来峰。变法还在二十年后，底气已经在这里。',
@@ -1612,7 +1620,7 @@ export const SPOTS = [
     dynasty: 'song',
     theme: 'landscape',
     lng: 120.12, lat: 30.22,
-    place: '净慈寺·西湖',
+    place: '杭州·净慈寺',
     text: '毕竟西湖六月中，风光不与四时同。接天莲叶无穷碧，映日荷花别样红。',
     emotion: '送别写成了一整湖夏天',
     context: '杨万里在临安送友人林子方出任福州，清晨过净慈寺，看见的是六月的西湖。题目是送别，诗里一句离愁也没有。',
@@ -1651,7 +1659,7 @@ export const SPOTS = [
     dynasty: 'song',
     theme: 'ambition',
     lng: 120.19, lat: 30.29,
-    place: '临安（杭州）',
+    place: '杭州·临安行在',
     text: '山外青山楼外楼，西湖歌舞几时休？暖风熏得游人醉，直把杭州作汴州。',
     emotion: '南渡半世纪，临安已经过得像没丢过一寸土',
     context: '相传林升题在临安一家旅舍墙上。汴州已在金人手中数十年，而西湖的歌舞没停。',
@@ -1750,7 +1758,8 @@ export const SPOTS = [
   },
 ];
 
-
+/** 各分册并起来就是这张图的全部条目 */
+export const SPOTS = [...CORE, ...TANG_B, ...TANG_C];
 
 export const spotById = (id) => SPOTS.find((s) => s.id === id);
 export const SPOT_IDS = SPOTS.map((s) => s.id);

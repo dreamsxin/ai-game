@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SPOTS, spotById } from '../src/atlas/spots.js';
-import { clusterSpots, spotToCluster, isPlaced, placelessSpots, CELL_DEG, MERGE_KM } from '../src/atlas/clusters.js';
+import { clusterSpots, spotToCluster, isPlaced, placelessSpots, shortPlace, CELL_DEG, MERGE_KM } from '../src/atlas/clusters.js';
 
 import { distanceKm } from '../src/atlas/projection.js';
 
@@ -34,6 +34,22 @@ test('长安一带并成一处，地名就叫长安', () => {
   // 同城的几首都该在这一堆里
   assert.ok(changan.spots.some((s) => s.id === 'wangbo-songduyi'));
   assert.ok(changan.spots.some((s) => s.id === 'yuanzhen-lisi'));
+});
+
+// 这条是被数据扩到一百多首之后才暴露出来的：写"长安市""长安里巷""长安南郊"的诗
+// 各自落进不同格子，长安一地散成三四枚印章，其中一枚还被邻近的乐游原抢了名字 ——
+// 于是《无题》的题签上写着"乐游原"。所以约定 place 的首段就是这处地方的身份，
+// 细部写在 `·` 之后（"长安·西市"），而这条测试守着它：报同一个地名的诗必须同归一枚印章。
+test('报同一个地名的诗必须落在同一枚印章上', () => {
+  const index = spotToCluster(clusters);
+  const seats = new Map();
+  for (const spot of PLACED) {
+    const key = shortPlace(spot.place);
+    const cluster = index.get(spot.id);
+    const seen = seats.get(key);
+    if (!seen) seats.set(key, cluster);
+    else assert.equal(cluster.id, seen.id, `${key} 散成了两枚印章：${seen.place} 与 ${cluster.place}（因 ${spot.name}）`);
+  }
 });
 
 test('隔着一条江的两处不会被并掉', () => {
@@ -69,13 +85,17 @@ test('地名相同但隔得远的两处不会被并掉', () => {
 
 
 test('堆的落点在自己成员的经纬度范围里', () => {
+  // 留 1e-6 度（约十厘米）的余量：三首诗坐标完全相同时，取平均也会因浮点误差
+  // 落到比最大值大 1e-14 的地方，卡得太死会在这种无意义的地方失败
+  const eps = 1e-6;
   for (const c of clusters) {
     const lngs = c.spots.map((s) => s.lng);
     const lats = c.spots.map((s) => s.lat);
-    assert.ok(c.lng >= Math.min(...lngs) && c.lng <= Math.max(...lngs), `${c.place} 的落点偏出去了`);
-    assert.ok(c.lat >= Math.min(...lats) && c.lat <= Math.max(...lats), `${c.place} 的落点偏出去了`);
+    assert.ok(c.lng >= Math.min(...lngs) - eps && c.lng <= Math.max(...lngs) + eps, `${c.place} 的落点偏出去了`);
+    assert.ok(c.lat >= Math.min(...lats) - eps && c.lat <= Math.max(...lats) + eps, `${c.place} 的落点偏出去了`);
   }
 });
+
 
 // 网格归堆最要紧的性质：分堆只取决于坐标，不取决于数据表的顺序。
 // 否则在表里插一首诗，别处的印章会跟着重排，id 也就不能当拾取标识用了。

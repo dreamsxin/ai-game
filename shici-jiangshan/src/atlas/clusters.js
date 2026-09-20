@@ -38,8 +38,13 @@ const commonest = (values) => {
 };
 
 
-/** 地名取首段："白帝城·三峡" → "白帝城"，"密州（诸城）" → "密州" */
-const shortPlace = (place) => place.split('·')[0].split('（')[0];
+/**
+ * 地名取首段："白帝城·三峡" → "白帝城"，"密州（诸城）" → "密州"。
+ * 首段就是这处地方的身份：同一首段的诗必须落在同一枚印章上，
+ * 所以写数据时**细部要写在 `·` 之后**（"长安·西市" 而不是 "长安市"）——
+ * 否则长安一地会按"长安/长安市/长安宫掖"散成好几枚印章。
+ */
+export const shortPlace = (place) => place.split('·')[0].split('（')[0];
 
 const describe = (keys, spots, order) => ({
   id: `at:${[...keys].sort()[0]}`,
