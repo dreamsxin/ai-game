@@ -1,0 +1,480 @@
+:root {
+  color-scheme: dark;
+  --ink: #f2f4f0;
+  --muted: rgba(242, 244, 240, 0.62);
+  --panel: rgba(10, 17, 24, 0.86);
+  --edge: rgba(255, 255, 255, 0.14);
+  --accent: #ffd447;
+  --warm: #ff6b6b;
+  --cool: #7cf7ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0b1118;
+  color: var(--ink);
+  font-family: 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  gap: 8px;
+  overflow: hidden;
+}
+
+.hud-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+
+.stat-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.stat-weapon {
+  font-size: 13px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.stat-score .stat-value {
+  font-size: 24px;
+  color: var(--accent);
+}
+
+/* 弹匣条：这游戏最该被一眼看到的东西，所以它横在画面顶上而不是缩在角落。 */
+.ammo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+}
+
+.ammo-bar {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.ammo-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  height: 100%;
+  background: var(--cool);
+}
+
+/* 装填进度画在同一条槽里：蹲下会明显更快，玩家看一眼就知道趴着划算。 */
+.ammo-reload {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  height: 100%;
+  background: rgba(255, 212, 71, 0.55);
+}
+
+.ammo-text {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 58px;
+  text-align: right;
+}
+
+.ammo-hint {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.ammo-low .ammo-fill {
+  background: var(--warm);
+}
+
+.ammo-reloading .ammo-fill {
+  background: rgba(124, 247, 255, 0.35);
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+}
+
+/* 画布挂在这个空容器里，React 不会去动它的子节点；手势也只在这块区域生效。 */
+.stage-host {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.stage-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.banner {
+  position: absolute;
+  top: 9%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* Boss 血条只在它开机后出现，出现本身就是一句「到了」。 */
+.boss {
+  position: absolute;
+  top: 8px;
+  left: 12%;
+  right: 12%;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.boss i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff6b6b, #ffb347);
+}
+
+.boss span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.boss-open {
+  color: #fff0f0;
+}
+
+.boss-shut {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.progress {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.pad-key {
+  display: grid;
+  place-items: center;
+  height: 54px;
+  border-radius: 16px;
+  border: 1px solid var(--edge);
+  background: rgba(10, 17, 24, 0.62);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
+.pad-key:active {
+  background: rgba(255, 212, 71, 0.28);
+}
+
+.pad-key-aim {
+  color: var(--cool);
+}
+
+.pad-key-jump {
+  color: var(--warm);
+  border-color: rgba(255, 107, 107, 0.5);
+}
+
+.pause-key {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 66px);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/* 静音开关贴在暂停键左边：两个都是随时要按的旁路操作。 */
+.mute-key {
+  position: absolute;
+  right: calc(max(12px, env(safe-area-inset-right)) + 46px);
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 66px);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/* 键盘操作也要看得见焦点，否则按 Tab 就等于瞎点。 */
+.pause-key:focus-visible,
+.mute-key:focus-visible,
+.pad-key:focus-visible,
+.panel-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(4, 8, 12, 0.7);
+  backdrop-filter: blur(4px);
+  overflow: auto;
+}
+
+.panel {
+  width: min(400px, 100%);
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  text-align: center;
+}
+
+.panel h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: 3px;
+}
+
+.panel-status {
+  margin: 4px 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-tips {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.panel-tips b {
+  color: var(--ink);
+}
+
+.panel-score {
+  margin: 0;
+  font-size: 38px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-stars {
+  margin: 2px 0 6px;
+  font-size: 20px;
+  letter-spacing: 4px;
+  color: var(--accent);
+}
+
+/* 星星逐颗弹出：animationDelay 由 JSX 按序号给，这里只管弹的姿态。 */
+.panel-stars i {
+  display: inline-block;
+  font-style: normal;
+  animation: star-pop 0.42s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.panel-stars .star-off {
+  opacity: 0.28;
+}
+
+@keyframes star-pop {
+  from {
+    transform: scale(0.2) rotate(-25deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* 破纪录只在真刷掉旧的最高分时出现，所以值得一条会发光的横幅。 */
+.panel-badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(255, 212, 71, 0.16);
+  border: 1px solid rgba(255, 212, 71, 0.55);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  animation: badge-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes badge-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(255, 212, 71, 0);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(255, 212, 71, 0.45);
+  }
+}
+
+.panel-settle {
+  animation: panel-rise 0.3s ease-out;
+}
+
+@keyframes panel-rise {
+  from {
+    transform: translateY(14px) scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.panel-detail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.panel-action {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #2b1c00;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+@media (min-width: 820px) {
+  .stage,
+  .pad,
+  .ammo {
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+/* 关掉动效的人是真的不想看动效，庆祝动画也不例外——内容本身一条都不少。 */
+@media (prefers-reduced-motion: reduce) {
+  .panel-settle,
+  .panel-badge,
+  .panel-stars i {
+    animation: none;
+  }
+}
+
+
+
+

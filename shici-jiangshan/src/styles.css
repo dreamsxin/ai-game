@@ -1,0 +1,361 @@
+:root {
+  --paper: rgba(241, 232, 206, 0.93);
+  --paper-solid: #efe5cb;
+  --paper-deep: #e3d5b4;
+  --ink: #2f2c25;
+  --ink-soft: #6c6450;
+  --zhu: #b5402f;
+  --qing: #2f6a94;
+  --line: rgba(92, 76, 50, 0.28);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: #e8dcbb;
+  color: var(--ink);
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif SC", serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button, input, select { font: inherit; color: inherit; }
+
+.app { position: relative; height: 100%; }
+.viewport { position: absolute; inset: 0; }
+.viewport canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.viewport canvas:active { cursor: grabbing; }
+
+/* ---------- 题头 ---------- */
+.hud {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  max-width: 350px;
+  padding: 13px 18px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 22px rgba(80, 62, 36, 0.16);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.hud h1 {
+  margin: 0;
+  font-size: 25px;
+  letter-spacing: 6px;
+  font-weight: 600;
+}
+.hud h1::after {
+  content: '诗';
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 5px 2px;
+  background: var(--zhu);
+  color: #f6ecd4;
+  font-size: 13px;
+  letter-spacing: 0;
+  vertical-align: 6px;
+}
+.hud-sub { margin: 6px 0 0; font-size: 12px; color: var(--ink-soft); letter-spacing: 0.5px; }
+.hud-line { margin: 9px 0 0; font-size: 13px; color: var(--zhu); letter-spacing: 1px; }
+.hud-meta { margin: 4px 0 0; font-size: 11px; color: rgba(108, 100, 80, 0.75); }
+
+/* ---------- 视角与卷面 ---------- */
+.views {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 46vw;
+}
+.views button {
+  padding: 6px 13px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-size: 13px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+.views button:hover { background: var(--paper-deep); }
+.views button.active { background: var(--zhu); color: #f7edd6; border-color: var(--zhu); }
+.sep { width: 12px; }
+
+/* ---------- 左侧卷轴 ---------- */
+.panel {
+  position: absolute;
+  top: 130px;
+  left: 16px;
+  bottom: 16px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 26px rgba(80, 62, 36, 0.16);
+  backdrop-filter: blur(6px);
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  transition: transform 0.24s ease, opacity 0.24s ease;
+}
+.panel.closed { transform: translateX(-118%); opacity: 0; pointer-events: none; }
+
+.panel-toggle {
+  position: absolute;
+  top: 142px;
+  left: 346px;
+  width: 24px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-left: none;
+  background: var(--paper);
+  cursor: pointer;
+  transition: left 0.24s ease;
+  z-index: 3;
+}
+.panel-toggle:not(.open) { left: 0; }
+
+.group { display: flex; flex-direction: column; gap: 8px; }
+.group.grow { flex: 1; min-height: 150px; }
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 5px;
+}
+.link { background: none; border: none; color: var(--zhu); font-size: 11px; letter-spacing: 1px; cursor: pointer; padding: 0; }
+
+/* ---------- 筛选 ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 240, 0.5);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s;
+}
+.chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--chip, var(--zhu));
+}
+.chip em { font-style: normal; font-size: 10px; color: var(--ink-soft); }
+.chip:hover { background: #fffaea; }
+.chip.on { border-color: var(--chip); background: color-mix(in srgb, var(--chip) 18%, #fffaea); }
+
+.row { display: flex; gap: 6px; }
+.row input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 240, 0.7);
+  font-size: 13px;
+}
+.row input::placeholder { color: rgba(108, 100, 80, 0.6); }
+
+/* ---------- 行迹 ---------- */
+.routes { display: flex; flex-direction: column; gap: 6px; }
+.route {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--chip);
+  background: rgba(255, 252, 240, 0.5);
+  text-align: left;
+  cursor: pointer;
+}
+.route:hover { background: #fffaea; }
+.route.on { background: color-mix(in srgb, var(--chip) 16%, #fffaea); }
+.route strong { font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+.route em { font-style: normal; font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; }
+
+.route-detail { display: flex; flex-direction: column; gap: 7px; }
+.route-meta { margin: 0; font-size: 11px; color: var(--zhu); }
+.route-stops { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.route-stops button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: rgba(255, 252, 240, 0.55);
+  font-size: 13px;
+  cursor: pointer;
+}
+.route-stops button:hover { background: #fffaea; }
+.route-stops button.on { background: color-mix(in srgb, var(--zhu) 16%, #fffaea); color: var(--zhu); }
+.route-stops .idx {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--zhu);
+  color: #f7edd6;
+  font-size: 10px;
+}
+.route-stops em { margin-left: auto; font-style: normal; font-size: 10px; color: var(--ink-soft); }
+.notes { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; }
+.notes li { font-size: 11.5px; line-height: 1.65; color: var(--ink-soft); }
+.route-pace { margin: 0; font-size: 11.5px; color: var(--ink-soft); }
+
+/* ---------- 诗词目录 ---------- */
+.spot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.spot-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.spot-list button:hover { background: #fffaea; }
+.spot-list button.on { background: color-mix(in srgb, var(--chip) 18%, #fffaea); }
+.spot-list .glyph {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--chip);
+  color: #f7edd6;
+  font-size: 11px;
+}
+.spot-list .name { font-size: 13.5px; }
+.spot-list .place { margin-left: auto; font-size: 11px; color: var(--ink-soft); }
+.spot-list .empty { padding: 10px 4px; font-size: 12px; color: var(--ink-soft); line-height: 1.7; }
+
+/* ---------- 诗词详情（题跋） ---------- */
+.card {
+  position: absolute;
+  top: 130px;
+  right: 16px;
+  bottom: 16px;
+  width: 388px;
+  padding: 18px 20px 20px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--chip);
+  box-shadow: 0 8px 26px rgba(80, 62, 36, 0.18);
+  backdrop-filter: blur(6px);
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  animation: rise 0.22s ease;
+}
+@keyframes rise { from { transform: translateY(12px); opacity: 0; } }
+
+.card header { display: flex; align-items: flex-start; gap: 10px; }
+.card h2 { margin: 0; font-size: 22px; letter-spacing: 3px; font-weight: 600; }
+.card-where { margin: 5px 0 0; font-size: 12px; color: var(--ink-soft); letter-spacing: 0.5px; }
+.card .close {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 240, 0.6);
+  cursor: pointer;
+  font-size: 12px;
+}
+.badge {
+  display: inline-block;
+  margin: 11px 0 0;
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--chip) 16%, #fffaea);
+  border: 1px solid color-mix(in srgb, var(--chip) 48%, transparent);
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+}
+
+/* 诗本身：字最大、行距最松，卷上最该读的就是这一段 */
+.poem {
+  margin: 13px 0 0;
+  padding: 14px 15px;
+  background: rgba(255, 252, 240, 0.62);
+  border-left: 3px solid color-mix(in srgb, var(--chip) 60%, transparent);
+  font-size: 15.5px;
+  line-height: 2.1;
+  letter-spacing: 1.5px;
+  text-align: justify;
+}
+
+.facts { margin: 14px 0 0; display: grid; gap: 8px; }
+.facts div { display: grid; grid-template-columns: 62px 1fr; gap: 8px; align-items: start; }
+.facts dt { font-size: 11.5px; color: var(--ink-soft); padding-top: 2px; }
+.facts dd { margin: 0; font-size: 12.5px; line-height: 1.7; }
+
+.card h3 {
+  margin: 17px 0 7px;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--zhu);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
+}
+.context { margin: 0; font-size: 13px; line-height: 1.85; text-align: justify; }
+.highlights { margin: 0; padding-left: 17px; display: flex; flex-direction: column; gap: 6px; }
+.highlights li { font-size: 13px; line-height: 1.75; }
+.highlights li::marker { color: var(--zhu); }
+
+.nearby { display: flex; flex-wrap: wrap; gap: 6px; }
+.nearby button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 240, 0.6);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.nearby button:hover { background: #fffaea; }
+.nearby em { font-style: normal; font-size: 10px; color: var(--ink-soft); }
+.disclaimer { margin: 17px 0 0; font-size: 11px; line-height: 1.7; color: rgba(108, 100, 80, 0.8); }
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 980px) {
+  .hud { max-width: 62vw; padding: 10px 13px; }
+  .hud h1 { font-size: 19px; letter-spacing: 4px; }
+  .views { max-width: 36vw; }
+  .panel { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 46vh; }
+  .panel.closed { transform: translateY(120%); }
+  .panel-toggle { top: auto; bottom: 12px; left: 12px; }
+  .card { top: 104px; left: 12px; right: 12px; bottom: auto; width: auto; max-height: 56vh; }
+  .poem { font-size: 14.5px; line-height: 1.95; }
+}
+
+
+
