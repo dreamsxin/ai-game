@@ -18,6 +18,26 @@ test('诗词表够厚，id 全局唯一', () => {
   assert.equal(new Set(ids).size, ids.length, 'id 有重复');
 });
 
+// 数据分了册（spots.js 加各 spots-*.js），而且是一批一批攒起来的，
+// 于是"同一首诗收了两遍、只是 id 起得不一样"成了最容易犯的错：
+// id 唯一性拦不住它，图上会在同一处叠出两枚一样的题签。
+// 按"作者+篇名（去掉括注）"和"正文开头"各查一遍 —— 两个口子都堵上才算数。
+test('同一首诗不许收两遍', () => {
+  const byTitle = new Map();
+  const byText = new Map();
+  for (const s of SPOTS) {
+    const title = `${s.author}《${s.name.replace(/[（(].*$/, '')}》`;
+    const seenTitle = byTitle.get(title);
+    assert.equal(seenTitle, undefined, `${title} 收了两遍：${seenTitle} 与 ${s.id}`);
+    byTitle.set(title, s.id);
+
+    const head = s.text.replace(/\s/g, '').slice(0, 14);
+    const seenText = byText.get(head);
+    assert.equal(seenText, undefined, `${s.id} 与 ${seenText} 的原文开头一模一样`);
+    byText.set(head, s.id);
+  }
+});
+
 test('每首诗的文字字段都有内容', () => {
   for (const s of SPOTS) {
     for (const key of ['id', 'name', 'author', 'place', 'text', 'emotion', 'context']) {

@@ -23,6 +23,7 @@
 
 import { TANG_B } from './spots-tang-b.js';
 import { TANG_C } from './spots-tang-c.js';
+import { SONG_B } from './spots-song-b.js';
 
 const CORE = [
   {
@@ -1759,7 +1760,7 @@ const CORE = [
 ];
 
 /** 各分册并起来就是这张图的全部条目 */
-export const SPOTS = [...CORE, ...TANG_B, ...TANG_C];
+export const SPOTS = [...CORE, ...TANG_B, ...TANG_C, ...SONG_B];
 
 export const spotById = (id) => SPOTS.find((s) => s.id === id);
 export const SPOT_IDS = SPOTS.map((s) => s.id);
