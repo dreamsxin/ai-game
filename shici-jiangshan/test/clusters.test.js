@@ -52,6 +52,19 @@ test('报同一个地名的诗必须落在同一枚印章上', () => {
   }
 });
 
+// 反过来的一条：一枚印章里的诗必须都报同一个首段。
+// 不然印章刻的名字是"众数猜出来的"——金陵那六首里秦淮河、乌衣巷、石头城、台城各写各的，
+// 印章上就刻了"石头城"，六朝旧都的那一枚反而以城里一处角落命名。
+// 两处地方真在十二公里之内（乌江镇与天门山）时，该做的是认下其中一处为身份、
+// 或把另一处按真实位置挪出这一格，而不是让名字碰运气。
+test('一枚印章上的地名不是猜的：堆里的诗都报同一个首段', () => {
+  for (const cluster of clusters) {
+    const names = [...new Set(cluster.spots.map((s) => shortPlace(s.place)))];
+    assert.equal(names.length, 1, `${cluster.place} 这一枚压着好几个地名：${names.join(' / ')}`);
+    assert.equal(cluster.place, names[0]);
+  }
+});
+
 test('隔着一条江的两处不会被并掉', () => {
   const index = spotToCluster(clusters);
   const jinling = index.get('liuyuxi-wuyixiang');
