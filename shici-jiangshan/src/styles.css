@@ -14,6 +14,8 @@
 
 html, body, #root {
   height: 100%;
+  /* 手机浏览器的地址栏会吃掉 100vh 的一截，用 dvh 才不会在滚动时跳一下 */
+  height: 100dvh;
   margin: 0;
   background: #e8dcbb;
   color: var(--ink);
@@ -345,17 +347,158 @@ button, input, select { font: inherit; color: inherit; }
 .nearby em { font-style: normal; font-size: 10px; color: var(--ink-soft); }
 .disclaimer { margin: 17px 0 0; font-size: 11px; line-height: 1.7; color: rgba(108, 100, 80, 0.8); }
 
-/* ---------- 窄屏 ---------- */
-@media (max-width: 980px) {
+/* ---------- 窄屏：卷轴与题跋都改成从下沿升起的抽屉 ----------
+   两块都贴下沿、而且**一次只开一块**（开题跋就收卷轴，见 App.jsx）：
+   平板竖屏上原先题跋在上、卷轴在下，两块加起来就把地图挤成顶上一条。 */
+@media (max-width: 980px) and (min-height: 561px) {
   .hud { max-width: 62vw; padding: 10px 13px; }
   .hud h1 { font-size: 19px; letter-spacing: 4px; }
-  .views { max-width: 36vw; }
-  .panel { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 46vh; }
-  .panel.closed { transform: translateY(120%); }
-  .panel-toggle { top: auto; bottom: 12px; left: 12px; }
-  .card { top: 104px; left: 12px; right: 12px; bottom: auto; width: auto; max-height: 56vh; }
+  .views { max-width: 40vw; }
+  .panel,
+  .card {
+    top: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: 62dvh;
+  }
+  .panel.closed { transform: translateY(125%); }
+  .panel-toggle { top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 12px; }
+  .panel-toggle.open { bottom: calc(62dvh + 14px + env(safe-area-inset-bottom, 0px)); }
   .poem { font-size: 14.5px; line-height: 1.95; }
 }
+
+
+/* ---------- 手机：按钮排成一条横滑带，两块抽屉都贴着下沿 ----------
+   这一档要解决的是"画面被挤没了"：十一个视角按钮在 390px 宽上会折成六行、
+   压掉屏幕上三分之一，再加上默认展开的卷轴，留给地图的只剩中间一条。
+   做法是按钮不折行、改成横向滚动；题跋与卷轴都从下沿升起，同时只开一块（见 App.jsx）。 */
+@media (max-width: 700px) {
+  .hud {
+    left: 10px;
+    right: 10px;
+    top: 10px;
+    max-width: none;
+    padding: 8px 12px 9px;
+  }
+  .hud h1 { font-size: 17px; letter-spacing: 3px; }
+  .hud h1::after { vertical-align: 3px; padding: 1px 4px 2px; font-size: 11px; }
+  /* "可转可缩，点印章读诗"这句在手机上让位给读数，一行一行都是画面 */
+  .hud-sub { display: none; }
+  .hud-line { margin: 5px 0 0; font-size: 12px; }
+  .hud-meta { margin: 3px 0 0; }
+
+  .views {
+    top: 62px;
+    left: 0;
+    right: 0;
+    max-width: none;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 0 10px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .views::-webkit-scrollbar { display: none; }
+  .views button { flex: none; padding: 7px 12px; font-size: 12.5px; letter-spacing: 1px; }
+  .sep { width: 1px; flex: none; align-self: stretch; background: var(--line); margin: 2px 3px; }
+
+  .panel,
+  .card {
+    top: auto;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 62dvh;
+  }
+  .panel { padding: 12px; gap: 10px; }
+  .card { padding: 14px 15px 16px; animation: rise 0.22s ease; }
+  .panel.closed { transform: translateY(125%); }
+
+  /* 收起来的把手贴着左下角，展开时压在抽屉上沿 */
+  .panel-toggle {
+    top: auto;
+    left: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    width: 34px;
+    height: 24px;
+    border-left: 1px solid var(--line);
+  }
+  .panel-toggle.open { bottom: calc(62dvh + 12px + env(safe-area-inset-bottom, 0px)); }
+
+  .group.grow { min-height: 110px; }
+  .card h2 { font-size: 19px; letter-spacing: 2px; }
+  .poem { font-size: 14px; line-height: 1.9; padding: 12px 13px; letter-spacing: 1px; }
+  .facts div { grid-template-columns: 54px 1fr; }
+  .chip, .route, .spot-list button, .route-stops button { min-height: 32px; }
+}
+
+/* ---------- 横躺的手机 / 矮窗口：高度不够，抽屉改成左右两栏 ----------
+   这一档要写在前面两档之后：宽度也许够不上 980，但高度只有三四百，
+   再把卷轴与题跋堆在下沿就等于把地图盖满（横躺的手机上题跋会独占整屏）。
+   做法是横着分栏 —— 卷轴回到左边、题跋回到右边，按钮排成顶上一条横滑带。 */
+@media (max-height: 560px) {
+  .hud { left: 10px; right: auto; top: 8px; max-width: 200px; padding: 6px 11px 7px; }
+  .hud h1 { font-size: 16px; letter-spacing: 2px; }
+  .hud-sub { display: none; }
+  .hud-line { margin: 4px 0 0; font-size: 11.5px; }
+  .hud-meta { display: none; }
+
+  .views {
+    top: 8px;
+    left: 222px;
+    right: 10px;
+    max-width: none;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 0 0 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .views::-webkit-scrollbar { display: none; }
+  .views button { flex: none; padding: 5px 11px; font-size: 12.5px; letter-spacing: 1px; }
+  .sep { width: 1px; flex: none; align-self: stretch; background: var(--line); margin: 2px 3px; }
+
+  .panel {
+    top: 52px;
+    bottom: 10px;
+    left: 10px;
+    right: auto;
+    width: min(44vw, 320px);
+    max-height: none;
+    padding: 11px;
+    gap: 9px;
+  }
+  .panel.closed { transform: translateX(-118%); }
+  .panel-toggle {
+    top: 58px;
+    bottom: auto;
+    left: calc(min(44vw, 320px) + 12px);
+    width: 24px;
+    height: 34px;
+    border-left: none;
+  }
+  .panel-toggle:not(.open) { left: 0; }
+
+  .card {
+    top: 52px;
+    bottom: 10px;
+    left: auto;
+    right: 10px;
+    width: min(52vw, 420px);
+    max-height: none;
+    padding: 13px 15px 14px;
+  }
+  .card h2 { font-size: 18px; }
+  .poem { font-size: 13.5px; line-height: 1.85; padding: 11px 12px; }
+}
+
+
 
 
 

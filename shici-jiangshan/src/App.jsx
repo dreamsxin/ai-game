@@ -17,6 +17,26 @@ const VIEWS = [
 
 const toggle = (list, id) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
+/**
+ * 抽屉档（手机竖屏、平板竖屏、或者被拖窄的窗口）。断点与 styles.css 那一档一致：
+ * 过了这条线，卷轴与题跋都从下沿升起、**一次只开一块**（两块叠起来地图就没了），
+ * 镜头也要重新取景 —— 左边不再压着面板，而横向视野在竖屏上装不下整幅横卷。
+ * 加上 min-height 是因为**横躺的手机是另一回事**：那时 CSS 把两块改回左右分栏，
+ * 面板仍压着西边，取景也不该跟着竖屏走。
+ */
+const NARROW = '(max-width: 980px) and (min-height: 561px)';
+const useNarrow = () => {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW);
+    const on = (e) => setNarrow(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return narrow;
+};
+
+
 const READING = [
   '印章的颜色是朝代：石青唐、石绿宋、赭石元；印文是主题，「别」「思」「山」「戍」「志」「隐」「情」「挽」。',
   '一枚印章管一处地方（约十二公里见方），不是一首诗：长安、杭州这些地方压着好几首，印章会大一点，点开先出这一处的清单。',
@@ -31,6 +51,7 @@ const READING = [
 export default function App() {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
+  const narrow = useNarrow();
   const [filter, setFilter] = useState(EMPTY_FILTER);
   const [selectedId, setSelectedId] = useState(null);
   // 一枚印章底下可能压着几十首（长安、杭州），所以拾取先给出"这一处叫什么、有哪些"
@@ -40,7 +61,8 @@ export default function App() {
   const [view, setView] = useState('overview');
   const [light, setLight] = useState('clear');
   const [showLabels, setShowLabels] = useState(true);
-  const [panelOpen, setPanelOpen] = useState(true);
+  // 手机上一进来就展开卷轴，地图只剩中间一条，所以窄屏默认收起
+  const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia(NARROW).matches);
   const [perf, setPerf] = useState({ fps: 0, tris: 0 });
 
   useEffect(() => {
@@ -97,6 +119,16 @@ export default function App() {
   useEffect(() => { sceneRef.current?.setLabels(showLabels); }, [showLabels]);
   useEffect(() => { sceneRef.current?.applyLight(light); }, [light]);
   useEffect(() => { sceneRef.current?.setView(view); }, [view]);
+  // 窄屏与宽屏的取景不一样（左边有没有压着卷轴、横向视野够不够），拖窄窗口也要跟着改；
+  // 跨过断点时顺手把卷轴恢复成这一档的常态：宽屏摊开、窄屏收起
+  useEffect(() => {
+    sceneRef.current?.setLayout({ narrow });
+    setPanelOpen(!narrow);
+  }, [narrow]);
+  // 手机上抽屉只能开一块：点开一首诗就把卷轴收起来，不然两块叠起来把地图盖光
+  useEffect(() => {
+    if (narrow && (selectedId || here.ids.length > 1)) setPanelOpen(false);
+  }, [narrow, selectedId, here]);
   useEffect(() => {
     sceneRef.current?.setSelected(selectedId);
     if (selectedId) sceneRef.current?.focusSpot(selectedId);

@@ -48,20 +48,27 @@ export const LIGHTS = [
 export const lightById = (id) => LIGHTS.find((l) => l.id === id) ?? LIGHTS[0];
 
 /**
- * 视角预设。全卷的注视点要比图幅中心（107.25°E）再往西挪两度多：
- * 左侧那块面板压掉了近四分之一的画面宽度，注视点放在正中央时，
- * 河西、陇右、巴蜀全躲在面板后面，"全卷"只剩下半张。
- * 往西挪等于把整幅画朝东推出来，东边的流求仍在画面之内。
+ * 视角预设。`bias` 是注视点要往西挪多少度：
+ * 宽屏时左侧那块卷轴压掉近四分之一的画面宽度，注视点放在图幅中心（107.25°E）时，
+ * 河西、陇右、巴蜀全躲在面板后面，"全卷"只剩下半张 —— 往西挪等于把整幅画朝东推出来。
+ * 窄屏上卷轴变成底部抽屉、不再挡住西边，这个偏移就要撤掉（`setLayout` 管）。
  */
 const VIEWS = {
-  overview:  { lng: 104.60, lat: 30.0,  dist: 0.95, pitch: 0.6 },
+  // narrow：竖屏时另一套取景 —— 不再为左侧卷轴西移，机头压低一点，
+  // 注视点略往东（西边三千公里多是无诗的高原，手机上先给中原与江南）
+  overview:  {
+    lng: 107.25, bias: -2.65, lat: 30.0, dist: 0.95, pitch: 0.6,
+    narrow: { lng: 110.5, lat: 32.0, dist: 0.9, pitch: 0.78 },
+  },
   guanzhong: { lng: 108.95, lat: 34.26, dist: 0.32, pitch: 0.56 },   // 关中（长安一带）
   jiangnan:  { lng: 120.20, lat: 30.25, dist: 0.32, pitch: 0.56 },   // 江南
   lingnan:   { lng: 113.26, lat: 23.13, dist: 0.38, pitch: 0.54 },   // 岭南
   saibei:    { lng: 110.00, lat: 40.80, dist: 0.38, pitch: 0.56 },   // 塞北
   bashu:     { lng: 104.06, lat: 30.57, dist: 0.35, pitch: 0.56 },   // 巴蜀
-  flat:      { lng: 104.60, lat: 30.0,  dist: 1.05, pitch: 1.38 },
+  flat:      { lng: 107.25, bias: -2.65, lat: 30.0, dist: 1.05, pitch: 1.38 },
 };
+
+
 
 
 export function createScene(canvas, { spots, onPick, onHover } = {}) {
@@ -119,12 +126,26 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
   let selectedId = null;
   let onStats = null;
   const fps = [];
+  // 取景随画面形状走：panelBias = 1 是宽屏（左侧压着卷轴），fitScale 是"画面越窄退得越远"
+  let panelBias = 1;
+  let fitScale = 1;
+  let viewId = 'overview';
+  // 镜头此刻是不是"预设视角给的"：是的话画面一变形就重新取景；
+  // 一旦飞去某首诗、框过某条行迹、或者人自己拖过缩放过，就不能再动它了
+  let fromPreset = true;
+  let lightId = 'clear';
+  // 人一上手拖／缩放，镜头就归人管，画面变形也不再自动重新取景
+  controls.addEventListener('start', () => { fromPreset = false; });
+
 
   const applyLight = (id) => {
     const p = lightById(id);
+    lightId = p.id;
     skyUniforms.top.value.set(p.skyTop);
     skyUniforms.bottom.value.set(p.skyBottom);
-    scene.fog = new THREE.FogExp2(new THREE.Color(p.fog), (p.fogDensity * 0.55) / MAP_SIZE);
+    // 雾要跟着取景松一松：竖屏上镜头退到两倍图幅之外，按宽屏那个浓度算，
+    // 整幅画会淡成一张白纸（"远则淡"是画法，不是把画擦掉）。
+    scene.fog = new THREE.FogExp2(new THREE.Color(p.fog), (p.fogDensity * 0.55) / (MAP_SIZE * Math.max(1, fitScale * 0.9)));
     hemi.color.set(p.skyBottom);
     hemi.intensity = p.ambient;
     sun.color.set(p.sun);
@@ -152,11 +173,30 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
   };
 
   const setView = (id, immediate = false) => {
-    const v = VIEWS[id] ?? VIEWS.overview;
-    const target = new THREE.Vector3(lngToX(v.lng), 0, latToZ(v.lat));
-    const dist = MAP_SIZE * v.dist;
+    const base = VIEWS[id] ?? VIEWS.overview;
+    viewId = VIEWS[id] ? id : 'overview';
+    const v = panelBias === 0 && base.narrow ? { ...base, ...base.narrow } : base;
+    const target = new THREE.Vector3(lngToX(v.lng + (v.bias ?? 0) * panelBias), 0, latToZ(v.lat));
+    const dist = MAP_SIZE * v.dist * fitScale;
+    fromPreset = true;
     flyTo(target.clone().add(new THREE.Vector3(0, dist * Math.sin(v.pitch), dist * Math.cos(v.pitch))), target, immediate);
   };
+
+  /**
+   * 画面形状变了就得重算取景，这是两件事：
+   * 1. **镜头要按画面有多窄往后退**。fov 是竖向的，横向视野由宽高比决定；
+   *    这幅图是横着长的（东西 62 度、南北 36 度），竖屏手机上按桌面那个距离飞过去，
+   *    "全卷"只剩中间一条 —— 所以窄到 3:2 以下，每窄一分就退一分。
+   * 2. **注视点西移只在卷轴真压着西边时才做**。窄屏上卷轴是底部抽屉，
+   *    还按宽屏往西挪，东海就整片跑出画外。
+   */
+  const setLayout = ({ narrow = false } = {}) => {
+    const next = narrow ? 0 : 1;
+    if (next === panelBias) return;
+    panelBias = next;
+    setView(viewId);
+  };
+
 
   /**
    * 飞到某处：从东南压低看过去，能看出它是靠山还是临水。
@@ -168,7 +208,9 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
     const p = atlas.positionOf(id);
     if (!p) return;
     const target = p.clone().add(new THREE.Vector3(0, 10, 0));
-    flyTo(target.clone().add(new THREE.Vector3(dist * 0.45, dist * 0.6, dist * 0.7)), target);
+    const d = dist * fitScale;
+    fromPreset = false;
+    flyTo(target.clone().add(new THREE.Vector3(d * 0.45, d * 0.6, d * 0.7)), target);
   };
 
   /** 把一组景点整体框进画面：选行程时用 */
@@ -178,7 +220,8 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
     const box = new THREE.Box3().setFromPoints(pts);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const dist = Math.max(320, Math.max(size.x, size.z) * 1.5);
+    const dist = Math.max(320, Math.max(size.x, size.z) * 1.5) * fitScale;
+    fromPreset = false;
     flyTo(center.clone().add(new THREE.Vector3(0, dist * 0.76, dist * 0.7)), center, false, 1.3);
   };
 
@@ -240,7 +283,24 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
     renderer.setSize(w, h, false);
     camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
+
+    // 3:2 是这幅图"刚够宽"的形状：比它窄，横向就装不下东西六十二度，每窄一分退一分。
+    // 上限压到 2.2 倍 —— 再退下去地形只剩一块光板，而且"全卷"本来也允许看不全，
+    // 手机上先给个能读的尺度，要看塞北、巴蜀按上面那排按钮跳过去。
+    const next = Math.min(2.2, Math.max(1, 1.5 / camera.aspect));
+    if (Math.abs(next - fitScale) > 0.01) {
+      fitScale = next;
+      applyLight(lightId);
+    }
+    controls.maxDistance = MAP_SIZE * 1.9 * fitScale;
+    // 还停在某个预设视角上（没有飞去某首诗、没有手动缩放）就顺势重新取景 ——
+    // 手机横竖屏一转、或者窗口拖窄，画面不该留着按旧形状算出来的距离
+    if (fromPreset) {
+      // 正飞着也要改：按旧形状算出来的落点不该等飞完再纠
+      setView(viewId, !tween.active);
+    }
   };
+
 
   const frame = (now) => {
     raf = requestAnimationFrame(frame);
@@ -293,6 +353,7 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
     focusSpot,
     frameSpots,
     setView,
+    setLayout,
     applyLight,
     resize,
     onStats: (cb) => { onStats = cb; },
