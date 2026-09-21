@@ -347,6 +347,57 @@ button, input, select { font: inherit; color: inherit; }
 .nearby em { font-style: normal; font-size: 10px; color: var(--ink-soft); }
 .disclaimer { margin: 17px 0 0; font-size: 11px; line-height: 1.7; color: rgba(108, 100, 80, 0.8); }
 
+/* ---------- 宽屏／大屏：面板与字跟着长大 ----------
+   两块面板与字号本来是照 1440 调的，搬到 2560、3440 上就成了角落里的两张小纸条
+   （320px 的卷轴在 3440 宽上只占一成，正文十三号字在这种屏上基本读不出是什么）。
+   面板占宽一变，"全卷"的注视点西移也要跟着重算 —— 那一步在 App.jsx 里把实际占宽报给取景。 */
+@media (min-width: 1600px) {
+  .hud { max-width: 400px; padding: 15px 21px 16px; }
+  .hud h1 { font-size: 28px; letter-spacing: 7px; }
+  .hud-sub { font-size: 13px; }
+  .hud-line { font-size: 14.5px; }
+  .hud-meta { font-size: 12px; }
+  .views button { padding: 7px 15px; font-size: 14px; }
+
+  .panel { top: 146px; width: 372px; padding: 16px; }
+  .panel-toggle { top: 158px; left: 398px; width: 26px; height: 38px; }
+  .card { top: 146px; width: 452px; padding: 20px 22px 22px; }
+
+  .group-head { font-size: 14px; }
+  .chip { font-size: 14px; padding: 6px 11px; }
+  .row input { font-size: 14px; padding: 7px 10px; }
+  .route strong { font-size: 15px; }
+  .route em, .notes li, .route-pace { font-size: 12.5px; }
+  .spot-list .name { font-size: 14.5px; }
+  .spot-list .place, .route-stops em { font-size: 12px; }
+  .card h2 { font-size: 25px; }
+  .card h3 { font-size: 14px; }
+  .poem { font-size: 17px; line-height: 2.15; padding: 16px 17px; }
+  .facts dd, .context, .highlights li { font-size: 14px; }
+  .nearby button { font-size: 13.5px; }
+}
+
+@media (min-width: 2200px) {
+  .hud { max-width: 470px; padding: 18px 24px 19px; }
+  .hud h1 { font-size: 33px; letter-spacing: 9px; }
+  .hud-sub { font-size: 14px; }
+  .hud-line { font-size: 16px; }
+  .views button { padding: 9px 18px; font-size: 15.5px; letter-spacing: 3px; }
+
+  .panel { top: 168px; width: 430px; padding: 18px; }
+  .panel-toggle { top: 180px; left: 456px; width: 28px; height: 42px; }
+  .card { top: 168px; width: 540px; padding: 24px 26px 26px; }
+
+  .chip { font-size: 15px; padding: 7px 12px; }
+  .route strong { font-size: 16.5px; }
+  .route em, .notes li, .route-pace { font-size: 13.5px; }
+  .spot-list .name { font-size: 16px; }
+  .card h2 { font-size: 29px; }
+  .poem { font-size: 19.5px; line-height: 2.2; padding: 18px 20px; }
+  .facts dd, .context, .highlights li { font-size: 15px; }
+  .facts div { grid-template-columns: 74px 1fr; }
+}
+
 /* ---------- 窄屏：卷轴与题跋都改成从下沿升起的抽屉 ----------
    两块都贴下沿、而且**一次只开一块**（开题跋就收卷轴，见 App.jsx）：
    平板竖屏上原先题跋在上、卷轴在下，两块加起来就把地图挤成顶上一条。 */

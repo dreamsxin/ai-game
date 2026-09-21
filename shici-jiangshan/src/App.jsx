@@ -51,6 +51,7 @@ const READING = [
 export default function App() {
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
+  const panelRef = useRef(null);
   const narrow = useNarrow();
   const [filter, setFilter] = useState(EMPTY_FILTER);
   const [selectedId, setSelectedId] = useState(null);
@@ -119,11 +120,18 @@ export default function App() {
   useEffect(() => { sceneRef.current?.setLabels(showLabels); }, [showLabels]);
   useEffect(() => { sceneRef.current?.applyLight(light); }, [light]);
   useEffect(() => { sceneRef.current?.setView(view); }, [view]);
-  // 窄屏与宽屏的取景不一样（左边有没有压着卷轴、横向视野够不够），拖窄窗口也要跟着改；
-  // 跨过断点时顺手把卷轴恢复成这一档的常态：宽屏摊开、窄屏收起
+  // 取景要知道卷轴实际压掉了多少画面宽：320px 面板在 1440 上占两成二，
+  // 在 3440 上只占一成，"全卷"的注视点该往西挪多少得按这个比例算（窄屏是抽屉，占 0）。
+  // 跨过断点时顺手把卷轴恢复成这一档的常态：宽屏摊开、窄屏收起。
   useEffect(() => {
-    sceneRef.current?.setLayout({ narrow });
+    const report = () => sceneRef.current?.setLayout({
+      narrow,
+      panelShare: narrow ? 0 : (panelRef.current?.offsetWidth ?? 0) / window.innerWidth,
+    });
+    report();
     setPanelOpen(!narrow);
+    window.addEventListener('resize', report);
+    return () => window.removeEventListener('resize', report);
   }, [narrow]);
   // 手机上抽屉只能开一块：点开一首诗就把卷轴收起来，不然两块叠起来把地图盖光
   useEffect(() => {
@@ -213,7 +221,7 @@ export default function App() {
         {panelOpen ? '◂' : '▸'}
       </button>
 
-      <aside className={`panel ${panelOpen ? '' : 'closed'}`} aria-label="筛选与行迹">
+      <aside ref={panelRef} className={`panel ${panelOpen ? '' : 'closed'}`} aria-label="筛选与行迹">
         <section className="group">
           <div className="group-head">
             <span>朝代</span>

@@ -175,7 +175,7 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
   const setView = (id, immediate = false) => {
     const base = VIEWS[id] ?? VIEWS.overview;
     viewId = VIEWS[id] ? id : 'overview';
-    const v = panelBias === 0 && base.narrow ? { ...base, ...base.narrow } : base;
+    const v = panelBias < 0.05 && base.narrow ? { ...base, ...base.narrow } : base;
     const target = new THREE.Vector3(lngToX(v.lng + (v.bias ?? 0) * panelBias), 0, latToZ(v.lat));
     const dist = MAP_SIZE * v.dist * fitScale;
     fromPreset = true;
@@ -187,15 +187,19 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
    * 1. **镜头要按画面有多窄往后退**。fov 是竖向的，横向视野由宽高比决定；
    *    这幅图是横着长的（东西 62 度、南北 36 度），竖屏手机上按桌面那个距离飞过去，
    *    "全卷"只剩中间一条 —— 所以窄到 3:2 以下，每窄一分就退一分。
-   * 2. **注视点西移只在卷轴真压着西边时才做**。窄屏上卷轴是底部抽屉，
-   *    还按宽屏往西挪，东海就整片跑出画外。
+   *    反过来，宽屏（16:9、21:9）横向早就够了，卡在 3:2 那个距离只是让上下多留两条空绢，
+   *    所以比 3:2 宽就往前凑一点（凑得比退得缓，免得一到超宽屏就贴到地面上）。
+   * 2. **注视点西移要按卷轴实际压掉多少画面来算**。那两度多是照 1440 宽、320 面板
+   *    （约 22%）调的；四千像素的屏上面板只占一成，照旧西移就把东海推出画外，
+   *    窄屏上面板变成底部抽屉更是完全不该移 —— 所以偏移量 = 面板占宽 ÷ 22%。
    */
-  const setLayout = ({ narrow = false } = {}) => {
-    const next = narrow ? 0 : 1;
-    if (next === panelBias) return;
+  const setLayout = ({ narrow = false, panelShare = 0.22 } = {}) => {
+    const next = narrow ? 0 : Math.min(1.4, Math.max(0, panelShare) / 0.22);
+    if (Math.abs(next - panelBias) < 0.02) return;
     panelBias = next;
     setView(viewId);
   };
+
 
 
   /**
@@ -284,10 +288,16 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
     camera.aspect = w / Math.max(1, h);
     camera.updateProjectionMatrix();
 
-    // 3:2 是这幅图"刚够宽"的形状：比它窄，横向就装不下东西六十二度，每窄一分退一分。
-    // 上限压到 2.2 倍 —— 再退下去地形只剩一块光板，而且"全卷"本来也允许看不全，
-    // 手机上先给个能读的尺度，要看塞北、巴蜀按上面那排按钮跳过去。
-    const next = Math.min(2.2, Math.max(1, 1.5 / camera.aspect));
+    // 取景按画面形状分三段：
+    //   窄于 3:2 —— 横向装不下东西六十二度，每窄一分退一分（上限 2.2 倍）；
+    //   3:2 到 16:9 —— 桌面那一档，原样不动（距离就是照这一段调出来的）；
+    //   宽于 16:9 —— 往前凑，凑到 0.66 倍为止。宽屏上真正见底的是竖向
+    //   （机头压着看，南北四千公里被压成半屏），所以可以比"按宽度算"再近一点，
+    //   代价是塞北与岭南的边角会出画，而那两头本来就只有零星几首。
+    const a = camera.aspect;
+    let next = 1;
+    if (a < 1.5) next = Math.min(2.2, 1.5 / a);
+    else if (a > 1.75) next = Math.max(0.66, 1.75 / a);
     if (Math.abs(next - fitScale) > 0.01) {
       fitScale = next;
       applyLight(lightId);
