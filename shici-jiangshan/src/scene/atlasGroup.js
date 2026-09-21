@@ -11,7 +11,7 @@ import {
 import { buildHeightField, elevationAt, KIND } from '../atlas/terrain.js';
 import { LAND, ISLANDS, LAKES, RIVERS, TOWNS, PEAKS } from '../atlas/geo.js';
 import { themeOf, dynastyOf, PALETTE } from '../atlas/taxonomy.js';
-import { clusterSpots, spotToCluster } from '../atlas/clusters.js';
+import { clusterSpots, spotToCluster, commonest as modeOf } from '../atlas/clusters.js';
 import { LAND_RAMP, SEA_RAMP, WATER_SILK, WET_BED, rampHex } from '../atlas/palette.js';
 import { makeLabel, makeRippleTexture, retitle } from './labels.js';
 
@@ -356,7 +356,7 @@ export function buildMarkers(clusters) {
     // 直接 setScalar(1.3) 会把基准冲掉，印章会瞬间涨到糊住整屏。
     return {
       cluster, index: i, base, poleH: h, color: theme.color,
-      seal, sealScale: seal.scale.clone(), label,
+      seal, sealScale: seal.scale.clone(), sealHeight: 0.028 * weight, label,
       visible: cluster.spots, shown: true,
     };
   });
@@ -372,6 +372,9 @@ export function buildMarkers(clusters) {
       const changed = visible.length !== e.visible.length;
       e.visible = visible;
       e.shown = visible.length > 0;
+      // 印章是 sprite，不在实例化的那三样里 —— 漏掉这一行的话，筛成"元 26 首"之后
+      // 晕圈、杆、拾取体都藏了，印章却还整整一屏挂在原处，而且点它谁也打不中。
+      e.seal.visible = e.shown;
       if (!e.shown) {
         haloMesh.setMatrixAt(e.index, HIDDEN);
         poleMesh.setMatrixAt(e.index, HIDDEN);
@@ -380,6 +383,17 @@ export function buildMarkers(clusters) {
       }
       if (changed) {
         retitle(e.label, labelOf(e.cluster, visible), { height: 0.0225 });
+        // 印色与印文也跟着筛选走：金陵那一枚平时是石青（唐居多），单看元曲时
+        // 它剩两首散曲，印章还石青着就等于在说"这里是唐诗"。晕圈同理。
+        const dyn = dynastyOf(modeOf(visible.map((s) => s.dynasty)));
+        const th = themeOf(modeOf(visible.map((s) => s.theme)));
+        retitle(e.seal, th.glyph, {
+          variant: 'seal', height: e.sealHeight,
+          cinnabar: `#${dyn.color.toString(16).padStart(6, '0')}`,
+        });
+        e.sealScale.copy(e.seal.scale);
+        haloMesh.setColorAt(e.index, color.set(th.color));
+        if (haloMesh.instanceColor) haloMesh.instanceColor.needsUpdate = true;
       }
       const h = e.poleH;
       haloMesh.setMatrixAt(e.index, m.makeRotationX(-Math.PI / 2).setPosition(e.base.x, e.base.y + 1.2, e.base.z));
@@ -469,14 +483,20 @@ export function buildRoute(detail) {
 }
 
 /**
- * 屏幕空间避让：把所有题签按优先级排队，投影到屏幕上，压到别人身上的先不显示。
- * 七十多首诗加古地名、名山，全卷视角下不避让就是一堵字墙 ——
+ * 屏幕空间避让：把所有题签按优先级排队，投影到屏幕上，压到别人身上的先往上叠一行，
+ * 叠不开才不显示。七十多首诗加古地名、名山，全卷视角下不避让就是一堵字墙 ——
  * 纸质地图一百年前就在做这件事，只是这里每帧重算一次。
+ * 印章只占位、不参与取舍：它是这张图唯一能点的东西，让给谁都不行。
  */
 function declutter(entries, camera, width, height, camDist) {
   const v = new THREE.Vector3();
   const placed = [];
   const rows = [];
+  // sizeAttenuation=false 的 sprite，scale 是"占屏幕的比例"，但比例的基准不是视口高度本身：
+  // 着色器把 scale 乘回了 -mvPosition.z，于是屏幕尺寸 = scale × (P[1][1] / 2) × 视口高度。
+  // 少算这个系数（fov 48° 时是 1.12）会让每块矩形都比真身小一圈，
+  // 密处就会看到两块题签压着边角一起显示 —— 避让算过了，只是尺算短了。
+  const px = camera.projectionMatrix.elements[5] * 0.5 * height;
   // 太远的题签不摆：飞到江南之后，幽州、泰山、沛县仍落在视锥里，
   // 于是一排北方的诗名会贴在画面顶端的地平线上，跟眼前这一带毫无关系。
   // 门槛按镜头距离算，而且诗名比地名收得紧得多 ——
@@ -500,19 +520,52 @@ function declutter(entries, camera, width, height, camDist) {
       e.sprite.visible = false;
       continue;
     }
-    const w = e.sprite.scale.x * height;
-    const h = e.sprite.scale.y * height;
+    const w = e.sprite.scale.x * px;
+    const h = e.sprite.scale.y * px;
     const cx = (v.x * 0.5 + 0.5) * width;
     const cy = (1 - (v.y * 0.5 + 0.5)) * height;
-    rows.push({ e, dist, rect: [cx - w / 2 - 3, cy - h / 2 - 2, cx + w / 2 + 3, cy + h / 2 + 2] });
+    rows.push({
+      e, dist, owner: e.entry ?? null,
+      rect: [cx - w / 2 - 3, cy - h / 2 - 2, cx + w / 2 + 3, cy + h / 2 + 2],
+    });
   }
-  // 同优先级里离镜头近的先摆，这样前排的名字不会被后山的名字抢掉
-  rows.sort((a, b) => a.e.rank - b.e.rank || a.dist - b.dist);
+  // 同级里先看这一处压着几首（长安十七首比终南山两首更该出名字），再看谁离镜头近 ——
+  // 只按远近排的话，密处出的那一条常常是最不值一提的那一处。
+  const load = (r) => (r.e.entry ? r.e.entry.visible.length : 0);
+  rows.sort((a, b) => a.e.rank - b.e.rank || load(b) - load(a) || a.dist - b.dist);
   for (const row of rows) {
-    const [x1, y1, x2, y2] = row.rect;
-    const hit = placed.some(([a1, b1, a2, b2]) => x1 < a2 && x2 > a1 && y1 < b2 && y2 > b1);
-    row.e.sprite.visible = !hit;
-    if (!hit) placed.push(row.rect);
+    // 印章不参与取舍（它是这张图的正文，副标题写的就是"点印章读诗"），
+    // 但它要占住位子：不占的话题签会盖在印章上，盖住的恰好是唯一能点的东西。
+    if (row.e.reserve) {
+      row.e.sprite.visible = true;
+      placed.push(row);
+      continue;
+    }
+    // **自己那一枚印章不算挡路**：题签就画在它上面十来个世界单位处，
+    // 走近之后这点间距在屏幕上还不到一行字高，算成碰撞的话每条诗名都会被自己的印章压掉，
+    // 结果是走到哪儿都只剩印章、一句诗名也不出来。
+    const collides = ([x1, y1, x2, y2]) => placed.some((p) => (
+      !(row.owner && p.owner === row.owner)
+      && x1 < p.rect[2] && x2 > p.rect[0] && y1 < p.rect[3] && y2 > p.rect[1]
+    ));
+    // 挡住了先往上叠一行再试（横向不能挪 —— 挪了题签就指向别处了）。
+    // 长安一带七八枚印章挤在三十像素里，不往上叠的话最该出的"长安 · 17 首"反而被邻居的印章挤掉。
+    const step = row.rect[3] - row.rect[1] + 4;
+    let placedAt = -1;
+    for (let k = 0; k <= (row.e.stack ?? 0); k++) {
+      const tryRect = [row.rect[0], row.rect[1] - k * step, row.rect[2], row.rect[3] - k * step];
+      if (!collides(tryRect)) {
+        placedAt = k;
+        row.rect = tryRect;
+        break;
+      }
+    }
+    row.e.sprite.visible = placedAt >= 0;
+    if (placedAt >= 0) {
+      // center 是 sprite 的锚点：往下挪锚点等于把字往上抬，而且是**屏幕空间**的精确位移
+      row.e.sprite.center.set(0.5, 0.5 - (placedAt * step) / (row.rect[3] - row.rect[1]));
+      placed.push(row);
+    }
   }
 }
 
@@ -551,10 +604,15 @@ export function buildAtlas(spots) {
     const cluster = clusterOf.get(spotId);
     return cluster ? byCluster.get(cluster.id) : null;
   };
-  // 避让优先级：选中 > 悬停 > 诗词 > 都城 > 州县 > 山峰
-  const spotLabels = markers.entries.map((e) => ({ sprite: e.label, rank: 2, wanted: true, reach: 1.35, entry: e }));
+  // 避让优先级：印章（只占位、不参与取舍）> 选中 > 悬停 > 诗词 > 都城 > 州县 > 山峰
+  const spotLabels = markers.entries.map((e) => ({
+    sprite: e.label, rank: 2, wanted: true, reach: 1.35, stack: 2, entry: e,
+  }));
+  const sealSlots = markers.entries.map((e) => ({
+    sprite: e.seal, rank: -1, wanted: true, reach: Infinity, reserve: true, entry: e,
+  }));
 
-  const labelEntries = [...spotLabels, ...towns.entries, ...peaks.entries];
+  const labelEntries = [...sealSlots, ...spotLabels, ...towns.entries, ...peaks.entries];
 
   let routeGroup = null;
   let selectedId = null;
@@ -580,6 +638,7 @@ export function buildAtlas(spots) {
     }
     for (const t of towns.entries) t.wanted = showLabels;
     for (const p of peaks.entries) p.wanted = showLabels;
+    for (const s of sealSlots) s.wanted = s.entry.shown;
   };
   refreshLabels();
 

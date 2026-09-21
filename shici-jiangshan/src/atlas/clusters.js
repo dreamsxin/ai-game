@@ -35,8 +35,9 @@ const mean = (nums) => nums.reduce((s, v) => s + v, 0) / nums.length;
  * 众数。并列时**按字符序**取，不按出现先后 ——
  * 这一点是刻意的：并列时取"先出现的那个"会让结果依赖数据表的顺序，
  * 而地名一旦随顺序变，下一步的同名合并就跟着变，整张图的印章都会重排。
+ * 表现层也用它（筛选之后重算印色与印文），所以导出去，免得两处各写一遍、结果还不一样。
  */
-const commonest = (values) => {
+export const commonest = (values) => {
   const count = new Map();
   for (const v of values) count.set(v, (count.get(v) ?? 0) + 1);
   return [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || (a < b ? -1 : 1))[0];
