@@ -24,6 +24,7 @@
 import { TANG_B } from './spots-tang-b.js';
 import { TANG_C } from './spots-tang-c.js';
 import { SONG_B } from './spots-song-b.js';
+import { YUAN_B } from './spots-yuan-b.js';
 
 const CORE = [
   {
@@ -253,8 +254,8 @@ const CORE = [
     author: '王昌龄',
     dynasty: 'tang',
     theme: 'frontier',
-    lng: 113.30, lat: 40.09,
-    place: '雁门关·代州',
+    lng: 112.86, lat: 39.30,
+    place: '雁门·关城',
     text: '秦时明月汉时关，万里长征人未还。但使龙城飞将在，不教胡马度阴山。',
     emotion: '追慕良将、痛惜征人不归的沉雄',
     context: '王昌龄借秦汉旧关写当世边防，呼唤如李广一般的名将镇守北疆。',
@@ -501,7 +502,7 @@ const CORE = [
     dynasty: 'song',
     theme: 'nostalgia',
     lng: 114.88, lat: 30.45,
-    place: '黄州赤壁',
+    place: '黄州·赤壁',
     text: '大江东去，浪淘尽，千古风流人物。故垒西边，人道是，三国周郎赤壁。乱石穿空，惊涛拍岸，卷起千堆雪。江山如画，一时多少豪杰。遥想公瑾当年，小乔初嫁了，雄姿英发。羽扇纶巾，谈笑间，樯橹灰飞烟灭。故国神游，多情应笑我，早生华发。人生如梦，一尊还酹江月。',
     emotion: '怀古伤己，英雄气与失意感交织',
     context: '元丰五年苏轼贬居黄州，游长江边赤壁矶，误认作三国战场，借周瑜抒发壮志未酬之慨。',
@@ -528,7 +529,7 @@ const CORE = [
     dynasty: 'song',
     theme: 'landscape',
     lng: 115.98, lat: 29.57,
-    place: '庐山西林寺',
+    place: '庐山·西林寺',
     text: '横看成岭侧成峰，远近高低各不同。不识庐山真面目，只缘身在此山中。',
     emotion: '观山而悟理的通透与自省',
     context: '元丰七年苏轼由黄州量移汝州，途中游庐山，题诗于西林寺壁。',
@@ -970,7 +971,7 @@ const CORE = [
     dynasty: 'tang',
     theme: 'nostalgia',
     lng: 102.63, lat: 37.93,
-    place: '凉州道中·赴安西途上',
+    place: '凉州·赴安西道中',
     text: '故园东望路漫漫，双袖龙钟泪不干。马上相逢无纸笔，凭君传语报平安。',
     emotion: '西行途中乍遇归人的思乡之切',
     context: '天宝八年岑参首次出塞赴安西幕府，途中遇见东归入京的使者，托他带一句口信。',
@@ -1048,7 +1049,7 @@ const CORE = [
     dynasty: 'yuan',
     theme: 'recluse',
     lng: 116.10, lat: 39.98,
-    place: '大都西山',
+    place: '西山·大都西郊',
     text: '冷云间，夕阳楼外数峰闲。等闲不许俗人看，雪意阑珊。倚阑干，衣冠潇洒，笑谈吟啸。霜天断雁，月夜孤鸿，如今世事艰难。',
     emotion: '以西山数峰自比，潇洒吟啸的背后是对世事艰难的清醒',
     context: '卢挚官至翰林学士，久居大都。此曲借西山雪意写胸中丘壑，前半萧散自得，末三句忽然沉下来。',
@@ -1165,7 +1166,7 @@ const CORE = [
     dynasty: 'yuan',
     theme: 'love',
     lng: 112.50, lat: 34.70,
-    place: '河南府（洛阳）',
+    place: '洛阳·河南府',
     text: '欲寄君衣君不还，不寄君衣君又寒。寄与不寄间，妾身千万难。',
     emotion: '两条路都通向坏结果，于是无从下手',
     context: '姚燧是元初重臣与文坛领袖，这支小令只二十四字，把一个两难说到了底。',
@@ -1760,7 +1761,7 @@ const CORE = [
 ];
 
 /** 各分册并起来就是这张图的全部条目 */
-export const SPOTS = [...CORE, ...TANG_B, ...TANG_C, ...SONG_B];
+export const SPOTS = [...CORE, ...TANG_B, ...TANG_C, ...SONG_B, ...YUAN_B];
 
 export const spotById = (id) => SPOTS.find((s) => s.id === id);
 export const SPOT_IDS = SPOTS.map((s) => s.id);
