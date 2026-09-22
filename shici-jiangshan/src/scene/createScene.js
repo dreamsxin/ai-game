@@ -235,6 +235,11 @@ export function createScene(canvas, { spots, onPick, onHover } = {}) {
    */
   const castAt = (clientX, clientY) => {
     const rect = canvas.getBoundingClientRect();
+    // 先按屏幕矩形打印章与题签：它们是屏幕固定字号的 sprite，
+    // 比杆底那根拾取圆柱大得多，只打圆柱的话点在印文上、点在诗名上都没反应
+    const onLabel = atlas.pickScreen(clientX - rect.left, clientY - rect.top);
+    if (onLabel) return { place: onLabel.place, ids: onLabel.spots.map((s) => s.id) };
+
     pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, camera);

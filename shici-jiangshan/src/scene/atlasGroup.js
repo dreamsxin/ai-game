@@ -487,8 +487,14 @@ export function buildRoute(detail) {
  * 叠不开才不显示。七十多首诗加古地名、名山，全卷视角下不避让就是一堵字墙 ——
  * 纸质地图一百年前就在做这件事，只是这里每帧重算一次。
  * 印章只占位、不参与取舍：它是这张图唯一能点的东西，让给谁都不行。
+ *
+ * 顺带把摆好的矩形记进 `zones`：**印章与题签本身要能点**。
+ * 拾取原来只打杆底那根看不见的圆柱（半径十二个世界单位），
+ * 而印章与题签是屏幕固定字号的 sprite —— 远看时它们在屏幕上比那根圆柱大得多，
+ * 于是"点印章读诗"点在印章上多半打不中，点诗名更是毫无反应。
+ * 既然这里每帧已经把它们的屏幕矩形算出来了，就直接留给拾取用。
  */
-function declutter(entries, camera, width, height, camDist) {
+function declutter(entries, camera, width, height, camDist, zones) {
   const v = new THREE.Vector3();
   const placed = [];
   const rows = [];
@@ -539,6 +545,7 @@ function declutter(entries, camera, width, height, camDist) {
     if (row.e.reserve) {
       row.e.sprite.visible = true;
       placed.push(row);
+      if (row.owner) zones.push({ rect: row.rect, entry: row.owner });
       continue;
     }
     // **自己那一枚印章不算挡路**：题签就画在它上面十来个世界单位处，
@@ -565,6 +572,7 @@ function declutter(entries, camera, width, height, camDist) {
       // center 是 sprite 的锚点：往下挪锚点等于把字往上抬，而且是**屏幕空间**的精确位移
       row.e.sprite.center.set(0.5, 0.5 - (placedAt * step) / (row.rect[3] - row.rect[1]));
       placed.push(row);
+      if (row.owner) zones.push({ rect: row.rect, entry: row.owner });
     }
   }
 }
@@ -623,6 +631,8 @@ export function buildAtlas(spots) {
   // 所以远看只留印章（副标题写的正是"点印章读诗"），走近了、点中了、或者它在当前行迹上
   // 才把诗名铺开 —— 古地名与山名一直留着，那是远看时唯一需要读的字。
   let farView = true;
+  // 每帧摆好的印章／题签屏幕矩形，留给拾取用（见 pickScreen）
+  const hitZones = [];
 
   const isHot = (e) => (
     (selectedId && clusterOf.get(selectedId) === e.cluster)
@@ -695,9 +705,32 @@ export function buildAtlas(spots) {
         farView = far;
         refreshLabels();
       }
-      declutter(labelEntries, camera, width, height, camDist);
-
+      hitZones.length = 0;
+      declutter(labelEntries, camera, width, height, camDist, hitZones);
     },
+
+    /**
+     * 屏幕上点中的印章或题签。**先于射线拾取**：印章与题签是屏幕固定字号的 sprite，
+     * 远看时比杆底那根圆柱（半径十二个世界单位）大得多，只打圆柱的话，
+     * 点在印章上多半打不中、点诗名毫无反应 —— 而副标题写的正是"点印章读诗"。
+     * 叠在一起时取**最小的那一块**：小的在上面（题签压着印章时，点字就该出那首诗）。
+     */
+    pickScreen(x, y) {
+      let best = null;
+      let bestArea = Infinity;
+      for (const z of hitZones) {
+        const [x1, y1, x2, y2] = z.rect;
+        if (x < x1 || x > x2 || y < y1 || y > y2) continue;
+        const area = (x2 - x1) * (y2 - y1);
+        if (area < bestArea) {
+          bestArea = area;
+          best = z.entry;
+        }
+      }
+      if (!best || !best.shown) return null;
+      return { place: best.cluster.place, spots: best.visible };
+    },
+
 
     animate(t) {
       // 水波缓缓流动，是这张图上唯一"动"的东西，动得慢才像画
