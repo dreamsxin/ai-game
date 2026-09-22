@@ -13,42 +13,67 @@ const FONT = '"Songti SC","STSong","SimSun","Noto Serif SC",serif';
 /** 星点半径：一等 10 像素到六等 2.2 像素，按星等指数收，差距才看得出来 */
 const radiusOf = (mag, scale) => (2.1 + 7.9 * ((6 - mag) / 5) ** 1.35) * scale;
 
-/** 画布坐标：判定层给的是 -1..1，这里换成像素，留出边距好写名字 */
-const project = (star, w, h) => {
-  const pad = Math.min(w, h) * 0.13;
-  const r = Math.min(w, h) / 2 - pad;
-  return [w / 2 + star.x * r, h / 2 + star.y * r];
+/** 这张图在画布上占多大：**两个方向各自算**，不是拿短边画个正圆。
+ *
+ * 第一版 r 取 `Math.min(w, h) / 2 - pad`，于是 2400×1200 上星图只占中间 888 像素，
+ * 左右各空出七百多 —— 跟"宽屏没适配"是同一个毛病。星图是极坐标的，
+ * 完全按画布拉伸会把圆盘扯成一条扁带（旋臂就读不出是旋臂了），
+ * 所以两轴各自吃满自己的边，再互相压一道比例上限：
+ * 宽屏椭圆横着一点、手机竖屏椭圆竖着一点，都还看得出是一张星图。
+ *
+ * 这道上限也是宽屏上仍有留白的原因：**21:9 的屏上铺不满是有意的代价** ——
+ * 要铺满就得扁到 2.4:1，那时最外圈的星会贴着上下沿、旋臂糊成三条横线。
+ * 换来的是短边方向一定吃满（星盘直径约占短边七成），面板另有大屏档跟着长大。 */
+const ELLIPSE = 1.6;
+export const layout = (w, h) => {
+  let rx = w * 0.44;
+  let ry = h * 0.42;
+  if (rx > ry * ELLIPSE) rx = ry * ELLIPSE;
+  if (ry > rx * ELLIPSE) ry = rx * ELLIPSE;
+  return { rx, ry, cx: w / 2, cy: h / 2, ellipseCap: ELLIPSE };
+};
+
+/** 星点大小与字号跟着画布长大：按对角线算，宽屏上才不是一版手机图放大看 */
+const scaleOf = (w, h) => Math.max(0.72, Math.min(1.7, Math.hypot(w, h) / 1500));
+
+/** 画布坐标：判定层给的是 -1..1，这里换成像素 */
+export const project = (star, w, h) => {
+  const { rx, ry, cx, cy } = layout(w, h);
+  return [cx + star.x * rx, cy + star.y * ry];
 };
 
 export function drawStarChart(ctx, { stars, width: w, height: h, hover, selected, dpr = 1 }) {
-  const scale = Math.max(0.72, Math.min(1.25, Math.min(w, h) / 900));
+  const scale = scaleOf(w, h);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
+  const { rx, ry } = layout(w, h);
+  const R = Math.max(rx, ry);
+
   // 绢底：中间略亮、边缘略深，像一张摊开的旧绢
-  const pad = Math.min(w, h) * 0.13;
-  const R = Math.min(w, h) / 2 - pad;
   const bg = ctx.createRadialGradient(w / 2, h / 2, R * 0.1, w / 2, h / 2, R * 1.9);
   bg.addColorStop(0, '#efe4c4');
   bg.addColorStop(1, '#dfd0a6');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
 
-  // 分野圈：古星图的三圈（内规、赤道、外规），这里借来当"篇数的量尺"
+  // 分野圈：古星图的三圈（内规、赤道、外规），这里借来当"篇数的量尺"。
+  // 圈也跟着椭圆走，否则圈是圆的、星是椭圆的，两套尺子对不上。
+  const ring = (k) => {
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h / 2, rx * k, ry * k, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  };
   ctx.strokeStyle = 'rgba(59,58,52,0.16)';
   ctx.lineWidth = 1;
-  for (const k of [0.34, 0.67, 1]) {
-    ctx.beginPath();
-    ctx.arc(w / 2, h / 2, R * k, 0, Math.PI * 2);
-    ctx.stroke();
-  }
+  for (const k of [0.34, 0.67, 1]) ring(k);
   ctx.setLineDash([4, 6]);
   ctx.strokeStyle = 'rgba(45,86,104,0.20)';
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
     ctx.beginPath();
-    ctx.moveTo(w / 2 + Math.cos(a) * R * 0.34, h / 2 + Math.sin(a) * R * 0.34);
-    ctx.lineTo(w / 2 + Math.cos(a) * R, h / 2 + Math.sin(a) * R);
+    ctx.moveTo(w / 2 + Math.cos(a) * rx * 0.34, h / 2 + Math.sin(a) * ry * 0.34);
+    ctx.lineTo(w / 2 + Math.cos(a) * rx, h / 2 + Math.sin(a) * ry);
     ctx.stroke();
   }
   ctx.setLineDash([]);
@@ -117,6 +142,9 @@ export function drawStarChart(ctx, { stars, width: w, height: h, hover, selected
   // （悬停或选中的那一颗例外，它必须出名字）。
   const placed = [];
   const hits = (r) => placed.some((p) => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1]);
+  // 星盘现在吃到了画布边上（宽屏要用得起宽度），所以候选位除了不许互相撞，
+  // 还得不许出画布 —— 不然最右那几颗的名字会被裁掉半边。
+  const inside = (r) => r[0] >= 2 && r[1] >= 2 && r[2] <= w - 2 && r[3] <= h - 2;
   const bright = [...order].sort((a, b) => a.mag - b.mag);   // 亮的先占位
   for (const s of bright) {
     const on = s.name === hover || s.name === selected;
@@ -138,10 +166,17 @@ export function drawStarChart(ctx, { stars, width: w, height: h, hover, selected
     let put = null;
     for (const [lx, ly] of spots) {
       const rect = [lx - 3, ly - size * 0.82, lx + tw + 3, ly - size * 0.82 + th];
-      if (!hits(rect)) { put = [lx, ly, rect]; break; }
+      if (!hits(rect) && inside(rect)) { put = [lx, ly, rect]; break; }
     }
     if (!put && !on) continue;
-    const [lx, ly, rect] = put ?? [spots[0][0], spots[0][1], [spots[0][0] - 3, spots[0][1] - size * 0.82, spots[0][0] + tw + 3, spots[0][1] - size * 0.82 + th]];
+    // 悬停／选中的那一颗必须出名字：四个候选位都不成时，把它夹回画布里再写
+    let fallback = put;
+    if (!fallback) {
+      const lx = Math.min(Math.max(spots[0][0], 5), w - tw - 5);
+      const ly = Math.min(Math.max(spots[0][1], size), h - 5);
+      fallback = [lx, ly, [lx - 3, ly - size * 0.82, lx + tw + 3, ly - size * 0.82 + th]];
+    }
+    const [lx, ly, rect] = fallback;
     placed.push(rect);
     ctx.fillStyle = 'rgba(240,231,205,0.82)';
     ctx.fillRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
@@ -154,7 +189,7 @@ export function drawStarChart(ctx, { stars, width: w, height: h, hover, selected
 export function hitTest(stars, px, py, w, h) {
   let best = null;
   let bestD = Infinity;
-  const scale = Math.max(0.72, Math.min(1.25, Math.min(w, h) / 900));
+  const scale = scaleOf(w, h);
   for (const s of stars) {
     const [x, y] = project(s, w, h);
     const d = Math.hypot(px - x, py - y);

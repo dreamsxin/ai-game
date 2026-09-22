@@ -515,6 +515,31 @@ button, input, select { font: inherit; color: inherit; }
   .facts div { grid-template-columns: 74px 1fr; }
 }
 
+/* 星图也要跟着大屏长大：这一层与地图那层是两套面板，
+   只给 .hud/.panel/.card 加档会让星图在 2560 上又剩两张小纸条。 */
+@media (min-width: 1600px) {
+  .sky-head { width: min(400px, 30vw); padding: 16px 19px 17px; }
+  .sky-head h2 { font-size: 25px; letter-spacing: 6px; }
+  .sky-head p { font-size: 14px; }
+  .sky-tiers li { font-size: 14px; }
+  .sky-tiers em { font-size: 13px; }
+  .sky-rank { width: 250px; padding: 10px; }
+  .sky-rank button { font-size: 15px; padding: 6px 9px; }
+  .sky-rank .num { font-size: 14px; }
+  .sky-card { width: min(500px, 40vw); max-height: 58dvh; }
+  .sky-foot { font-size: 13px; }
+}
+
+@media (min-width: 2200px) {
+  .sky-head { width: min(470px, 26vw); }
+  .sky-head h2 { font-size: 29px; letter-spacing: 8px; }
+  .sky-head p { font-size: 15.5px; }
+  .sky-tiers li { font-size: 15.5px; }
+  .sky-rank { width: 300px; }
+  .sky-rank button { font-size: 17px; padding: 7px 11px; }
+  .sky-card { width: min(600px, 34vw); }
+}
+
 /* ---------- 窄屏：卷轴与题跋都改成从下沿升起的抽屉 ----------
    两块都贴下沿、而且**一次只开一块**（开题跋就收卷轴，见 App.jsx）：
    平板竖屏上原先题跋在上、卷轴在下，两块加起来就把地图挤成顶上一条。 */
