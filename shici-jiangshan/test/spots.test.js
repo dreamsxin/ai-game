@@ -21,12 +21,14 @@ test('诗词表够厚，id 全局唯一', () => {
 // 数据分了册（spots.js 加各 spots-*.js），而且是一批一批攒起来的，
 // 于是"同一首诗收了两遍、只是 id 起得不一样"成了最容易犯的错：
 // id 唯一性拦不住它，图上会在同一处叠出两枚一样的题签。
-// 按"作者+篇名（去掉括注）"和"正文开头"各查一遍 —— 两个口子都堵上才算数。
+// 按"作者+篇名"和"正文开头"各查一遍 —— 两个口子都堵上才算数。
+// 篇名只剥「（其二）」「（节）」这类序号后缀：**括注里是首句的不能剥**，
+// 李商隐两首《无题》各是一首诗，剥成"无题"就会把它们当成重收。
 test('同一首诗不许收两遍', () => {
   const byTitle = new Map();
   const byText = new Map();
   for (const s of SPOTS) {
-    const title = `${s.author}《${s.name.replace(/[（(].*$/, '')}》`;
+    const title = `${s.author}《${s.name.replace(/（(其[一二三四五六七八九十]+|节)）\s*$/, '')}》`;
     const seenTitle = byTitle.get(title);
     assert.equal(seenTitle, undefined, `${title} 收了两遍：${seenTitle} 与 ${s.id}`);
     byTitle.set(title, s.id);
@@ -76,13 +78,18 @@ test('每首落得住的诗，坐标都在图框之内', () => {
 
 // 定不住地点的（《静夜思》《锦瑟》）只允许"两个都没有"，
 // 半个坐标最危险：它会照样落到图上，落在赤道或者本初子午线附近。
+// 落不下还有第二种理由：**地方认得出，但在图幅之外** —— 这卷子西边止于玉门关一带（92°E），
+// 岑参的北庭、李颀的交河都在更西边，硬挪进画里就是编造，所以同样不落点、只进列表与检索。
 test('无定所的诗必须经纬度都空着，并在 place 里交代', () => {
   const placeless = SPOTS.filter((s) => !isPlaced(s));
   assert.ok(placeless.length >= 1, '一首无定所的都没有，这条路径就没人走过');
   for (const s of placeless) {
     assert.equal(s.lng, null, `${s.name} 的经度不是 null`);
     assert.equal(s.lat, null, `${s.name} 的纬度不是 null`);
-    assert.ok(s.place.includes('无定'), `${s.name} 的 place 没说清为什么落不下`);
+    assert.ok(
+      s.place.includes('无定') || s.place.includes('图外'),
+      `${s.name} 的 place 没说清为什么落不下`,
+    );
   }
   assert.ok(PLACED.length > SPOTS.length * 0.9, '落不住的诗太多了，这就不是一张地图了');
 });

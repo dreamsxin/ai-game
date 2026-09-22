@@ -23,7 +23,12 @@
 
 import { TANG_B } from './spots-tang-b.js';
 import { TANG_C } from './spots-tang-c.js';
+import { TANG_D } from './spots-tang-d.js';
+import { TANG_E } from './spots-tang-e.js';
+import { TANG_F } from './spots-tang-f.js';
 import { SONG_B } from './spots-song-b.js';
+import { SONG_C } from './spots-song-c.js';
+import { SONG_D } from './spots-song-d.js';
 import { YUAN_B } from './spots-yuan-b.js';
 
 const CORE = [
@@ -620,7 +625,7 @@ const CORE = [
     dynasty: 'song',
     theme: 'ambition',
     lng: 117.97, lat: 28.45,
-    place: '上饶带湖（信州）',
+    place: '上饶·带湖',
     text: '醉里挑灯看剑，梦回吹角连营。八百里分麾下炙，五十弦翻塞外声。沙场秋点兵。马作的卢飞快，弓如霹雳弦惊。了却君王天下事，赢得生前身后名。可怜白发生！',
     emotion: '壮怀激烈与壮志成空的骤然落差',
     context: '辛弃疾闲居江西上饶带湖时寄给好友陈亮，梦中重回沙场，醒来只余白发。',
@@ -1761,7 +1766,12 @@ const CORE = [
 ];
 
 /** 各分册并起来就是这张图的全部条目 */
-export const SPOTS = [...CORE, ...TANG_B, ...TANG_C, ...SONG_B, ...YUAN_B];
+export const SPOTS = [
+  ...CORE,
+  ...TANG_B, ...TANG_C, ...TANG_D, ...TANG_E, ...TANG_F,
+  ...SONG_B, ...SONG_C, ...SONG_D,
+  ...YUAN_B,
+];
 
 export const spotById = (id) => SPOTS.find((s) => s.id === id);
 export const SPOT_IDS = SPOTS.map((s) => s.id);
