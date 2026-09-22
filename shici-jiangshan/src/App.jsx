@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import StarSky from './StarSky.jsx';
 import { createScene, LIGHTS } from './scene/createScene.js';
 import { SPOTS, spotById } from './atlas/spots.js';
 import { ROUTES } from './atlas/routes.js';
@@ -44,6 +45,7 @@ const READING = [
   '《静夜思》《锦瑟》这类写作地历来无定说的，不落在图上（硬派一个地方就是编造），但仍在左侧列表里，也搜得到。',
   '地形按《千里江山图》的矿物色标：谷地绢黄、丘陵石绿、两千四百米以上才转石青，再往上越高越淡，最后淡进绢底（画里的"高则明、远则淡"）。天空也是绢色 —— 画里的天就是绢本身。',
   '「行迹」把一位诗人一生走过的地方连成一条线，编号按年代而不是按路程，所以线会来回折。',
+  '「星图」是另一张看法：把作者按收录篇数分成六等星，一等最亮（李白、王维、苏轼、杜甫），同朝的连成一条旋臂 —— 点一颗星看这位写过哪些地方，再点一首回图上读它。',
 ];
 
 
@@ -62,6 +64,8 @@ export default function App() {
   const [view, setView] = useState('overview');
   const [light, setLight] = useState('clear');
   const [showLabels, setShowLabels] = useState(true);
+  // 星图是一层盖在地图上的东西：地图与三维场景照旧留着，回来时不用重建
+  const [sky, setSky] = useState(false);
   // 手机上一进来就展开卷轴，地图只剩中间一条，所以窄屏默认收起
   const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia(NARROW).matches);
   const [perf, setPerf] = useState({ fps: 0, tris: 0 });
@@ -210,7 +214,18 @@ export default function App() {
         <button type="button" className={showLabels ? 'active' : ''} onClick={() => setShowLabels(!showLabels)}>
           题签
         </button>
+        <button type="button" className={sky ? 'active' : ''} onClick={() => setSky(!sky)}>
+          星图
+        </button>
       </nav>
+
+      {sky && (
+        <StarSky
+          onClose={() => setSky(false)}
+          onPick={(id) => { setSky(false); pick(id); }}
+        />
+      )}
+
 
       <button
         type="button"

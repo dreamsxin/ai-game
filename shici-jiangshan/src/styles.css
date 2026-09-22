@@ -347,6 +347,123 @@ button, input, select { font: inherit; color: inherit; }
 .nearby em { font-style: normal; font-size: 10px; color: var(--ink-soft); }
 .disclaimer { margin: 17px 0 0; font-size: 11px; line-height: 1.7; color: rgba(108, 100, 80, 0.8); }
 
+/* ---------- 作者星图：一层盖在地图上的绢本星图 ---------- */
+.sky {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  animation: rise 0.24s ease;
+}
+
+.sky-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+.sky-head {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: min(330px, 38vw);
+  padding: 14px 16px 15px;
+  background: var(--silk);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 26px rgba(40, 32, 18, 0.14);
+}
+
+.sky-head h2 { margin: 0 0 6px; font-size: 21px; letter-spacing: 5px; font-weight: 600; }
+.sky-head p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.75; color: var(--ink-soft); }
+.sky-head .close { position: absolute; top: 10px; right: 10px; }
+
+.sky-tiers { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.sky-tiers li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; }
+.sky-tiers em { color: var(--ink-soft); font-size: 11.5px; font-style: normal; }
+.sky-tiers .dot { width: 12px; height: 12px; border-radius: 50%; background: #2d5668; flex: none; }
+.sky-tiers .dot.m1 { width: 14px; height: 14px; }
+.sky-tiers .dot.m2 { width: 11px; height: 11px; }
+.sky-tiers .dot.m3 { width: 9px; height: 9px; }
+.sky-tiers .dot.m4 { width: 7px; height: 7px; }
+.sky-tiers .dot.m5 { width: 5px; height: 5px; }
+.sky-tiers .dot.m6 { width: 4px; height: 4px; }
+
+.sky-rank {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 210px;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  background: var(--silk);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 26px rgba(40, 32, 18, 0.14);
+}
+
+.sky-rank button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  background: none;
+  border: none;
+  border-left: 3px solid var(--chip, #2d5668);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.sky-rank button:hover, .sky-rank button.on { background: rgba(181, 64, 47, 0.08); }
+.sky-rank .idx { color: var(--ink-soft); font-size: 11.5px; }
+.sky-rank .num { color: var(--zhu); font-size: 12.5px; }
+
+.sky-card {
+  top: auto;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 86vw);
+  max-height: 52dvh;
+}
+.sky-foot { margin: 10px 0 0; font-size: 11.5px; color: var(--ink-soft); }
+
+/* 窄屏：榜不摆在右上角（那儿只剩一条缝），改成贴底的一排可横划的名次。
+   排行是这张图的另一半意思，不能在手机上整块藏掉；但它与作者卡占同一条底边，
+   所以卡一开就让榜让位（:has 选的是"里面有卡的星图"）。 */
+@media (max-width: 980px) and (min-height: 561px) {
+  .sky-head { width: auto; left: 12px; right: 12px; top: 12px; }
+  .sky-rank {
+    top: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 6px;
+  }
+  .sky-rank li { flex: none; }
+  .sky-rank button { width: auto; grid-template-columns: auto auto; gap: 6px; padding: 4px 9px; }
+  .sky-rank .idx { display: none; }
+  .sky:has(.sky-card) .sky-rank { display: none; }
+  .sky-card { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: none; width: auto; }
+}
+
+@media (max-height: 560px) {
+  .sky-head { width: min(260px, 40vw); top: 10px; left: 10px; padding: 9px 11px 10px; }
+  .sky-head h2 { font-size: 17px; letter-spacing: 3px; }
+  .sky-head p { display: none; }
+  .sky-rank { top: 10px; right: 10px; width: 170px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .sky-card { bottom: 10px; max-height: 60dvh; }
+}
+
 /* ---------- 宽屏／大屏：面板与字跟着长大 ----------
    两块面板与字号本来是照 1440 调的，搬到 2560、3440 上就成了角落里的两张小纸条
    （320px 的卷轴在 3440 宽上只占一成，正文十三号字在这种屏上基本读不出是什么）。
