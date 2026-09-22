@@ -21,14 +21,16 @@ test('诗词表够厚，id 全局唯一', () => {
 // 数据分了册（spots.js 加各 spots-*.js），而且是一批一批攒起来的，
 // 于是"同一首诗收了两遍、只是 id 起得不一样"成了最容易犯的错：
 // id 唯一性拦不住它，图上会在同一处叠出两枚一样的题签。
-// 按"作者+篇名"和"正文开头"各查一遍 —— 两个口子都堵上才算数。
-// 篇名只剥「（其二）」「（节）」这类序号后缀：**括注里是首句的不能剥**，
-// 李商隐两首《无题》各是一首诗，剥成"无题"就会把它们当成重收。
+// 两个口子都堵：篇名**照原样比**，再比正文开头。
+// 篇名不做任何规整是试过两次才定下来的：
+// 剥掉整个括注会把李商隐两首《无题》（相见时难／昨夜星辰）判成重收；
+// 只剥「（其N）」又会把王昌龄《从军行》其一与其四判成重收 ——
+// 组诗里的每一首本来就是一首诗。真正的重收由"正文前十四字相同"兜住。
 test('同一首诗不许收两遍', () => {
   const byTitle = new Map();
   const byText = new Map();
   for (const s of SPOTS) {
-    const title = `${s.author}《${s.name.replace(/（(其[一二三四五六七八九十]+|节)）\s*$/, '')}》`;
+    const title = `${s.author}《${s.name}》`;
     const seenTitle = byTitle.get(title);
     assert.equal(seenTitle, undefined, `${title} 收了两遍：${seenTitle} 与 ${s.id}`);
     byTitle.set(title, s.id);

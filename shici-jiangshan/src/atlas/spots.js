@@ -26,9 +26,11 @@ import { TANG_C } from './spots-tang-c.js';
 import { TANG_D } from './spots-tang-d.js';
 import { TANG_E } from './spots-tang-e.js';
 import { TANG_F } from './spots-tang-f.js';
+import { TANG_G } from './spots-tang-g.js';
 import { SONG_B } from './spots-song-b.js';
 import { SONG_C } from './spots-song-c.js';
 import { SONG_D } from './spots-song-d.js';
+import { SONG_E } from './spots-song-e.js';
 import { YUAN_B } from './spots-yuan-b.js';
 
 const CORE = [
@@ -1768,8 +1770,8 @@ const CORE = [
 /** 各分册并起来就是这张图的全部条目 */
 export const SPOTS = [
   ...CORE,
-  ...TANG_B, ...TANG_C, ...TANG_D, ...TANG_E, ...TANG_F,
-  ...SONG_B, ...SONG_C, ...SONG_D,
+  ...TANG_B, ...TANG_C, ...TANG_D, ...TANG_E, ...TANG_F, ...TANG_G,
+  ...SONG_B, ...SONG_C, ...SONG_D, ...SONG_E,
   ...YUAN_B,
 ];
 
