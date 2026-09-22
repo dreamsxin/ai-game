@@ -27,11 +27,13 @@ import { TANG_D } from './spots-tang-d.js';
 import { TANG_E } from './spots-tang-e.js';
 import { TANG_F } from './spots-tang-f.js';
 import { TANG_G } from './spots-tang-g.js';
+import { TANG_H } from './spots-tang-h.js';
 import { SONG_B } from './spots-song-b.js';
 import { SONG_C } from './spots-song-c.js';
 import { SONG_D } from './spots-song-d.js';
 import { SONG_E } from './spots-song-e.js';
 import { YUAN_B } from './spots-yuan-b.js';
+import { YUAN_C } from './spots-yuan-c.js';
 
 const CORE = [
   {
@@ -92,7 +94,7 @@ const CORE = [
     author: '李白',
     dynasty: 'tang',
     theme: 'recluse',
-    lng: 121.03, lat: 29.17,
+    lng: 120.92, lat: 29.45,
     place: '天姥山·剡县',
     text: '海客谈瀛洲，烟涛微茫信难求。越人语天姥，云霞明灭或可睹。天姥连天向天横，势拔五岳掩赤城。天台四万八千丈，对此欲倒东南倾。我欲因之梦吴越，一夜飞度镜湖月。湖月照我影，送我至剡溪。谢公宿处今尚在，渌水荡漾清猿啼。脚著谢公屐，身登青云梯。半壁见海日，空中闻天鸡。千岩万转路不定，迷花倚石忽已暝。熊咆龙吟殷岩泉，栗深林兮惊层巅。云青青兮欲雨，水澹澹兮生烟。列缺霹雳，丘峦崩摧。洞天石扉，訇然中开。青冥浩荡不见底，日月照耀金银台。霓为衣兮风为马，云之君兮纷纷而来下。虎鼓瑟兮鸾回车，仙之人兮列如麻。忽魂悸以魄动，恍惊起而长嗟。惟觉时之枕席，失向来之烟霞。世间行乐亦如此，古来万事东流水。别君去兮何时还？且放白鹿青崖间，须行即骑访名山。安能摧眉折腰事权贵，使我不得开心颜！',
     emotion: '挣脱权贵束缚、追求精神自由的傲然',
@@ -1770,9 +1772,9 @@ const CORE = [
 /** 各分册并起来就是这张图的全部条目 */
 export const SPOTS = [
   ...CORE,
-  ...TANG_B, ...TANG_C, ...TANG_D, ...TANG_E, ...TANG_F, ...TANG_G,
+  ...TANG_B, ...TANG_C, ...TANG_D, ...TANG_E, ...TANG_F, ...TANG_G, ...TANG_H,
   ...SONG_B, ...SONG_C, ...SONG_D, ...SONG_E,
-  ...YUAN_B,
+  ...YUAN_B, ...YUAN_C,
 ];
 
 export const spotById = (id) => SPOTS.find((s) => s.id === id);
