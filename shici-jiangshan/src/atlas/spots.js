@@ -28,10 +28,12 @@ import { TANG_E } from './spots-tang-e.js';
 import { TANG_F } from './spots-tang-f.js';
 import { TANG_G } from './spots-tang-g.js';
 import { TANG_H } from './spots-tang-h.js';
+import { TANG_I } from './spots-tang-i.js';
 import { SONG_B } from './spots-song-b.js';
 import { SONG_C } from './spots-song-c.js';
 import { SONG_D } from './spots-song-d.js';
 import { SONG_E } from './spots-song-e.js';
+import { SONG_F } from './spots-song-f.js';
 import { YUAN_B } from './spots-yuan-b.js';
 import { YUAN_C } from './spots-yuan-c.js';
 
@@ -211,7 +213,7 @@ const CORE = [
     author: '高适',
     dynasty: 'tang',
     theme: 'farewell',
-    lng: 114.38, lat: 36.10,
+    lng: 116.70, lat: 34.38,
     place: '睢阳·河南',
     text: '千里黄云白日曛，北风吹雁雪纷纷。莫愁前路无知己，天下谁人不识君。',
     emotion: '豪迈洒脱中的鼓励与信心',
@@ -1772,8 +1774,8 @@ const CORE = [
 /** 各分册并起来就是这张图的全部条目 */
 export const SPOTS = [
   ...CORE,
-  ...TANG_B, ...TANG_C, ...TANG_D, ...TANG_E, ...TANG_F, ...TANG_G, ...TANG_H,
-  ...SONG_B, ...SONG_C, ...SONG_D, ...SONG_E,
+  ...TANG_B, ...TANG_C, ...TANG_D, ...TANG_E, ...TANG_F, ...TANG_G, ...TANG_H, ...TANG_I,
+  ...SONG_B, ...SONG_C, ...SONG_D, ...SONG_E, ...SONG_F,
   ...YUAN_B, ...YUAN_C,
 ];
 

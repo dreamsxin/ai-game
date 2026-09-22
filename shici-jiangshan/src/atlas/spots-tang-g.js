@@ -200,7 +200,7 @@ export const TANG_G = [
     author: '岑参',
     dynasty: 'tang',
     theme: 'elegy',
-    lng: 114.39, lat: 36.09,
+    lng: 116.70, lat: 34.38,
     place: '睢阳·梁园',
     text: '梁园日暮乱飞鸦，极目萧条三两家。庭树不知人去尽，春来还发旧时花。',
     emotion: '故园只剩几户人家，花还照着旧年开',
