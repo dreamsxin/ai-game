@@ -126,7 +126,9 @@ button, input, select { font: inherit; color: inherit; }
 .panel-toggle:not(.open) { left: 0; }
 
 .group { display: flex; flex-direction: column; gap: 8px; }
-.group.grow { flex: 1; min-height: 150px; }
+/* 结果这一组封顶、自己滚：四百多首全铺开时卷轴会长到两千像素，
+   后面的行迹与读法就被推到看不见的地方，搜完也不知道结果在哪儿 */
+.group.grow { flex: 1 1 auto; min-height: 150px; max-height: 46dvh; }
 .group-head {
   display: flex;
   align-items: center;
@@ -172,6 +174,16 @@ button, input, select { font: inherit; color: inherit; }
   font-size: 13px;
 }
 .row input::placeholder { color: rgba(108, 100, 80, 0.6); }
+.row .clear {
+  flex: none;
+  width: 28px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 240, 0.7);
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+.row .clear:hover { color: var(--zhu); }
 
 /* ---------- 行迹 ---------- */
 .routes { display: flex; flex-direction: column; gap: 6px; }
@@ -236,6 +248,7 @@ button, input, select { font: inherit; color: inherit; }
 .spot-list button {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   width: 100%;
   padding: 5px 8px;
@@ -246,6 +259,29 @@ button, input, select { font: inherit; color: inherit; }
 }
 .spot-list button:hover { background: #fffaea; }
 .spot-list button.on { background: color-mix(in srgb, var(--chip) 18%, #fffaea); }
+.spot-list button.with-hit { align-items: baseline; padding-bottom: 7px; }
+/* 命中的那一处：自己占一行，前面的小标签说清命中在哪个字段 ——
+   「句中」是原文，「题解」「背景」「赏析」是我写的话，不标出来会被当成诗里的字 */
+.spot-list .hit {
+  flex: 0 0 100%;
+  margin: 1px 0 0 26px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.spot-list .hit em {
+  font-style: normal;
+  margin-right: 5px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+.spot-list .hit mark {
+  background: color-mix(in srgb, var(--zhu) 18%, transparent);
+  color: var(--zhu);
+  font-weight: 600;
+}
 .spot-list .glyph {
   width: 18px;
   height: 18px;

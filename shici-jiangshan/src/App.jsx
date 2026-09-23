@@ -4,7 +4,7 @@ import { createScene, LIGHTS } from './scene/createScene.js';
 import { SPOTS, spotById } from './atlas/spots.js';
 import { ROUTES } from './atlas/routes.js';
 import { DYNASTIES, THEMES, dynastyOf, themeOf, hexOf } from './atlas/taxonomy.js';
-import { filterSpots, summarize, nearbySpots, headline, routeDetail, EMPTY_FILTER } from './atlas/query.js';
+import { filterSpots, summarize, nearbySpots, headline, routeDetail, matchHint, EMPTY_FILTER } from './atlas/query.js';
 
 const VIEWS = [
   { id: 'overview', name: '全卷', hint: '西起玉门关，东到东海' },
@@ -284,7 +284,43 @@ export default function App() {
               aria-label="关键词"
               onChange={(e) => setFilter((f) => ({ ...f, keyword: e.target.value }))}
             />
+            {filter.keyword.trim() && (
+              <button type="button" className="clear" aria-label="清空检索" onClick={() => setFilter((f) => ({ ...f, keyword: '' }))}>✕</button>
+            )}
           </div>
+        </section>
+
+        {/* 结果紧跟检索框：这一段原先排在整卷的最末，输入之后要往下滚一千多像素才看得见结果 */}
+        <section className="group grow">
+          <div className="group-head"><span>诗词 {filtered.length}</span></div>
+          <ul className="spot-list">
+            {filtered.map((s) => {
+              const raw = matchHint(s, filter.keyword);
+              const hint = raw && !raw.obvious ? raw : null;   // 命中在篇名／作者时不补这一行：那两项就在行上
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    title={Number.isFinite(s.lng) ? s.place : `${s.place} —— 定不住地点，不落在图上`}
+                    className={`${selectedId === s.id ? 'on' : ''} ${hint ? 'with-hit' : ''}`}
+                    style={{ '--chip': hexOf(themeOf(s.theme).color) }}
+                    onClick={() => pick(s.id)}
+                  >
+                    <span className="glyph">{themeOf(s.theme).glyph}</span>
+                    <span className="name">{s.name}</span>
+                    <span className="place">{s.author}</span>
+                    {hint && (
+                      <span className="hit">
+                        <em>{hint.label}</em>{hint.before}<mark>{hint.hit}</mark>{hint.after}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+
+            {!filtered.length && <li className="empty">这组条件下没有作品，试试少选一个主题或清空检索</li>}
+          </ul>
         </section>
 
         <section className="group">
@@ -325,29 +361,6 @@ export default function App() {
         <section className="group">
           <div className="group-head"><span>怎么看这张图</span></div>
           <ul className="notes">{READING.map((n) => <li key={n}>{n}</li>)}</ul>
-        </section>
-
-        <section className="group grow">
-          <div className="group-head"><span>诗词 {filtered.length}</span></div>
-          <ul className="spot-list">
-            {filtered.map((s) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  title={Number.isFinite(s.lng) ? s.place : `${s.place} —— 定不住地点，不落在图上`}
-                  className={selectedId === s.id ? 'on' : ''}
-                  style={{ '--chip': hexOf(themeOf(s.theme).color) }}
-                  onClick={() => pick(s.id)}
-                >
-                  <span className="glyph">{themeOf(s.theme).glyph}</span>
-                  <span className="name">{s.name}</span>
-                  <span className="place">{s.author}</span>
-                </button>
-              </li>
-            ))}
-
-            {!filtered.length && <li className="empty">这组条件下没有作品，试试少选一个主题或清空检索</li>}
-          </ul>
         </section>
       </aside>
 

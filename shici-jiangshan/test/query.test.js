@@ -4,7 +4,7 @@ import { SPOTS, spotById } from '../src/atlas/spots.js';
 import { ROUTES } from '../src/atlas/routes.js';
 import { DYNASTIES, THEMES } from '../src/atlas/taxonomy.js';
 import {
-  filterSpots, summarize, nearbySpots, headline, routeDetail, allRouteDetails, EMPTY_FILTER,
+  filterSpots, summarize, nearbySpots, headline, routeDetail, allRouteDetails, matchHint, EMPTY_FILTER,
 } from '../src/atlas/query.js';
 
 const kw = (keyword) => filterSpots({ ...EMPTY_FILTER, keyword });
@@ -49,6 +49,63 @@ test('搜不到的词返回空数组', () => {
   assert.deepEqual(kw('zzzzzz'), []);
   // 英文的大小写不影响结果
   assert.equal(kw('ABCDEF').length, kw('abcdef').length);
+});
+
+// 搜「明月」会出来《山居秋暝》——命中的是"明月松间照"。列表里只有篇名与作者时
+// 这看着像搜错了，所以每条结果都要能说出命中在哪个字段、哪几个字。
+test('每条命中都说得出命中在哪一处', () => {
+  const hits = kw('明月');
+  assert.ok(hits.length > 3);
+  for (const s of hits) {
+    const hint = matchHint(s, '明月');
+    assert.ok(hint, `${s.author}《${s.name}》命中了却说不出命中在哪`);
+    assert.equal(hint.hit, '明月');
+    assert.ok(['作者', '地名', '篇名', '句中', '题解', '背景', '赏析'].includes(hint.label), `字段名 ${hint.label} 不在词表里`);
+    // 片段必须是原文里真有的一段，不能是拼出来的
+    const plain = (hint.before + hint.hit + hint.after).replace(/…/g, '');
+    const source = [s.name, s.author, s.place, s.text, s.emotion, s.context, ...s.highlights].join('\u0000');
+    assert.ok(source.includes(plain), `${s.name} 的片段「${plain}」在原文里找不到`);
+  }
+});
+
+test('命中在作者或篇名时标 obvious —— 那两项就在列表行上，不必再补一行', () => {
+  const libai = SPOTS.find((s) => s.author === '李白');
+  assert.equal(matchHint(libai, '李白').label, '作者');
+  assert.equal(matchHint(libai, '李白').obvious, true);
+  const byName = SPOTS.find((s) => s.name.includes('黄鹤楼'));
+  assert.equal(matchHint(byName, '黄鹤楼').label, '篇名');
+  assert.equal(matchHint(byName, '黄鹤楼').obvious, true);
+  // 句中命中要画出来：这是"看不出为什么命中"的那一类
+  const inText = SPOTS.find((s) => s.text.includes('明月') && !s.name.includes('明月') && !s.place.includes('明月'));
+  assert.equal(matchHint(inText, '明月').label, '句中');
+  assert.equal(matchHint(inText, '明月').obvious, false);
+  assert.equal(matchHint(libai, ''), null);
+  assert.equal(matchHint(libai, '阿尔卑斯'), null);
+});
+
+test('空白分开的几个词是"并且"：先想起人、再想起句里的字，这么搜得着', () => {
+  const both = kw('李白 黄河');
+  assert.ok(both.length >= 1, '「李白 黄河」应当搜得到李白写黄河的那几首');
+  for (const s of both) {
+    const hay = [s.name, s.author, s.place, s.text, s.emotion, s.context, ...s.highlights].join(' ');
+    assert.ok(hay.includes('李白') && hay.includes('黄河'), `${s.name} 少了一个词`);
+  }
+  // 并且，所以结果一定不多于任一单词的结果
+  assert.ok(both.length <= Math.min(kw('李白').length, kw('黄河').length));
+  // 多词时命中提示挑那个"看不出来的"：显示黄河所在的句子，而不是"作者 李白"
+  const hint = matchHint(both[0], '李白 黄河');
+  assert.equal(hint.obvious, false);
+  assert.ok(hint.hit === '黄河' || hint.label !== '作者');
+  // 前后空格与连续空格不影响
+  assert.equal(kw('  李白   黄河  ').length, both.length);
+});
+
+test('命中片段在长文里要截短，两头用省略号交代还有字', () => {
+  const long = SPOTS.find((s) => s.text.length > 40 && s.text.includes('月'));
+  const hint = matchHint(long, '月');
+  assert.ok(hint.before.length + hint.after.length < 24, '片段截得不够短，会在卷轴里折成好几行');
+  const at = long.text.indexOf('月');
+  if (at > 8) assert.ok(hint.before.startsWith('…'), '前面还有字却没有省略号');
 });
 
 test('summarize 的各项之和等于总数', () => {
