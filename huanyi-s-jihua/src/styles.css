@@ -48,6 +48,19 @@ body {
   overflow: hidden;
 }
 
+/* HUD、舞台、操作键同一列同一宽度。只给舞台限宽会让宽屏上的 HUD 飞到屏幕两端。 */
+.frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .hud-top {
   display: flex;
   align-items: flex-start;
@@ -194,7 +207,7 @@ body {
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: 8px;
+  bottom: 4px;
   height: 4px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.35);
@@ -207,17 +220,25 @@ body {
   background: var(--cool);
 }
 
+/* 弃翼键贴在舞台内底部：轻点画布任意处也能弃翼，但那是隐形操作，
+   这个键是它唯一看得见的提示，同时兼作状态显示（有翼／裸机）。
+   做成浮键而不是占一整行，舞台才吃得满高度。 */
 .pad {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
   display: grid;
-  grid-template-columns: 1fr;
 }
 
 /* 只有一个按钮：弃翼。走位靠拖动，开火是自动的，所以这一个键就是全部的战术输入。 */
 .pad-key {
   display: grid;
   place-items: center;
-  height: 58px;
-  border-radius: 16px;
+  height: 52px;
+  padding: 0 22px;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
   border: 1px solid rgba(127, 227, 255, 0.5);
   background: rgba(127, 227, 255, 0.12);
   color: var(--cool);
@@ -241,7 +262,7 @@ body {
 .pause-key,
 .mute-key {
   position: absolute;
-  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 70px);
+  bottom: 16px;
   display: grid;
   place-items: center;
   width: 38px;
@@ -253,12 +274,12 @@ body {
 }
 
 .pause-key {
-  right: max(12px, env(safe-area-inset-right));
+  right: 12px;
 }
 
 /* 静音开关贴在暂停键左边：两个都是随时要按的旁路操作。 */
 .mute-key {
-  right: calc(max(12px, env(safe-area-inset-right)) + 46px);
+  right: 58px;
 }
 
 /* 键盘操作也要看得见焦点，否则按 Tab 就等于瞎点。 */
@@ -520,12 +541,14 @@ body {
   font-weight: 700;
 }
 
-@media (min-width: 820px) {
-  .stage,
-  .pad {
-    max-width: 560px;
-    margin: 0 auto;
-    width: 100%;
+/* 宽屏上的限宽交给 .frame，这里只在矮屏上把 HUD 收一收，别跟舞台抢高度。 */
+@media (max-height: 560px) {
+  .stat-score .stat-value {
+    font-size: 17px;
+  }
+
+  .stat-label {
+    display: none;
   }
 }
 

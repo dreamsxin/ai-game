@@ -279,7 +279,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="hud-top">
+      {/* HUD、舞台、操作键收在同一列里：只给舞台限宽而 HUD 铺满整屏的话，
+          宽屏上分数会跑到屏幕最左、机翼跑到最右，和舞台完全脱节。 */}
+      <div className="frame">
+        <header className="hud-top">
         <div className="stat stat-score">
           <span className="stat-value">{formatScore(view.score)}</span>
           <span className="stat-label">{progressLabel(view)}</span>
@@ -309,32 +312,35 @@ export default function App() {
         <div className="progress" aria-hidden="true">
           <i style={{ width: `${Math.round(progressRatio(view, bossAt(levelAt(view.levelIndex))) * 100)}%` }} />
         </div>
-      </div>
 
-      <nav className="pad" aria-label="触屏操作">
+        {/* 三个键都贴在舞台内的右下角：它们是这块画面的操作，不该再去偷一整行高度。
+            注意它们是 stage-host 的兄弟节点，所以按键不会同时被算成一次「画布轻点」。 */}
+        <nav className="pad" aria-label="触屏操作">
+          <button
+            type="button"
+            className={`pad-key pad-jettison${view.ship.wing ? '' : ' pad-key-off'}`}
+            onPointerDown={jettison}
+            aria-label={jettisonLabel(view.ship)}
+          >
+            {jettisonLabel(view.ship)}
+          </button>
+        </nav>
+
+        <button type="button" className="pause-key" onClick={pause} aria-label={paused ? '继续' : '暂停'}>
+          {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
+        </button>
+
         <button
           type="button"
-          className={`pad-key pad-jettison${view.ship.wing ? '' : ' pad-key-off'}`}
-          onPointerDown={jettison}
-          aria-label={jettisonLabel(view.ship)}
+          className="mute-key"
+          onClick={toggleMute}
+          aria-pressed={muted}
+          aria-label={muteLabel(muted)}
         >
-          {jettisonLabel(view.ship)}
+          {muted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
         </button>
-      </nav>
-
-      <button type="button" className="pause-key" onClick={pause} aria-label={paused ? '继续' : '暂停'}>
-        {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
-      </button>
-
-      <button
-        type="button"
-        className="mute-key"
-        onClick={toggleMute}
-        aria-pressed={muted}
-        aria-label={muteLabel(muted)}
-      >
-        {muted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
-      </button>
+        </div>
+      </div>
 
       {overlay && (
         <div className="overlay" role="dialog" aria-modal="true">
