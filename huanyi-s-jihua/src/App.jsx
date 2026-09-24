@@ -279,10 +279,12 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* HUD、舞台、操作键收在同一列里：只给舞台限宽而 HUD 铺满整屏的话，
-          宽屏上分数会跑到屏幕最左、机翼跑到最右，和舞台完全脱节。 */}
+      {/* 画面铺满屏幕，HUD 浮在它上面：竖版射击最值钱的就是纵向那点空间，
+          HUD 占一行等于把提前量削掉一截。 */}
       <div className="frame">
-        <header className="hud-top">
+        <div className="stage">
+          <div ref={hostRef} className="stage-host" aria-label="换翼S计划关卡" />
+          <header className="hud-top">
         <div className="stat stat-score">
           <span className="stat-value">{formatScore(view.score)}</span>
           <span className="stat-label">{progressLabel(view)}</span>
@@ -297,10 +299,8 @@ export default function App() {
           <span className={`stat-value${view.ship.wing ? '' : ' stat-bare'}`}>{wingLabel(view.ship)}</span>
           <span className="stat-label">{chainLabel(view.chain) || evolveLabel(view.ship) || brief.label}</span>
         </div>
-      </header>
+        </header>
 
-      <div className="stage">
-        <div ref={hostRef} className="stage-host" aria-label="换翼S计划关卡" />
         {fault && <p className="fault">表现层没起来：{fault}　·　刷新页面重试</p>}
         {banner && <p className="banner">{banner}</p>}
         {hp !== null && (
