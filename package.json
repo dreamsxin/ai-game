@@ -29,7 +29,8 @@
     "lishui-luxing",
     "fuzhou-luxing",
     "shici-jiangshan",
-    "qiannian-jiangshan"
+    "qiannian-jiangshan",
+    "huanyi-s-jihua"
   ],
   "scripts": {
     "dev": "npm run dev --workspace wuqizi",
@@ -60,6 +61,7 @@
     "dev:fuzhou-luxing": "npm run dev --workspace fuzhou-luxing",
     "dev:shici-jiangshan": "npm run dev --workspace shici-jiangshan",
     "dev:qiannian-jiangshan": "npm run dev --workspace qiannian-jiangshan",
+    "dev:huanyi-s-jihua": "npm run dev --workspace huanyi-s-jihua",
     "build": "npm run build --workspaces --if-present",
     "build:wuqizi": "npm run build --workspace wuqizi",
     "build:xiaoyuanmian": "npm run build --workspace xiaoyuanmian",
@@ -88,6 +90,7 @@
     "build:fuzhou-luxing": "npm run build --workspace fuzhou-luxing",
     "build:shici-jiangshan": "npm run build --workspace shici-jiangshan",
     "build:qiannian-jiangshan": "npm run build --workspace qiannian-jiangshan",
+    "build:huanyi-s-jihua": "npm run build --workspace huanyi-s-jihua",
     "start": "npm run start --workspace wuqizi",
     "start:xiaoyuanmian": "npm run start --workspace xiaoyuanmian",
     "start:nijie-tunshi": "npm run start --workspace nijie-tunshi",
@@ -115,6 +118,7 @@
     "start:fuzhou-luxing": "npm run start --workspace fuzhou-luxing",
     "start:shici-jiangshan": "npm run start --workspace shici-jiangshan",
     "start:qiannian-jiangshan": "npm run start --workspace qiannian-jiangshan",
+    "start:huanyi-s-jihua": "npm run start --workspace huanyi-s-jihua",
     "test": "npm test --workspaces --if-present",
     "test:wuqizi": "npm test --workspace wuqizi",
     "test:xiaoyuanmian": "npm test --workspace xiaoyuanmian",
@@ -142,6 +146,7 @@
     "test:lishui-luxing": "npm test --workspace lishui-luxing",
     "test:fuzhou-luxing": "npm test --workspace fuzhou-luxing",
     "test:shici-jiangshan": "npm test --workspace shici-jiangshan",
-    "test:qiannian-jiangshan": "npm test --workspace qiannian-jiangshan"
+    "test:qiannian-jiangshan": "npm test --workspace qiannian-jiangshan",
+    "test:huanyi-s-jihua": "npm test --workspace huanyi-s-jihua"
   }
 }
