@@ -77,6 +77,8 @@ export default function App() {
   const [best, setBest] = useState(readBest);
   const [muted, setMuted] = useState(readMuted);
   const [banner, setBanner] = useState('');
+  // 表现层挂掉时的提示。黑屏本身不说话，这行字替它说。
+  const [fault, setFault] = useState('');
   // 最高分在结算时才写盘，但仍要拿开局那一刻的旧纪录比，重开一局才不会误报破纪录。
   const bestAtStartRef = useRef(readBest());
 
@@ -146,7 +148,16 @@ export default function App() {
 
   useEffect(() => {
     const host = hostRef.current;
-    const renderer = createRenderer(host);
+    // 表现层起不来就说出来。以前它一挂只表现为「黑屏 + 选了机翼没动作」：
+    // 面板是 React 画的，照样能点，但世界不动——最难查的就是这种一声不响的失败。
+    let renderer;
+    try {
+      renderer = createRenderer(host);
+    } catch (error) {
+      console.error('[stage] 表现层没起来', error);
+      setFault(String(error?.message ?? error));
+      return undefined;
+    }
     // 键盘挂在 window，手势只挂在舞台上，HUD 上的按钮不会被当成走位拖动。
     const keys = createInput(window, { pointer: false, onPause: () => pauseRef.current?.() });
     // 走位换算问渲染层要：2.5D 里一个像素等于几格要看船现在多深，
@@ -287,6 +298,7 @@ export default function App() {
 
       <div className="stage">
         <div ref={hostRef} className="stage-host" aria-label="换翼S计划关卡" />
+        {fault && <p className="fault">表现层没起来：{fault}　·　刷新页面重试</p>}
         {banner && <p className="banner">{banner}</p>}
         {hp !== null && (
           <div className="boss-bar" aria-label={`${view.bossName} 剩余体力`}>

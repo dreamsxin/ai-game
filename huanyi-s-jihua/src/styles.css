@@ -126,6 +126,23 @@ body {
   pointer-events: none;
 }
 
+/* 表现层挂掉时的提示。黑屏本身不说话，这行字替它说。 */
+.fault {
+  position: absolute;
+  top: 42%;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 47, 94, 0.14);
+  border: 1px solid rgba(255, 47, 94, 0.55);
+  color: var(--warm);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .banner {
   position: absolute;
   top: 8%;
