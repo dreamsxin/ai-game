@@ -136,11 +136,19 @@ export default function App() {
     push(togglePause(state));
   }, [best, next, push, restart]);
 
+  // 暂停回调走 ref：渲染循环那个 effect 必须只挂一次。
+  // 把 pause 写进 deps 会让它随 best 变化重建——而重建一次就是新开一个 WebGL 上下文，
+  // 开几次浏览器就不再给了，画面直接黑屏（2D 版无所谓，3D 版是致命的）。
+  const pauseRef = useRef(pause);
+  useEffect(() => {
+    pauseRef.current = pause;
+  }, [pause]);
+
   useEffect(() => {
     const host = hostRef.current;
     const renderer = createRenderer(host);
     // 键盘挂在 window，手势只挂在舞台上，HUD 上的按钮不会被当成走位拖动。
-    const keys = createInput(window, { pointer: false, onPause: pause });
+    const keys = createInput(window, { pointer: false, onPause: () => pauseRef.current?.() });
     // 走位换算问渲染层要：2.5D 里一个像素等于几格要看船现在多深，
     // 照「场地高 / 画布高」这种平均值算，竖着拖会比手指慢四成。
     const touch = createInput(host, {
@@ -184,6 +192,9 @@ export default function App() {
         schedule();
       });
     };
+    // 先画一帧再进循环：万一 rAF 被浏览器掐着（后台标签、省电模式、无头环境），
+    // 至少画面上有场地而不是一整块黑——「黑屏」这种症状太容易被当成程序崩了。
+    renderer.render(gameRef.current, 0, []);
     schedule();
 
     return () => {
@@ -193,7 +204,8 @@ export default function App() {
       renderer.dispose();
       padRef.current = null;
     };
-  }, [pause]);
+    // 只挂一次：WebGL 上下文和后处理的渲染目标都是重家伙，不能跟着 state 重建。
+  }, []);
 
   useEffect(() => {
     if (view.status !== 'over' && view.status !== 'won') return;

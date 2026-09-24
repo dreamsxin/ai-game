@@ -93,6 +93,12 @@ export function createStage(host) {
   renderer.toneMappingExposure = 1.15;
   host.appendChild(renderer.domElement);
 
+  // 上下文丢了的话画布会纯黑而且一声不响，所以这里留一句明话。
+  renderer.domElement.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    console.warn('[stage] WebGL 上下文丢失，画面会变黑；刷新页面即可恢复。');
+  });
+
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 1400);
   const world = new THREE.Group();
@@ -365,6 +371,10 @@ export function createStage(host) {
     dispose() {
       observer.disconnect();
       composer.dispose();
+      // **必须显式丢掉上下文**：只调 renderer.dispose() 的话旧上下文要等 GC 才释放，
+      // 而浏览器同时只给十来个 WebGL 上下文。热更新／重挂几次之后新的就申请不到了，
+      // 症状是整块画布纯黑、控制台连错都不报。
+      renderer.forceContextLoss();
       renderer.dispose();
       renderer.domElement.remove();
     },
