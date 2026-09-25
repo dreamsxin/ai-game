@@ -168,9 +168,10 @@ body {
 
 .banner {
   position: absolute;
-  top: 8%;
+  /* 让开右上角那簇旁路键（top 92、宽两枚 38）：横幅是全宽居中文本，不留位就会穿过去。 */
+  top: 96px;
   left: 8px;
-  right: 8px;
+  right: 108px;
   margin: 0;
   text-align: center;
   font-size: 15px;
@@ -179,6 +180,10 @@ body {
   color: var(--accent);
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.75);
   pointer-events: none;
+  /* 一行装不下就截断：换行会把第二行推到右上那簇键下面。 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Boss 血条压在画面顶端：弱点标记在画布上，剩多少血在这里。 */

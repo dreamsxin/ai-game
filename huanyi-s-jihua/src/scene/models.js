@@ -67,36 +67,13 @@ export function createPool(parent, factory) {
 
 const textureCache = new Map();
 
-/** 字：画进一张小贴图里当 sprite 用。机翼编号、运载火箭装的型号、跳关门都靠它。 */
-export function labelTexture(text, color = '#04101f') {
-  const key = `${text}|${color}`;
-  const hit = textureCache.get(key);
-  if (hit) return hit;
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, 128, 128);
-  ctx.fillStyle = color;
-  ctx.font = `800 ${text.length > 2 ? 52 : 84}px system-ui, 'PingFang SC', sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 64, 70);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  textureCache.set(key, texture);
-  return texture;
-}
-
-export function makeLabel(text, color, size = 5) {
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: labelTexture(text, color), transparent: true, depthWrite: false }),
-  );
-  sprite.scale.set(size, size, 1);
-  return sprite;
-}
-
-/** 一点点辉光贴图，火花和敌弹的光晕都用它。 */
+/**
+ * 一点点辉光贴图，火花和敌弹的光晕都用它。
+ *
+ * 这个文件里**没有任何文字**：斜俯视下道具约 20 像素、运载火箭约 30 像素，
+ * 把字做成贴图缩到那个尺寸只会是一团糊的方块（试过 128 贴图、加描边、抬到壳外，都糊）。
+ * 所有文字改由 `render.js` 的 2D 叠层按投影位置画成原生分辨率的字。
+ */
 export function glowTexture() {
   const hit = textureCache.get('#glow');
   if (hit) return hit;
@@ -460,10 +437,10 @@ export function makeEnemy(kind) {
     nose.rotation.x = Math.PI / 2;
     nose.position.z = 8;
     group.add(nose);
-    const label = makeLabel('?', '#3b2200', 6);
-    label.position.set(0, 4.4, 0);
-    group.userData.label = label;
-    group.add(label);
+    // 它装的是哪一型：由 2D 叠层按投影位置写在它上方（世界里的字一定糊）。
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3.4, 4), trim);
+    fin.position.set(0, 3.4, -3);
+    group.add(fin);
   } else {
     const block = new THREE.Mesh(new THREE.BoxGeometry(11, 7, 8), body);
     group.add(block);
@@ -535,13 +512,8 @@ export function makeDrop() {
   const halo = new THREE.Mesh(new THREE.TorusGeometry(5.4, 0.4, 6, 24), glowMat(HAZARD.gold, 0.95));
   halo.rotation.x = -Math.PI / 2;
   group.add(halo);
-  const code = makeLabel('C', '#04101f', 4.6);
-  code.position.set(0, 0.2, 0);
-  group.add(code);
-  const mark = makeLabel('I', TIER_COLOR[0], 3.2);
-  mark.position.set(0, -3.6, 0);
-  group.add(mark);
-  group.userData = { gem, halo, code, mark };
+  // 型号与阶级由 2D 叠层写在它上方：道具在屏幕上只有二十像素，贴图文字必糊。
+  group.userData = { gem, halo };
   return group;
 }
 
@@ -562,10 +534,8 @@ export function makeGate() {
   veil.rotation.x = BILLBOARD_X;
   veil.position.y = 5;
   group.add(veil);
-  const label = makeLabel('跳关', HAZARD.cool, 9);
-  label.position.y = 12;
-  group.add(label);
-  group.userData = { posts: group.children.filter((item) => item.userData.side), lintel, veil, label };
+  // 「跳关」两个字由 2D 叠层写在门框上方。
+  group.userData = { posts: group.children.filter((item) => item.userData.side), lintel, veil };
   return group;
 }
 

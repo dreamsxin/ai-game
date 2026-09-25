@@ -17,7 +17,6 @@ import { createStage } from './stage.js';
 import {
   createPool,
   glowTexture,
-  labelTexture,
   makeBoss,
   makeDrop,
   makeEnemy,
@@ -32,14 +31,6 @@ const MAX_SPARKS = 320;
 const MAX_ARCS = 20;
 const ARC_SEGMENTS = 5;
 const TRAIL_LEN = 10;
-
-const setLabel = (sprite, text, color) => {
-  if (sprite.userData.text === text && sprite.userData.color === color) return;
-  sprite.userData.text = text;
-  sprite.userData.color = color;
-  sprite.material.map = labelTexture(text, color);
-  sprite.material.needsUpdate = true;
-};
 
 /** 每种火力对应一种模型。同型号的子弹共用一个池子，回声（量子分身）的另开一个。 */
 const shotKey = (shot) => {
@@ -195,6 +186,9 @@ export function createRenderer(host) {
   let notes = [];
   let flash = null;
   let lastX = FIELD_W / 2;
+  // 世界里锚着的那些字（道具型号、火箭装的型号、跳关门）：每帧由 sync 收集，
+  // 由 2D 叠层按投影位置画成原生分辨率的字——贴图缩到二十像素一定糊。
+  let marks = [];
   // 相位残影的轨迹：只在下潜时攒，别的时候一帧一帧清掉。
   const trail = [];
 
@@ -368,7 +362,10 @@ export function createRenderer(host) {
       mesh.position.set(worldX(foe.x), alt, worldZ(foe.y));
       const ud = mesh.userData;
       if (ud.spin) ud.spin.rotation.y = foe.age * 1.6;
-      if (ud.label && foe.wing) setLabel(ud.label, foe.wing, '#3b2200');
+      // 运载火箭装的是哪一型：世界里的字一定糊，所以交给 2D 叠层按投影位置写。
+      if (foe.kind === 'carrier' && foe.wing) {
+        marks.push({ x: foe.x, y: foe.y, alt: ALT.enemy + 7, text: foe.wing, color: HAZARD.gold, size: 15 });
+      }
       const hurt = foe.hp < foe.maxHp;
       ud.bar.visible = hurt;
       ud.barBack.visible = hurt;
@@ -435,10 +432,19 @@ export function createRenderer(host) {
       ud.gem.material.emissive.set(usable ? base : '#2b2f3c');
       ud.gem.material.emissiveIntensity = usable ? 0.9 : 0.2;
       ud.halo.visible = usable && !fading;
-      setLabel(ud.code, drop.code, '#04101f');
       const tier = Math.min(3, Math.max(1, drop.tier ?? 1));
-      ud.mark.visible = tier > 1;
-      if (tier > 1) setLabel(ud.mark, tierOf(tier).mark, TIER_COLOR[tier - 1]);
+      // 型号与阶级写在 2D 叠层上：道具在屏幕上只有二十像素，贴图文字必糊。
+      // 打不进本关弱点的压成灰字，和压暗的宝石说同一件事。
+      marks.push({
+        x: drop.x,
+        y: drop.y,
+        alt: ALT.shot + 13,
+        text: drop.code,
+        color: usable ? (drop.mine ? HAZARD.cool : HAZARD.gold) : '#8b93a7',
+        size: 16,
+        sub: tier > 1 ? tierOf(tier).mark : null,
+        subColor: TIER_COLOR[tier - 1],
+      });
       mesh.scale.setScalar(fading ? 0.72 : 1);
     }
     dropPool.end();
@@ -454,6 +460,7 @@ export function createRenderer(host) {
     ud.lintel.scale.set(data.w, 1, 1);
     ud.veil.scale.set(data.w, 10, 1);
     ud.veil.material.opacity = 0.14 + Math.abs(Math.sin(performance.now() / 420)) * 0.12;
+    marks.push({ x: data.x, y: data.y, alt: 14, text: '跳关', color: HAZARD.cool, size: 18 });
   };
 
   const syncShots = (state) => {
@@ -599,6 +606,26 @@ export function createRenderer(host) {
     ctx.textAlign = 'center';
     const scale = Math.min(size.w / 420, 1.4);
     drawTouch(state, pointers);
+
+    // 世界里锚着的字：道具型号、火箭装的型号、跳关门。深色描边保证在任何底色上都读得出。
+    ctx.lineJoin = 'round';
+    for (const mark of marks) {
+      const spot = toScreen(mark.x, mark.y, mark.alt);
+      if (spot.x < -40 || spot.x > size.w + 40 || spot.y < -40 || spot.y > size.h + 40) continue;
+      ctx.font = `800 ${Math.round(mark.size * Math.min(1.2, scale))}px 'PingFang SC', system-ui, sans-serif`;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(4, 12, 26, 0.9)';
+      ctx.strokeText(mark.text, spot.x, spot.y);
+      ctx.fillStyle = mark.color;
+      ctx.fillText(mark.text, spot.x, spot.y);
+      if (mark.sub) {
+        ctx.font = `800 ${Math.round(mark.size * 0.72 * Math.min(1.2, scale))}px 'PingFang SC', system-ui, sans-serif`;
+        ctx.lineWidth = 3;
+        ctx.strokeText(mark.sub, spot.x, spot.y + mark.size * 1.1);
+        ctx.fillStyle = mark.subColor ?? mark.color;
+        ctx.fillText(mark.sub, spot.x, spot.y + mark.size * 1.1);
+      }
+    }
     for (const item of notes) {
       item.age += dt;
       const spot = toScreen(item.x, item.y);
@@ -638,6 +665,7 @@ export function createRenderer(host) {
 
     render(state, dt, pointers) {
       const delta = Math.min(0.05, Math.max(0, dt));
+      marks = [];
       stage.setChapter(state.chapter);
       // Boss 战时背景压慢：这时候该看的是弹幕和弱点，不是风景往后跑。
       stage.drift(delta, state.boss ? 0.42 : 1);
