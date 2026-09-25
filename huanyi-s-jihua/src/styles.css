@@ -244,6 +244,8 @@ body {
   bottom: 16px;
   transform: translateX(-50%);
   display: grid;
+  /* 不吞手势：走位是全屏拖动，这块提示条压在拇指老家，能吞事件就等于开了个死区。 */
+  pointer-events: none;
 }
 
 /* 只有一个按钮：弃翼。走位靠拖动，开火是自动的，所以这一个键就是全部的战术输入。 */
@@ -262,10 +264,6 @@ body {
   letter-spacing: 2px;
   /* manipulation 会把「按住再滑一点」判成滚动，浏览器随即发 pointercancel，按住的键自己松了。 */
   touch-action: none;
-}
-
-.pad-key:active {
-  background: rgba(127, 227, 255, 0.3);
 }
 
 .pad-key-off {
@@ -302,7 +300,6 @@ body {
 /* 键盘操作也要看得见焦点，否则按 Tab 就等于瞎点。 */
 .pause-key:focus-visible,
 .mute-key:focus-visible,
-.pad-key:focus-visible,
 .wing-card:focus-visible,
 .panel-action:focus-visible {
   outline: 2px solid var(--accent);

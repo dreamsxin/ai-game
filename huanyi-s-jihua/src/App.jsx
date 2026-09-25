@@ -264,8 +264,6 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onHidden);
   }, [push]);
 
-  const jettison = () => padRef.current?.press('jettison');
-
   const ready = view.status === 'ready';
   const selecting = view.status === 'select';
   const paused = view.status === 'paused';
@@ -313,18 +311,15 @@ export default function App() {
           <i style={{ width: `${Math.round(progressRatio(view, bossAt(levelAt(view.levelIndex))) * 100)}%` }} />
         </div>
 
-        {/* 三个键都贴在舞台内的右下角：它们是这块画面的操作，不该再去偷一整行高度。
-            注意它们是 stage-host 的兄弟节点，所以按键不会同时被算成一次「画布轻点」。 */}
-        <nav className="pad" aria-label="触屏操作">
-          <button
-            type="button"
-            className={`pad-key pad-jettison${view.ship.wing ? '' : ' pad-key-off'}`}
-            onPointerDown={jettison}
-            aria-label={jettisonLabel(view.ship)}
-          >
+        {/* 弃翼提示条**不吃指针事件**：走位是全屏拖动，一块会吞手势的按钮摆在拇指老家
+            就等于在最常按的地方开了个死区（从它上面起手拖动，船不动）。
+            关掉 pointer-events 之后点它照样弃翼——事件穿到画布上，那本来就是「轻点即弃翼」。
+            所以它退回它真正的职责：看得见的提示 + 状态显示（带翼／裸机／下潜中）。 */}
+        <div className="pad" aria-hidden="true">
+          <span className={`pad-key pad-jettison${view.ship.wing ? '' : ' pad-key-off'}`}>
             {jettisonLabel(view.ship)}
-          </button>
-        </nav>
+          </span>
+        </div>
 
         <button type="button" className="pause-key" onClick={pause} aria-label={paused ? '继续' : '暂停'}>
           {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
