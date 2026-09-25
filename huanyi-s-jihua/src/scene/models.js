@@ -342,6 +342,10 @@ export function makeShip({ ghost = false } = {}) {
   // 机翼层：两片大后掠翼加翼尖灯与挂舱。阶级越高翼尖越亮。
   const wing = new THREE.Group();
   const panelMat = flat('#3c4c7d', { emissive: '#2d3f84', glow: 0.8, metalness: 0.5, opacity: 1 });
+  // **必须双面**。两处都会把面翻过去：ExtrudeGeometry 转平之后朝上的是它的背面盖，
+  // 而左翼是靠 scale.x = -1 镜像出来的（负缩放同样翻绕序）。
+  // 单面材质下这两片翼会被整片剔掉——斜俯视下就是「战机没有机翼」，而判定里它明明还在。
+  panelMat.side = THREE.DoubleSide;
   mats.push(panelMat);
   const leadMat = glowMat('#7fe3ff', 0.75);
   mats.push(leadMat);
