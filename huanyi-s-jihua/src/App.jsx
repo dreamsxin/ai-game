@@ -345,7 +345,7 @@ export default function App() {
       {overlay && (
         <div className="overlay" role="dialog" aria-modal="true">
           <div className={`panel${finished || cleared ? ' panel-settle' : ''}${selecting ? ' panel-wide' : ''}`}>
-            <h1>{finished ? resultTitle(view.status) : selecting ? '选择机翼' : '换翼S计划'}</h1>
+            <h1>{finished ? resultTitle(view.status) : selecting ? '选择机翼 · 第 2 步' : '换翼S计划'}</h1>
             <p className="panel-status">{statusLabel(view.status)}</p>
 
             {ready && (
@@ -366,7 +366,14 @@ export default function App() {
               <>
                 <p className="panel-brief">{briefLine(brief)}</p>
                 <p className="panel-detail">{weakHint(brief.weak)}</p>
+                {/* 先给一个默认出击键：两层面板长得太像，玩家点完「出击」看到选翼面板
+                    很容易以为卡在原地。这个键让「不想挑」的人一步入场。 */}
+                <button type="button" className="panel-action" onClick={() => pick(brief.pick)}>
+                  <Play size={18} aria-hidden="true" />
+                  带 {brief.pick} {WINGS[brief.pick].name} 出击
+                </button>
                 <p className="panel-detail panel-lab">{labLabel(brief.lab)}</p>
+                <p className="panel-detail">或者自己挑一只（{brief.codes.length} 种可选，往下滑看全部）</p>
                 <div className="wing-grid">
                   {brief.codes.map((code) => (
                     <button

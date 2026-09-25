@@ -67,8 +67,12 @@ body {
   position: absolute;
   z-index: 2;
   top: 8px;
-  left: 8px;
-  right: 8px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  padding: 0 8px;
+  /* 宽屏上三块别横跨整屏：视线要横扫一米才能读完 HUD 就是设计错误。 */
+  max-width: 720px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -268,7 +272,9 @@ body {
 .pause-key,
 .mute-key {
   position: absolute;
-  bottom: 16px;
+  /* 挪到右上：底部那一带是拇指走位与弃翼键的地盘，旁路操作不该掺在里面。
+     92 是让开 HUD（到 62）和 Boss 血条（70—84）之后的位置。 */
+  top: 92px;
   display: grid;
   place-items: center;
   width: 38px;
