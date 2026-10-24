@@ -45,7 +45,8 @@ export function stellarIgnitionReady(state) {
 
 export function resultStars(result) {
   if (!result) return 0;
-  if (result.elapsed <= 150 && result.highestCombo >= 6 && result.phaseShortcut) return 3;
+  const stableIgnition = (result.ignitionAttempts ?? 1) <= 1;
+  if (result.elapsed <= 150 && result.highestCombo >= 6 && result.phaseShortcut && stableIgnition) return 3;
   if (result.elapsed <= 195 || result.highestCombo >= 4) return 2;
   return 1;
 }

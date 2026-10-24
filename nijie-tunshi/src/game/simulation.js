@@ -307,6 +307,7 @@ export function step(state, input = {}, dt = STEP) {
         highestCombo: next.player.highestCombo,
         route: next.encounter.route ?? 'steady',
         phaseShortcut: next.encounter.phaseShortcut,
+        ignitionAttempts: next.player.ignitionAttempts,
       };
       next.result.stars = resultStars(next.result);
       next.message = `糖洞跃迁完成 · ${next.result.stars} 星评价`;

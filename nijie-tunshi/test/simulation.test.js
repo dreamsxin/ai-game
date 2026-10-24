@@ -6,7 +6,7 @@ import {
   createGame, enterNextUniverse, isAscensionUnlocked, radiusForMass,
   restartCurrentUniverse, step, togglePause,
 } from '../src/game/simulation.js';
-import { STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS, stellarIgnitionReady } from '../src/game/rules.js';
+import { STELLAR_FUEL_TARGET, STELLAR_IGNITION_MASS, resultStars, stellarIgnitionReady } from '../src/game/rules.js';
 import { createReplayAgent } from './helpers/replayAgent.js';
 
 const advance = (state, input, seconds) => {
@@ -269,6 +269,15 @@ test('scripted replay completes stellar ignition in every defined universe', () 
     assert.equal(state.status, 'ascending', `universe ${universe}`);
     assert.equal(state.player.ignited, true, `universe ${universe}`);
   }
+});
+
+test('three stars demand a stable first ignition', () => {
+  const base = { elapsed: 140, highestCombo: 7, phaseShortcut: true };
+  assert.equal(resultStars({ ...base, ignitionAttempts: 1 }), 3);
+  assert.equal(resultStars({ ...base, ignitionAttempts: 2 }), 2);
+  assert.equal(resultStars({ ...base }), 3, 'legacy results count as one attempt');
+  assert.equal(resultStars({ elapsed: 200, highestCombo: 2, phaseShortcut: false, ignitionAttempts: 3 }), 1);
+  assert.equal(resultStars(null), 0);
 });
 
 test('pause freezes simulation and toggle resumes it', () => {

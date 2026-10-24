@@ -217,7 +217,7 @@ export default function App() {
         <section className="overlay results">
           <p className="eyebrow">糖星诞生 · {view.universe.name}</p>
           <h2>{'★'.repeat(view.result?.stars ?? 1)}</h2>
-          <div className="result-grid"><span>用时<strong>{formatTime(view.result?.elapsed ?? 0)}</strong></span><span>最高连击<strong>×{view.result?.highestCombo ?? 0}</strong></span><span>累计星级<strong>{view.universe.cumulativeStars + (view.result?.stars ?? 0)}</strong></span><span>下一宇宙<strong>{view.universe.index + 1}</strong></span></div>
+          <div className="result-grid"><span>用时<strong>{formatTime(view.result?.elapsed ?? 0)}</strong></span><span>最高连击<strong>×{view.result?.highestCombo ?? 0}</strong></span><span>累计星级<strong>{view.universe.cumulativeStars + (view.result?.stars ?? 0)}</strong></span><span>点火次数<strong>{view.result?.ignitionAttempts ?? 1}</strong></span></div>
           <div className="result-actions"><button className="secondary" onClick={restart}><RotateCcw size={17} />重试本宇宙</button><button className="primary" data-testid="next-universe" onClick={continueUniverse}><Sparkles size={17} />进入下一宇宙</button></div>
         </section>
       )}
