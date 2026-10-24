@@ -4,6 +4,7 @@ import { ambientOffset, burstDirection, profileFor, seedFor } from '../game/effe
 import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitState, stageChargeProgress } from '../game/progression.js';
 import { POLARITY_FLIP_DURATION } from '../game/universes.js';
 import { CANDY_LIGHTING, lightingState } from '../game/lighting.js';
+import { creatureMoodPose } from '../game/moods.js';
 
 const geometryFor = (object) => {
   const size = object.size;
@@ -740,7 +741,9 @@ export function createScene(host) {
           swarm.position.x = object.x;
           swarm.position.z = object.z;
           mesh.rotation.y += 0.003 + object.mass * 0.00005;
-          mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12;
+          const pose = creatureMoodPose(object, playerState, state.encounter, time);
+          mesh.rotation.x = pose.lean;
+          mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12 + pose.bob;
           swarm.position.y = mesh.position.y;
           updateAmbientSwarm(swarm, time, object.polarity);
           const available = playerState.mass + 2 >= object.mass && object.polarity !== 'dark';
@@ -757,6 +760,7 @@ export function createScene(host) {
           swarm.material.opacity += ((available || object.polarity === 'dark' ? profileFor(object.type).ambientOpacity : 0.12) - swarm.material.opacity) * 0.08;
           if (mesh.userData.glints) {
             mesh.userData.glints.rotation.y = time * 0.35;
+            mesh.userData.glints.scale.setScalar(pose.glintScale);
             mesh.userData.glints.children.forEach((glint, index) => {
               glint.material.opacity = (0.38 + Math.sin(time * 3 + index * 2) * 0.22) * (available ? 1 : 0.55);
             });
