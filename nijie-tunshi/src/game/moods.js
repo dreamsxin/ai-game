@@ -4,6 +4,7 @@ export const MOOD_SENSE_RADIUS = 14;
 
 export function creatureMood(object, player, encounter) {
   if (!object.active || object.type === 'core') return 'dormant';
+  if (object.veiled && !object.revealed) return 'dormant';
   if (object.polarity === 'dark') return 'sour';
   const distance = Math.hypot(player.x - object.x, player.z - object.z);
   if (distance > MOOD_SENSE_RADIUS) return 'watching';

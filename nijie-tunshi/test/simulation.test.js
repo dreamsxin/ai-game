@@ -280,6 +280,37 @@ test('three stars demand a stable first ignition', () => {
   assert.equal(resultStars(null), 0);
 });
 
+test('veiled creatures reveal only through gravity in the dark sugar universe', () => {
+  const genesis = createGame(77, { index: 1 });
+  const dark = createGame(77, { index: 4 });
+  assert.ok(genesis.objects.every((object) => !object.veiled && object.revealed));
+  assert.deepEqual(
+    dark.objects.filter((object) => object.veiled).map((object) => object.id),
+    ['crystal-1', 'prism-3'],
+  );
+  assert.ok(dark.objects.filter((object) => object.veiled).every((object) => !object.revealed));
+
+  const target = dark.objects.find((object) => object.id === 'prism-3');
+  let state = dark;
+  state.player.mass = 40;
+  state.player.radius = radiusForMass(40);
+  state.player.x = target.x;
+  state.player.z = target.z;
+  state = step(state, {});
+  assert.equal(state.objects.find((object) => object.id === 'prism-3').active, true, 'veiled target resists consumption');
+
+  state.player.x = target.x;
+  state.player.z = target.z + 6;
+  state = advance(state, { gravityHeld: true }, 0.2);
+  assert.equal(state.objects.find((object) => object.id === 'prism-3').revealed, true);
+  assert.ok(state.actionEvents.some((event) => event.type === 'veiledReveal'));
+
+  state.player.x = target.x;
+  state.player.z = target.z;
+  state = step(state, {});
+  assert.equal(state.objects.find((object) => object.id === 'prism-3').active, false);
+});
+
 test('pause freezes simulation and toggle resumes it', () => {
   let state = createGame();
   state = togglePause(state);

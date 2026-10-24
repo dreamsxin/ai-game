@@ -9,6 +9,7 @@ export const CREATURE_BEHAVIOR = {
 
 export function creatureMotion(object, player, encounter, dt) {
   if (!object.active || object.type === 'core' || object.gravity) return { x: 0, z: 0 };
+  if (object.veiled && !object.revealed) return { x: 0, z: 0 };
   const dx = object.x - player.x;
   const dz = object.z - player.z;
   const distance = Math.hypot(dx, dz);

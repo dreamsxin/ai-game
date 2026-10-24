@@ -21,6 +21,7 @@ export const UNIVERSES = [
     id: 'dark-matter', name: '黑糖深空', rule: '糖引力感知',
     description: '部分糖果怪只在糖引力牵引时显形。',
     massScale: 1.12,
+    veiledIds: ['prism-3', 'crystal-1'],
   },
 ];
 

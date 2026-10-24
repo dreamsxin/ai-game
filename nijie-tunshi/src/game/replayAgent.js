@@ -59,6 +59,7 @@ export function createReplayAgent() {
         && Math.hypot(state.player.x - structure.x, state.player.z - structure.z) < 4.5
       ));
       const polarityPull = node.kind === 'object' && target.polarity === 'dark' && distance < 6.8;
+      const veiledPull = node.kind === 'object' && target.veiled && !target.revealed && distance < 6.8;
       const dashPressed = (node.action === 'dash' && distance < 5 && !previousDash)
         || Boolean(nearbyBreakable && state.player.abilities.dash.cooldown === 0);
       const phasePressed = node.action === 'phase' && distance < 5 && !previousPhase;
@@ -69,7 +70,7 @@ export function createReplayAgent() {
         z: dz,
         dashPressed,
         phasePressed,
-        gravityHeld: polarityPull || (node.action === 'gravity' && distance < 5),
+        gravityHeld: polarityPull || veiledPull || (node.action === 'gravity' && distance < 5),
       };
     },
   };

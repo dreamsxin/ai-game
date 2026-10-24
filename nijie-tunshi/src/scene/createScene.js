@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { LEVEL } from '../game/level.js';
 import { ambientOffset, burstDirection, profileFor, seedFor } from '../game/effects.js';
 import { PLANETARY_RINGS, playerVisualForMass, ringMotionState, satelliteOrbitState, stageChargeProgress } from '../game/progression.js';
-import { POLARITY_FLIP_DURATION } from '../game/universes.js';
+import { POLARITY_FLIP_DURATION, UNIVERSES } from '../game/universes.js';
 import { CANDY_LIGHTING, lightingState } from '../game/lighting.js';
 import { creatureMoodPose } from '../game/moods.js';
 
@@ -450,8 +450,14 @@ export function createScene(host) {
   const objectMeshes = new Map();
   const ambientSwarms = new Map();
   const labels = new Map();
+  const veiledCapableIds = new Set(UNIVERSES.flatMap((universe) => universe.veiledIds ?? []));
   for (const object of LEVEL.objects) {
     const mesh = new THREE.Mesh(geometryFor(object), glowMaterial(object.color));
+    if (veiledCapableIds.has(object.id)) {
+      mesh.material.transparent = true;
+      mesh.material.opacity = 1;
+      mesh.userData.veilCapable = true;
+    }
     mesh.position.set(object.x, object.size * 0.72, object.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -594,11 +600,12 @@ export function createScene(host) {
       const isIgnition = event.type === 'stellarIgnition';
       const isAnchor = event.type === 'anchorBreak';
       const isPolarity = event.type === 'polarityFlip';
+      const isVeiled = event.type === 'veiledReveal';
       const burst = createBurst({
         ...event,
         objectId: event.structureId ?? event.anchorId ?? event.objectId ?? event.type,
-        type: isIgnition ? 'core' : isAnchor || isPolarity ? 'crystal' : 'cube',
-        size: isIgnition ? 2.4 : isAnchor ? 1.5 : isPolarity ? 1.35 : 1.1,
+        type: isIgnition ? 'core' : isAnchor || isPolarity || isVeiled ? 'crystal' : 'cube',
+        size: isIgnition ? 2.4 : isAnchor ? 1.5 : isPolarity || isVeiled ? 1.35 : 1.1,
       });
       burst.bornAt = now;
       activeBursts.push(burst);
@@ -746,7 +753,8 @@ export function createScene(host) {
           mesh.position.y = mesh.userData.baseY + Math.sin(time * 1.7 + object.mass) * 0.12 + pose.bob;
           swarm.position.y = mesh.position.y;
           updateAmbientSwarm(swarm, time, object.polarity);
-          const available = playerState.mass + 2 >= object.mass && object.polarity !== 'dark';
+          const veiled = Boolean(object.veiled) && !object.revealed;
+          const available = playerState.mass + 2 >= object.mass && object.polarity !== 'dark' && !veiled;
           const polarityAmount = object.polarity === 'dark'
             ? clamp01(object.polarityCharge / POLARITY_FLIP_DURATION)
             : object.polarity === 'light' ? 1 : 0;
@@ -757,7 +765,11 @@ export function createScene(host) {
           mesh.material.emissive.lerp(targetObjectColor, 0.12);
           swarm.material.color.lerp(targetObjectColor, 0.12);
           mesh.material.emissiveIntensity += ((available ? 2.4 : object.polarity === 'dark' ? 1.5 + polarityAmount * 2 : 0.55) - mesh.material.emissiveIntensity) * 0.08;
-          swarm.material.opacity += ((available || object.polarity === 'dark' ? profileFor(object.type).ambientOpacity : 0.12) - swarm.material.opacity) * 0.08;
+          swarm.material.opacity += ((veiled ? 0.05 : available || object.polarity === 'dark' ? profileFor(object.type).ambientOpacity : 0.12) - swarm.material.opacity) * 0.08;
+          if (mesh.userData.veilCapable) {
+            mesh.material.opacity += ((veiled ? 0.07 : 1) - mesh.material.opacity) * 0.14;
+            mesh.material.depthWrite = mesh.material.opacity > 0.5;
+          }
           if (mesh.userData.glints) {
             mesh.userData.glints.rotation.y = time * 0.35;
             mesh.userData.glints.scale.setScalar(pose.glintScale);
@@ -775,7 +787,7 @@ export function createScene(host) {
             label.position.z = object.z;
             label.position.y = mesh.userData.baseY + object.size * 0.85 + 0.9 + Math.sin(time * 1.7 + object.mass) * 0.12;
             const labelDistance = Math.hypot(playerState.x - object.x, playerState.z - object.z);
-            label.visible = labelDistance < 18;
+            label.visible = labelDistance < 18 && !veiled;
           }
         } else {
           const label = labels.get(object.id);

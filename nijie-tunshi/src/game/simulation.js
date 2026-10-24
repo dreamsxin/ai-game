@@ -20,11 +20,15 @@ const cloneLevelObjects = (universeDefinition) => LEVEL.objects.map((object) => 
   const polarity = universeDefinition.id === 'antimatter' && object.fuel
     ? universeDefinition.darkFuelIds?.includes(object.id) ? 'dark' : 'light'
     : 'neutral';
+  const veiled = universeDefinition.id === 'dark-matter'
+    && Boolean(universeDefinition.veiledIds?.includes(object.id));
   return {
     ...object,
     mass: Number((object.mass * universeDefinition.massScale).toFixed(2)),
     polarity,
     polarityCharge: 0,
+    veiled,
+    revealed: !veiled,
     vx: 0,
     vz: 0,
     active: true,
@@ -152,6 +156,17 @@ function updateGravityObjects(state, dt) {
     const dz = state.player.z - object.z;
     const distance = Math.hypot(dx, dz);
     const blocked = lineBlocked(object, state.player);
+    if (object.veiled && !object.revealed) {
+      if (gravityActive && distance <= ABILITIES.gravity.radius && !blocked) {
+        object.revealed = true;
+        pushEvent(state, 'actionEvents', {
+          type: 'veiledReveal', objectId: object.id,
+          x: object.x, z: object.z, color: 0xb98cff,
+        });
+        state.message = `糖引力显形 · ${object.id}`;
+      }
+      continue;
+    }
     if (object.polarity === 'dark') {
       const consumeReady = object.type === 'core'
         ? state.encounter.coreUnlocked
