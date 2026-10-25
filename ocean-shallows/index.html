@@ -14,11 +14,13 @@
   body{
     font-family:'Nunito Sans',system-ui,-apple-system,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
     color:#0b3439;user-select:none;-webkit-user-select:none;
+    opacity:0;transition:opacity .9s ease;
   }
+  body.ready{opacity:1}
   #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
   .vignette{
     position:fixed;inset:0;pointer-events:none;z-index:2;
-    background:radial-gradient(125% 95% at 50% 42%, rgba(0,0,0,0) 46%, rgba(4,42,46,.30) 100%);
+    background:radial-gradient(125% 95% at 50% 42%, rgba(0,0,0,0) 52%, rgba(4,42,46,.21) 100%);
     mix-blend-mode:multiply;
   }
   .grain{
@@ -127,6 +129,16 @@
   body.hideui .dock{transform:translateX(-50%) translateY(28px)}
   body.hideui .tools{transform:translateY(-14px)}
 
+  /* ---------- ambient: the UI steps back when the sea is left alone ---------- */
+  body.idle .hud, body.idle .tools, body.idle .dock, body.idle .hint{opacity:0;pointer-events:none}
+  body.idle .dock{transform:translateX(-50%) translateY(24px)}
+  body.idle .tools{transform:translateY(-14px)}
+  body.idle, body.idle #c{cursor:none}
+  /* while idling the vignette stays: it is part of the picture, not the interface */
+  @media (prefers-reduced-motion: reduce){
+    body.idle .hud, body.idle .tools, body.idle .dock, body.idle .hint{transition-duration:.01ms !important}
+  }
+
   /* ---------- fatal fallback ---------- */
   .fatal{
     position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:28px;text-align:center;
@@ -151,6 +163,7 @@
     .tools{right:12px;top:12px;gap:5px;max-width:calc(100vw - 24px)}
     .tool{padding:6px 9px;font-size:10.5px;gap:5px}
     .tool i{display:none}
+    .tool[data-act="full"]{display:none}
     .dock{gap:6px;padding:7px;border-radius:22px;bottom:max(10px, env(safe-area-inset-bottom));
           max-width:calc(100vw - 20px);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;justify-content:flex-start}
     .dock::-webkit-scrollbar{display:none}
@@ -189,6 +202,7 @@
   <button class="tool" data-act="calm"><span>平静</span><i>C</i></button>
   <button class="tool" data-act="clear"><span>清澈</span><i>M</i></button>
   <button class="tool" data-act="sound"><span>声音</span><i>♪</i></button>
+  <button class="tool" data-act="full"><span>全屏</span><i>F</i></button>
   <button class="tool" data-act="hide"><span>隐藏</span><i>H</i></button>
 </div>
 
@@ -218,13 +232,30 @@ const fatalMsg = document.getElementById('fatalMsg');
 function fatal(title, detail) {
   if (fatalMsg) fatalMsg.textContent = title + (detail ? '：' + detail : '');
   if (fatalEl) fatalEl.classList.add('show');
+  document.body.classList.add('ready');
 }
+// safety net: if anything throws before the first frame, the page still becomes visible
+setTimeout(() => document.body.classList.add('ready'), 4000);
 if (!window.THREE) {
   fatal('无法加载 three.js', '这个页面需要联网加载 three.js r128，请检查网络后刷新');
   return;
 }
 
 const REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+// ------------------------------------------------------------------ launch options
+//   ?wallpaper=1   boot straight into ambient mode (UI fades out, wakes on input)
+//   ?fps=30        cap the frame rate — the single best power saving for a wall paper
+//   ?dpr=1.25      override the device pixel ratio cap
+//   ?q=low         start at reduced internal resolution
+//   ?cycle=1       visible slow warm/cool day cycle instead of the subtle breathing
+const QS = new URLSearchParams(location.search);
+const WALLPAPER = QS.get('wallpaper') === '1' || QS.get('mode') === 'wallpaper';
+const FPS_CAP = (() => {
+  const v = parseFloat(QS.get('fps'));
+  if (isFinite(v) && v >= 5) return v;
+  return WALLPAPER ? 30 : 0;          // a wall paper has no reason to run at 60 Hz
+})();
 
 // ------------------------------------------------------------------ math
 const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
@@ -255,9 +286,19 @@ try {
   fatal('无法初始化 WebGL', '当前浏览器或显卡未启用 WebGL，请换用新版 Chrome / Edge 并开启硬件加速');
   return;
 }
+// A wall paper may run for days; when Chrome recycles the GPU context a reload is the only
+// path three r128 can guarantee, because every uploaded buffer is gone with it.
+let ctxLost = false;
 canvas.addEventListener('webglcontextlost', e => {
   e.preventDefault();
-  fatal('渲染已中断', '浏览器回收了图形上下文，刷新页面即可恢复');
+  ctxLost = true;
+  if (typeof stopLoop === 'function') stopLoop();
+  fatal('渲染已中断', '图形上下文被回收，正在自动恢复');
+  setTimeout(() => { if (ctxLost) location.reload(); }, 3500);
+}, false);
+canvas.addEventListener('webglcontextrestored', () => {
+  ctxLost = false;
+  if (fatalEl) fatalEl.classList.remove('show');
 }, false);
 renderer.setClearColor(0x0a3c44, 1);
 renderer.outputEncoding = THREE.sRGBEncoding;
@@ -268,7 +309,11 @@ renderer.toneMapping = THREE.NoToneMapping;
 renderer.autoClear = false;
 
 let DPR = Math.min(window.devicePixelRatio || 1, 2);
-let QUALITY = 1;                       // adaptive multiplier
+{
+  const v = parseFloat(QS.get('dpr'));
+  if (isFinite(v) && v > 0) DPR = clamp(v, 0.5, 3);
+}
+let QUALITY = QS.get('q') === 'low' ? 0.8 : 1;   // adaptive multiplier
 renderer.setPixelRatio(DPR);
 
 const scene = new THREE.Scene();
@@ -492,7 +537,7 @@ const waterMat = new THREE.ShaderMaterial({
     uSunCol: { value: new THREE.Color(0xfff0d6).convertSRGBToLinear().multiplyScalar(1.45) },
     uNear: { value: camera.near }, uFar: { value: camera.far },
     uDeep:    { value: new THREE.Color(0x073a72).convertSRGBToLinear() },
-    uShallow: { value: new THREE.Color(0x49d6c8).convertSRGBToLinear() },
+    uShallow: { value: new THREE.Color(0x59ded2).convertSRGBToLinear() },
     uSkyTop:  { value: new THREE.Color(0x9fd8ea).convertSRGBToLinear() },
     uSkyHor:  { value: new THREE.Color(0xdff2f2).convertSRGBToLinear() }
   },
@@ -612,7 +657,8 @@ const waterMat = new THREE.ShaderMaterial({
       vec3 Hv = normalize(uSun + V);
       float ndh = max(dot(N, Hv), 0.0);
       float ndhS = max(dot(Nswell, Hv), 0.0);
-      float glit = pow(ndhS, 260.0) * 0.95 + pow(ndh, 1400.0) * 0.30;
+      float glitMask = smoothstep(0.36, 0.86, fbm(p * 0.075 + vec2(t * 0.020, -t * 0.015)));
+      float glit = (pow(ndhS, 110.0) * 0.52 + pow(ndh, 620.0) * 0.14) * (0.14 + 0.86 * glitMask);
 
       // ---- refraction + water column (analytic depth — matches the sand mesh exactly)
       vec2 suv = gl_FragCoord.xy / uRes;
@@ -622,17 +668,17 @@ const waterMat = new THREE.ShaderMaterial({
       vec2 suv2 = clamp(suv + off, vec2(0.001), vec2(0.999));
       vec3 bedCol = pow(texture2D(uScene, suv2).rgb, vec3(2.2));   // RT stores sRGB-encoded bytes
 
-      vec3 absorb = exp(-vec3(0.255, 0.052, -0.008) * thick * uClarity);
-      float tint = smoothstep(1.8, 12.5, thick);
+      vec3 absorb = exp(-vec3(0.235, 0.048, -0.010) * thick * uClarity);
+      float tint = smoothstep(1.6, 11.0, thick);
       vec3 waterCol = mix(uShallow, uDeep, pow(tint, 0.85));
-      // the +0.12 keeps very shallow water turquoise instead of letting bare sand read grey
-      float scatT = (1.0 - exp(-thick * 0.048)) * 0.80 + 0.12 * uClarity;
+      // the constant term keeps very shallow water turquoise instead of letting bare sand read grey
+      float scatT = (1.0 - exp(-thick * 0.048)) * 0.84 + 0.20 * uClarity;
 
       // ---- caustics on the floor
       float caus = caustic(p, t) * exp(-thick * 0.12) * smoothstep(13.0, 1.0, thick);
       caus *= 0.45 + 0.55 * smoothstep(0.30, 0.72, fbm(p * 0.085 + 7.0));
 
-      vec3 col = bedCol * (1.0 + caus * 0.55) * absorb + waterCol * scatT * (0.42 + 0.58 * tint);
+      vec3 col = bedCol * (1.0 + caus * 0.18) * absorb + waterCol * scatT * (0.42 + 0.58 * tint);
 
       // ---- foam
       float shoreBand = smoothstep(1.35, 0.08, thick);
@@ -2617,10 +2663,18 @@ canvas.addEventListener('pointerdown', e => {
   }
 }, { passive: true });
 
+let lastSkim = 0;
 canvas.addEventListener('pointermove', e => {
-  if (!whirlDrag) return;
   const wp = new THREE.Vector3();
-  if (pickWater(e.clientX, e.clientY, wp)) U.swirlPos.value.set(wp.x, wp.z);
+  if (whirlDrag) {
+    if (pickWater(e.clientX, e.clientY, wp)) U.swirlPos.value.set(wp.x, wp.z);
+    return;
+  }
+  // brushing the cursor across the water leaves a faint ring — nothing more, this is a backdrop
+  const now = performance.now();
+  if (now - lastSkim < 220) return;
+  lastSkim = now;
+  if (pickWater(e.clientX, e.clientY, wp)) addRing(wp.x, wp.z, 0.85, 0.13, 2.8);
 }, { passive: true });
 window.addEventListener('pointerup', () => { whirlDrag = false; });
 
@@ -2632,6 +2686,7 @@ function setTool(act, on) {
 }
 toolBtns.forEach(b => b.setAttribute('aria-pressed', 'false'));
 function toggle(act) {
+  if (act === 'full') { toggleFullscreen(); return; }
   if (act === 'hide') {
     state.hidden = !state.hidden;
     document.body.classList.toggle('hideui', state.hidden);
@@ -2666,6 +2721,8 @@ window.addEventListener('keydown', e => {
   else if (k === 'c') toggle('calm');
   else if (k === 'm') toggle('clear');
   else if (k === 'h') toggle('hide');
+  else if (k === 'f') toggleFullscreen();
+  else if (k === 'p') togglePause();
 });
 
 // ==================================================================
@@ -2779,31 +2836,148 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
-/*__NEXT2__*/
+// ==================================================================
+//  AMBIENT / WALLPAPER BEHAVIOUR
+// ==================================================================
+// The page is meant to sit on a desktop for hours. The interface fades away when nobody
+// touches it, the renderer sleeps while the tab is hidden, and the frame rate can be capped.
+const IDLE_MS = WALLPAPER ? 2800 : 6500;
+let idleTimer = 0;
+let pointerHeld = false;
+let idleHinted = false;
+
+const uiPanels = [document.getElementById('dock'), document.getElementById('tools')];
+function setUIOffscreen(off) {
+  uiPanels.forEach(el => { if (el && 'inert' in el) el.inert = off; });
+}
+
+function sleepUI() {
+  if (pointerHeld) return;
+  const a = document.activeElement;
+  if (a && a.closest && a.closest('.dock, .tools')) return;   // keyboard focus is still inside the UI
+  const wasAwake = !document.body.classList.contains('idle');
+  document.body.classList.add('idle');
+  setUIOffscreen(true);
+  // one-time hint so the fade never reads as a broken page
+  if (wasAwake && !idleHinted && !WALLPAPER) {
+    idleHinted = true;
+    setTimeout(() => { if (document.body.classList.contains('idle')) toast('界面已淡出 · 移动鼠标唤出'); }, 900);
+  }
+}
+function wakeUI() {
+  document.body.classList.remove('idle');
+  setUIOffscreen(false);
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(sleepUI, IDLE_MS);
+}
+['pointermove', 'pointerdown', 'wheel', 'touchstart', 'keydown', 'focus']
+  .forEach(t => window.addEventListener(t, wakeUI, { passive: true }));
+window.addEventListener('pointerdown', () => { pointerHeld = true; clearTimeout(idleTimer); }, { passive: true });
+['pointerup', 'pointercancel'].forEach(t =>
+  window.addEventListener(t, () => { pointerHeld = false; wakeUI(); }, { passive: true }));
+document.addEventListener('blur', sleepUI);
+window.addEventListener('focus', wakeUI);
+
+// ---- pause
+let paused = false;
+function togglePause() {
+  paused = !paused;
+  if (paused) { stopLoop(); toast('已暂停 · 再按 P 继续'); }
+  else { startLoop(); wakeUI(); }
+}
+
+// ---- fullscreen
+function toggleFullscreen() {
+  const el = document.documentElement;
+  const fs = document.fullscreenElement || document.webkitFullscreenElement;
+  try {
+    if (fs) {
+      const p = (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+      if (p && p.catch) p.catch(function () {});
+    } else {
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (!fn) { toast('当前浏览器不支持全屏'); return; }
+      const p = fn.call(el);
+      if (p && p.catch) p.catch(() => toast('浏览器阻止了全屏'));
+    }
+  } catch (err) { toast('浏览器阻止了全屏'); }
+}
+document.addEventListener('fullscreenchange', () => {
+  setTool('full', !!document.fullscreenElement);
+  wakeUI();
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  setTool('full', !!document.webkitFullscreenElement);
+});
+
+// ---- slow day cycle
+// Default is a ±3.5 % breathing that nobody consciously notices but that keeps the light
+// from looking frozen after an hour. ?cycle=1 opens it up into a visible warm / cool drift.
+const CYCLE_S = QS.get('cycle') === '1' ? 240 : 420;
+const CYCLE_AMP = QS.get('cycle') === '1' ? 0.34 : 0.035;
+const SUN_BASE = sun.intensity, HEMI_BASE = hemi.intensity;
+const SUN_NEUTRAL = new THREE.Color(0xfff1d6);
+const SUN_WARM = new THREE.Color(0xffd2a0);
+const SUN_COOL = new THREE.Color(0xe6f2ff);
+const _sunTmp = new THREE.Color();
+function applyDayCycle(t) {
+  const ph = Math.sin(t * TAU / CYCLE_S);
+  sun.intensity = SUN_BASE * (1 + ph * CYCLE_AMP * 0.9);
+  hemi.intensity = HEMI_BASE * (1 + ph * CYCLE_AMP * 0.7);
+  if (CYCLE_AMP > 0.1) {
+    _sunTmp.copy(SUN_NEUTRAL).lerp(ph > 0 ? SUN_WARM : SUN_COOL, Math.abs(ph) * 0.6);
+    sun.color.copy(_sunTmp);
+    waterMat.uniforms.uSunCol.value.copy(_sunTmp).convertSRGBToLinear().multiplyScalar(1.45);
+  }
+}
+
+if (WALLPAPER) sleepUI(); else wakeUI();
 
 // ------------------------------------------------------------------ main loop
 let last = performance.now();
+let rafId = 0;
+
+function startLoop() {
+  if (rafId || paused) return;
+  last = performance.now();
+  rafId = requestAnimationFrame(renderFrame);
+}
+function stopLoop() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+}
 
 document.addEventListener('visibilitychange', () => {
-  if (!audio.ready) return;
   if (document.hidden) {
-    if (audio.on) audio.master.gain.setTargetAtTime(0.0, audio.ctx.currentTime, 0.12);
+    stopLoop();                                   // a wall paper behind a maximised window costs nothing
+    if (audio.ready && audio.on) audio.master.gain.setTargetAtTime(0.0, audio.ctx.currentTime, 0.12);
   } else {
-    last = performance.now();
-    if (audio.on) audio.master.gain.setTargetAtTime(0.5, audio.ctx.currentTime, 0.35);
+    startLoop();
+    wakeUI();
+    if (audio.ready && audio.on) audio.master.gain.setTargetAtTime(0.5, audio.ctx.currentTime, 0.35);
   }
 });
+window.addEventListener('pagehide', stopLoop);
+window.addEventListener('pageshow', e => { if (e.persisted) startLoop(); });
+
 let simCur = 0;
 let frames = 0, accum = 0, slowStreak = 0;
 
 let frameNo = 0;
+let firstFrameDone = false;
 
 function renderFrame(now) {
+  rafId = requestAnimationFrame(renderFrame);
+
+  const raw = (now - last) / 1000;
+  // frame cap: skipping a frame is far cheaper than drawing it
+  if (FPS_CAP > 0 && raw < 1 / FPS_CAP - 0.002) return;
+
   // clamp to a strictly positive step: a negative dt would run every lerp backwards
-  const dt = Math.max(0.0005, Math.min(0.05, (now - last) / 1000));
+  const dt = Math.max(0.0005, Math.min(0.05, raw));
   frameNo++;
   last = Math.max(last, now);
   U.time.value += dt;
+  applyDayCycle(U.time.value);
 
   // ---- GPU ripple step
   simMat.uniforms.uState.value = simRT[simCur].texture;
@@ -2833,6 +3007,8 @@ function renderFrame(now) {
   renderer.render(quadScene, quadCam);
   renderer.render(scene, camera);
 
+  if (!firstFrameDone) { firstFrameDone = true; document.body.classList.add('ready'); }
+
   // ---- adaptive quality
   frames++; accum += dt;
   if (frames >= 45) {
@@ -2841,7 +3017,6 @@ function renderFrame(now) {
     else slowStreak = 0;
     frames = 0; accum = 0;
   }
-  requestAnimationFrame(renderFrame);
 }
 
 resize();
@@ -2855,7 +3030,8 @@ resize();
   }
   waterMat.uniforms.uState.value = simRT[simCur].texture;
 })();
-requestAnimationFrame(renderFrame);
+// ?fps caps the loop; ?q=low starts below native resolution
+startLoop();
 
 })();
 </script>

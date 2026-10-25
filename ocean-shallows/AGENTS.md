@@ -10,7 +10,9 @@
 - **是什么**：一个可以直接双击打开的 WebGL 小场景。俯视视角看一片热带浅海，左上角有一小片弧形沙滩，
   海底有沙纹、海草、珊瑚与碎石；底部磨砂玻璃卡片可以把鳐鱼、水母抛进 / 放进海里。
 - **不是什么**：不是游戏，没有分数、关卡、存档；不引入构建工具、不做模块拆分、不接后端。
-- **交付物**：`ocean-shallows/index.html`（唯一运行文件，约 120 KB）与本文 `AGENTS.md`。
+- **现在的目标**：作为**桌面互动背景**常驻。没人碰它时界面自动淡出，只剩海面与生物；
+  鼠标掠过留下细环，点击 / 拖动才有反应；可全屏、可锁帧、标签页隐藏时完全停下。
+- **交付物**：`ocean-shallows/index.html`（唯一运行文件，约 124 KB）与本文 `AGENTS.md`。
 
 ## 2. 硬约束（不可协商）
 
@@ -35,8 +37,8 @@
 | 区块 | 内容 |
 | --- | --- |
 | `<style>` | 全部 UI 样式。命名空间：`.hud .brand .tools .tool .dock .card .thumb .hint .toast`，`body.hideui` |
-| `<body>` | `#c` 画布、`.vignette`、`.grain`、HUD、6 个工具按钮、dock、提示、toast、`.fatal` 兜底层 |
-| boot guards | `fatal()` 兜底、three 加载检查、`REDUCED`（prefers-reduced-motion） |
+| `<body>` | `#c` 画布、`.vignette`、`.grain`、HUD、7 个工具按钮、dock、提示、toast、`.fatal` 兜底层 |
+| boot guards | `fatal()` 兜底、three 加载检查、`REDUCED`（prefers-reduced-motion）、`QS` 启动参数 |
 | 世界常量 | `BEACH` `WORLD` `shoreDist()` `bedH()` |
 | `renderer` / `scene` / `camera` | 渲染器设置、相机初始机位、`SUN_DIR`、`PALM_POS` |
 | `U` | 全局共享 uniform（time / swell / rain / swirl / clarity / foam / sun / camPos） |
@@ -56,7 +58,8 @@
 | 生物阴影 / 环境群 | `cShadow` 实例化贴地阴影、初始 12 只种群 |
 | 粒子 / 涟漪 / 音频 | `pAir` `pUnder` `ringMesh` `addRing` `initAudio` `playSplash` `playPlink` |
 | 卡片 / 工具 / 交互 | `CARD_ORDER` `bindCard` `throwArc` `dropCreature` `toggle` 键盘 |
-| 主循环 | `resize()`、`warmUp()`、`renderFrame()`、自适应画质 |
+| ambient / 壁纸 | `sleepUI` `wakeUI` `setUIOffscreen` `togglePause` `toggleFullscreen` `applyDayCycle` |
+| 主循环 | `resize()`、`warmUp()`、`startLoop` / `stopLoop`、`renderFrame()`、自适应画质 |
 
 ## 4. 世界坐标与几何不变量
 
@@ -232,7 +235,7 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 卡片是 `<button>`，桌面 96 px 宽；`pointerdown` 里 `setPointerCapture` 必须包 `try/catch`。
 判定阈值为位移 < 9 px 且时长 < 420 ms。
 
-### 工具条（6 个，含键盘）
+### 工具条（7 个，含键盘）
 
 | 按钮 | 键 | 行为 |
 | --- | --- | --- |
@@ -241,11 +244,52 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 | 平静 | `C` | `uSwell → 0.10`、`uFoam → 0.30`，生物减速沉底 |
 | 清澈 | `M` | `uClarity → 0.38`，水体更通透 |
 | 声音 | `♪` | 合成海浪（噪声 + 滤波，增益跟 `swashReachJS` 同步）+ 溅水 + plink |
+| 全屏 | `F` | `requestFullscreen` / 退出；≤760 px 隐藏该按钮（移动端无意义） |
 | 隐藏 | `H` | `body.hideui`，隐藏全部 UI |
+
+另有 `P` **暂停**：直接 `stopLoop()` 冻结整幅画面，再按恢复。没有按钮，只走键盘。
 
 点击水面（非漩涡模式）会产生一圈涟漪 + 水花，附近 8 m 内的生物受惊逃走。
 
+**掠过水面**：`canvas` 上的 `pointermove` 每 220 ms 最多留下一个 `addRing(x, z, 0.85, 0.13, 2.8)`
+——极淡的细环，是"背景"能被无意间扰动的最小反馈。漩涡拖动时该分支让位给 `U.swirlPos`。
+
 ## 10. 性能与自适应
+
+### 10.1 桌面背景（wallpaper）模式
+
+| 项 | 默认 | 说明 |
+| --- | --- | --- |
+| 静默淡出 | 6.5 s（`?wallpaper=1` 时 2.8 s） | `pointermove` / `pointerdown` / `wheel` / `touchstart` / `keydown` / `focus` 唤醒；`document` 失焦立即淡出 |
+| 淡出内容 | `.hud .tools .dock .hint` | **不含** `.vignette` 与 `.grain` —— 暗角与颗粒是画面的一部分，不是界面 |
+| 拖动保护 | `pointerHeld` | 按住不放时计时器不生效，松手后重新计时 |
+| 焦点保护 | `activeElement.closest('.dock,.tools')` | 键盘焦点在 UI 内时也不淡出 |
+| 首次提示 | 一次性 toast | 非 wallpaper 模式第一次自动淡出后提示「界面已淡出 · 移动鼠标唤出」，否则会像坏了 |
+| 光标 | `body.idle { cursor:none }` | 只在静默态生效 |
+| 焦点隔离 | `inert` | 淡出时把 dock / tools 移出 tab 序，避免聚焦到看不见的按钮 |
+| 帧率 | 不限（`?wallpaper=1` 时 30） | `?fps=N` 覆盖；跳帧实现，`last` **只在真正渲染时**更新，否则永远追不上阈值 |
+| 后台 | `stopLoop()` | `visibilitychange` + `pagehide`；`pageshow`（bfcache，`e.persisted`）恢复 |
+| 上下文丢失 | 3.5 s 后自动 `reload()` | three r128 无法保证 GPU 上下文回收后所有 buffer 重建 |
+| 首帧 | `body.ready` 0.9 s 淡入 | 另有 4 s 兜底定时器，防止异常时整页停在 `opacity:0` |
+
+**启动参数**
+
+| 参数 | 作用 |
+| --- | --- |
+| `?wallpaper=1` / `?mode=wallpaper` | 直接进入静默态 + 30 Hz |
+| `?fps=24` | 锁帧（≥5 才生效） |
+| `?dpr=1.25` | 覆盖像素比上限（钳在 0.5–3） |
+| `?q=low` | 初始 `QUALITY = 0.8` |
+| `?cycle=1` | 把日光呼吸放大成 240 s 的可见暖冷循环 |
+
+**日光呼吸**：默认 `sin(t·2π/420)` 驱动 `sun.intensity` ±3.15 %、`hemi` ±2.45 %，
+肉眼几乎不可见但避免"死画面的光"。`?cycle=1` 时幅度 0.34，并在 `SUN_NEUTRAL / SUN_WARM / SUN_COOL`
+之间插值 `sun.color`，同时同步 `waterMat.uniforms.uSunCol`（记得保持 ×1.45 的强度系数）。
+
+**摆放建议**：Wallpaper Engine / Lively 用浏览器源指向 `index.html?wallpaper=1`，
+分辨率与原屏一致；不要开"鼠标穿透"，否则卡片无法拖动。
+
+### 10.2 自适应画质
 
 - `DPR = min(devicePixelRatio, 2)`，`QUALITY` 作为乘数
 - 每 45 帧统计 FPS，连续两轮 < 42 时 `QUALITY -= 0.16`（下限 0.62）并 `resize()`
@@ -310,6 +354,10 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 - [ ] 控制台无 shader 编译错误（用 §12 的 `errlog` 注入法）
 - [ ] 水母缩略图仍能在深色底上辨认出钟体与触手
 - [ ] `.fatal` 覆盖层默认不出现（`#fatal` 的 class 不含 `show`）
+- [ ] 普通模式 6.5 s 后 `body` 带 `idle`；`?wallpaper=1` 一进来就带 `idle`
+- [ ] `document.dispatchEvent(new Event('blur'))` 立刻 idle，`pointermove` 立刻唤醒
+- [ ] `?fps=30` 与 `?q=low` 下画面连续、无黑边、无报错
+- [ ] 按 `P` 冻结后 `rafId === 0`，再按恢复；切到别的标签页再回来不会双循环
 
 ## 13. 健壮性与无障碍
 
@@ -338,7 +386,11 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 - [x] 阴影更新降频 —— 已改为隔帧
 - [x] 无 WebGL / CDN 失败兜底 —— 已加 `.fatal` 覆盖层与上下文丢失处理
 - [x] `prefers-reduced-motion` —— 已关跃水、降旋转、去 CSS 过渡
-- [ ] 移动端工具条 6 个按钮在 430px 下仍偏挤，可收进"更多"折叠菜单
+- [x] 桌面背景模式 —— 静默淡出、全屏、锁帧、后台暂停、上下文自动恢复、首帧淡入
+- [ ] 移动端工具条 6 个按钮（`full` 已隐藏）在 430px 下仍偏挤，可收进"更多"折叠菜单
+- [ ] 真正作为壁纸时无法接收鼠标事件（Wallpaper Engine 的源本身不转发），
+      可考虑用 `?ambient=1` 让生物按更长的随机间隔自行投放，长时间不重样
+- [ ] 长时间运行（>24 h）后 `U.time` 精度下降可能导致噪声抖动，可考虑对 `uTime` 取模
 - [ ] 生物被拖到沙滩上时的落地表现（现在统一按水面处理）
 - [ ] 近距观察时水面泡沫呈"块状"，需要更细的 lace 分形（p×8 那层不够碎）
 - [ ] 沙滩在俯视全景下偏平，沙纹起伏目前只有约 6% 对比，可加一层暗部颗粒
