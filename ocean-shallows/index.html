@@ -89,7 +89,9 @@
     box-shadow:0 30px 60px -34px rgba(0,34,40,.95), 0 1px 0 rgba(255,255,255,.75) inset;
     transition:opacity .55s cubic-bezier(.4,0,.2,1), transform .55s cubic-bezier(.4,0,.2,1);
     max-width:calc(100vw - 24px);
+    overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   }
+  .dock::-webkit-scrollbar{display:none}
   .card{
     -webkit-appearance:none;appearance:none;border:0;background:transparent;padding:0;cursor:grab;
     display:flex;flex-direction:column;align-items:center;gap:5px;width:96px;flex:0 0 auto;
@@ -155,6 +157,13 @@
   }
   .fatal .r:hover{background:rgba(255,255,255,.82)}
 
+  @media (max-width: 1180px){
+    /* nine cards no longer fit at 96 px — shrink the deck before it has to scroll */
+    .card{width:80px}
+    .thumb{width:80px;height:80px;border-radius:15px}
+    .card .lt{font-size:8px}
+    .hint{bottom:calc(max(16px, env(safe-area-inset-bottom)) + 108px)}
+  }
   @media (max-width: 760px){
     .brand{left:16px;top:14px}
     .brand .cn{font-size:23px;letter-spacing:.12em}
@@ -193,7 +202,7 @@
 <div class="hud brand">
   <div class="cn">浅海</div>
   <div class="en">Ocean Shallows</div>
-  <div class="cnt" id="cnt" aria-live="polite">0 条鳐 · 0 只水母</div>
+  <div class="cnt" id="cnt" aria-live="polite">鳐 0 · 水母 0 · 鱼 0 · 龟 0</div>
 </div>
 
 <div class="tools" id="tools">
@@ -1297,7 +1306,25 @@ const SPECIES = {
   sting:  { cn: '蓝斑魟', en: 'Blue-spotted Stingray', span: 0.82, chord: 1.12, thick: 0.11, sweep: 0.22, taper: 2.8, tipPow: 0.5,
             tailLen: 1.8, tailW: 0.060, horns: false, flapRate: 3.4, amp: 0.12, speed: 1.05, dep: [-0.85, -0.5], rad: 0.95 },
   moon:   { cn: '海月水母', en: 'Moon Jelly', R: 0.64, H: 0.36, pulse: 1.35, speed: 1.0, dep: [-5.5, -1.6], rad: 0.72 },
-  nettle: { cn: '海荨麻', en: 'Sea Nettle', R: 0.50, H: 0.64, pulse: 1.05, speed: 1.15, dep: [-6.5, -2.0], rad: 0.60 }
+  nettle: { cn: '海荨麻', en: 'Sea Nettle', R: 0.50, H: 0.64, pulse: 1.05, speed: 1.15, dep: [-6.5, -2.0], rad: 0.60 },
+
+  // ---- swimmers: one tube-loft builder, three shaders ----
+  // L = nose→tail-base length (m), W/H = half width / half height, sway = body-wave scale
+  shark:  { cn: '乌翅真鲨', en: 'Blacktip Reef Shark', kind: 'fish',
+            L: 2.05, W: 0.235, H: 0.205, sway: 0.085, caudal: [0.70, 0.42], dorsal: [0.60, 0.52, 0.30],
+            pect: [0.66, 0.42, 0.30], amp: 0.85, flapRate: 1.45, speed: 2.45, dep: [-3.6, -1.1], rad: 1.45, deep: true },
+  clown:  { cn: '小丑鱼', en: 'Clownfish', kind: 'fish',
+            L: 0.78, W: 0.175, H: 0.215, sway: 0.15, caudal: [0.20, 0.125], dorsal: [0.52, 0.22, 0.07],
+            pect: [0.60, 0.15, 0.07], amp: 1.0, flapRate: 6.2, speed: 1.35, dep: [-1.5, -0.66], rad: 0.34, school: 3.4 },
+  puffer: { cn: '刺鲀', en: 'Porcupine Puffer', kind: 'fish',
+            L: 0.78, W: 0.355, H: 0.320, sway: 0.02, round: true, caudal: [0.17, 0.085], dorsal: [0.0, 0.0, 0.0],
+            pect: [0.74, 0.075, 0.13], spikes: 62, amp: 0.55, flapRate: 4.6, speed: 0.82,
+            dep: [-1.9, -0.80], rad: 0.40, puff: 1.5 },
+
+  // ---- turtle: its own shell builder, breathes at the surface ----
+  turtle: { cn: '绿海龟', en: 'Green Turtle', kind: 'turtle',
+            L: 1.12, W: 0.44, H: 0.13, amp: 0.60, flapRate: 1.05, speed: 0.80,
+            dep: [-3.2, -1.05], rad: 0.95, surf: true }
 };
 
 // ---------------------------------------------------------------- ray geometry
@@ -1444,6 +1471,212 @@ function buildJelly(cfg) {
   return g;
 }
 
+// ---------------------------------------------------------------- fish geometry
+// One lofted tube for every swimmer (shark / clownfish / puffer). Nose points +z,
+// the same convention as the rays, so yaw = atan2(vx, vz) works unchanged.
+//   aPart 0 = body, 1 = pectorals, 2 = dorsal + caudal, 3 = spikes
+//   aUV   u = lateral (-1 left .. 1 right),  v = 0 tail base .. 1 nose
+function buildFish(cfg) {
+  const P = [], UVs = [], PT = [], IDX = [];
+  const NU = 24, NV = 18;
+  const L = cfg.L, W = cfg.W, H = cfg.H;
+  const zBase = -L * 0.5;
+  const prof = cfg.round
+    // puffer: a barrel that fills out in the middle and pinches into the tail peduncle
+    ? v => Math.max(0.03, Math.pow(Math.sin(Math.PI * clamp(v, 0.02, 0.99)), 0.52))
+    : v => {
+      const head = Math.sin(Math.min(1, v / 0.52) * Math.PI * 0.5);
+      const tail = 0.26 + 0.74 * smooth(0, 0.30, v);
+      const snout = 1 - 0.82 * smooth(0.74, 1.0, v);
+      return Math.max(0.02, head * tail * snout);
+    };
+
+  // ---- body : closed tube, no seam duplicates (u = sin(angle) stays continuous)
+  for (let i = 0; i <= NU; i++) {
+    const v = i / NU, r = prof(v), z = zBase + v * L;
+    for (let j = 0; j < NV; j++) {
+      const a = (j / NV) * TAU, ca = Math.cos(a), sa = Math.sin(a);
+      P.push(sa * W * r, ca * H * r * (ca > 0 ? 1.0 : 0.82), z);
+      UVs.push(sa, v); PT.push(0);
+    }
+  }
+  for (let i = 0; i < NU; i++) {
+    for (let j = 0; j < NV; j++) {
+      const a = i * NV + j, b = i * NV + ((j + 1) % NV);
+      IDX.push(a, a + NV, b, b, a + NV, b + NV);
+    }
+  }
+  // nose + tail caps
+  for (let end = 0; end < 2; end++) {
+    const ringBase = end ? 0 : NU * NV;
+    const zc = end ? zBase : zBase + L;
+    const centre = P.length / 3;
+    P.push(0, 0, zc); UVs.push(0, end ? 0 : 1); PT.push(0);
+    for (let j = 0; j < NV; j++) {
+      const a = ringBase + j, b = ringBase + ((j + 1) % NV);
+      if (end) IDX.push(centre, b, a); else IDX.push(centre, a, b);
+    }
+  }
+
+  const tri = (p1, p2, p3, uv, part) => {
+    const b = P.length / 3;
+    P.push(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2]);
+    UVs.push(uv[0], uv[1], uv[2], uv[3], uv[4], uv[5]);
+    PT.push(part, part, part);
+    IDX.push(b, b + 1, b + 2);
+  };
+
+  // ---- pectoral fins : flat paddles, swept back and tilted down a touch
+  if (cfg.pect && cfg.pect[1] > 0.001) {
+    const [at, len, sweep] = cfg.pect;
+    const v = clamp(at, 0.05, 0.95), z0 = zBase + v * L, rx = W * prof(v) * 0.80;
+    for (const s of [-1, 1]) {
+      const tx = s * (W + len), tz = z0 - sweep;
+      const r0 = [s * rx, -0.01, z0 + L * 0.10];
+      const r1 = [s * rx, -0.01, z0 - L * 0.10];
+      const t0 = [tx, -0.05, tz + L * 0.05];
+      const t1 = [tx, -0.05, tz - L * 0.07];
+      tri(r0, t0, r1, [0, 0.5, 1, 0.5, 0, 0.5], 1);
+      tri(r1, t0, t1, [0, 0.5, 1, 0.5, 1, 0.5], 1);
+    }
+  }
+
+  // ---- dorsal fin : vertical sheet on the spine (invisible for the puffer)
+  if (cfg.dorsal && cfg.dorsal[2] > 0.001) {
+    const [at, len, h] = cfg.dorsal;
+    const v0 = clamp(at, 0.10, 0.92);
+    const zs = zBase + v0 * L, ze = zs - len;
+    const yS = H * prof(v0) * 0.92, yE = H * prof(clamp(v0 - len / L, 0.05, 0.95)) * 0.92;
+    const zt = zs - len * 0.34, yt = yS + h;
+    tri([0, yS, zs], [0, yt, zt], [0, yS, ze], [0, 0.5, 1.0, 0.5, 0, 0.5], 2);
+    tri([0, yt, zt], [0, yE + h * 0.10, ze], [0, yS, ze], [1.0, 0.5, 0.45, 0.5, 0, 0.5], 2);
+  }
+
+  // ---- caudal fin : two lobes, spread horizontally so the fork reads from above
+  if (cfg.caudal) {
+    const [len, spread] = cfg.caudal;
+    for (const s of [-1, 1]) {
+      const tip = [s * spread, s * len * 0.11, zBase - len];
+      const notch = [0, s * len * 0.03, zBase - len * 0.42];
+      tri([0, 0, zBase], tip, notch, [0, 0.5, 1, 0.5, 0.3, 0.5], 2);
+    }
+  }
+
+  // ---- spikes : porcupine puffer, distributed over the barrel body
+  if (cfg.spikes) {
+    const n = cfg.spikes, ez = L * 0.46;
+    for (let k = 0; k < n; k++) {
+      const lat = Math.asin(clamp(-0.62 + 1.24 * ((k + 0.5) / n), -1, 1));
+      const lon = k * 2.39996;
+      const nx = Math.cos(lat) * Math.cos(lon), ny = Math.sin(lat), nz = Math.cos(lat) * Math.sin(lon);
+      const px = nx * W * 0.94, py = ny * H * 0.94, pz = nz * ez * 0.94;
+      const sl = W * (0.22 + 0.13 * Math.abs(ny));
+      const ax = px + nx * sl, ay = py + ny * sl, az = pz + nz * sl;
+      const rad = 0.042 * L;
+      // tangent basis around the normal
+      const tx = -ny, ty = nx, tz = 0;
+      const bx = ny * tz - nz * ty, by = nz * tx - nx * tz, bz = nx * ty - ny * tx;
+      const uvY = (pz - zBase) / L;
+      for (let s = 0; s < 3; s++) {
+        const a1 = (s / 3) * TAU, a2 = ((s + 1) / 3) * TAU;
+        const p1 = [px + (tx * Math.cos(a1) + bx * Math.sin(a1)) * rad,
+                    py + (ty * Math.cos(a1) + by * Math.sin(a1)) * rad,
+                    pz + (tz * Math.cos(a1) + bz * Math.sin(a1)) * rad];
+        const p2 = [px + (tx * Math.cos(a2) + bx * Math.sin(a2)) * rad,
+                    py + (ty * Math.cos(a2) + by * Math.sin(a2)) * rad,
+                    pz + (tz * Math.cos(a2) + bz * Math.sin(a2)) * rad];
+        tri(p1, [ax, ay, az], p2, [0, uvY, 1, uvY, 0, uvY], 3);
+      }
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('aUV', new THREE.Float32BufferAttribute(UVs, 2));
+  g.setAttribute('aPart', new THREE.Float32BufferAttribute(PT, 1));
+  g.setIndex(IDX);
+  g.computeVertexNormals();
+  return g;
+}
+
+// ---------------------------------------------------------------- turtle geometry
+// Carapace = two sheets (dome + plastron) like the rays, plus four paddles and a head.
+//   aPart 0 = shell, 1 = front flippers, 2 = rear flippers, 3 = head
+//   aUV   u = -1 left .. 1 right (0..1 across a flipper),  v = 0 tail .. 1 head
+function buildTurtle(cfg) {
+  const P = [], UVs = [], PT = [], SH = [], IDX = [];
+  const NU = 26, NV = 9;
+  const L = cfg.L, W = cfg.W, H = cfg.H;
+  const halfW = v => W * Math.sqrt(Math.max(0, 1 - Math.pow((v - 0.56) / 0.60, 2))) * (0.82 + 0.18 * smooth(0, 0.45, v));
+
+  for (let sh = 0; sh < 2; sh++) {
+    const base = P.length / 3;
+    for (let j = 0; j <= NV; j++) {
+      for (let i = 0; i <= NU; i++) {
+        const u = -1 + 2 * i / NU, v = j / NV;
+        const hw = Math.max(0.02, halfW(v));
+        const dome = Math.pow(Math.max(0, 1 - u * u), 0.62) * Math.pow(Math.sin(Math.PI * clamp(v, 0, 1)), 0.42);
+        const y = sh ? -H * 0.30 : H * dome - H * 0.10;
+        P.push(u * hw, y, (v - 0.5) * L);
+        UVs.push(u, v); PT.push(0); SH.push(sh);
+      }
+    }
+    for (let j = 0; j < NV; j++) {
+      for (let i = 0; i < NU; i++) {
+        const a = base + j * (NU + 1) + i;
+        if (sh === 0) IDX.push(a, a + NU + 1, a + 1, a + 1, a + NU + 1, a + NU + 2);
+        else IDX.push(a, a + 1, a + NU + 1, a + 1, a + NU + 2, a + NU + 1);
+      }
+    }
+  }
+
+  // ---- flippers : paddle sheets, narrow at the root, widest two-thirds out
+  //      aUV.x runs 0 at the root to 1 at the tip
+  const paddle = (rootX, rootZ, len, wid, dirZ, part) => {
+    const sx = Math.sign(rootX) || 1;
+    const tipX = rootX + sx * len, tipZ = rootZ + dirZ;
+    const midX = rootX + sx * len * 0.58, midZ = rootZ + dirZ * 0.48;
+    const b = P.length / 3;
+    const V = [
+      [rootX, 0.012, rootZ + wid * 0.20, 0, 0.5],
+      [rootX, 0.012, rootZ - wid * 0.16, 0, 0.5],
+      [midX, -0.004, midZ + wid * 0.50, 0.58, 0.5],
+      [midX, -0.004, midZ - wid * 0.46, 0.58, 0.5],
+      [tipX, -0.030, tipZ, 1, 0.5]
+    ];
+    V.forEach(vv => { P.push(vv[0], vv[1], vv[2]); UVs.push(vv[3], vv[4]); PT.push(part); SH.push(0); });
+    IDX.push(b, b + 2, b + 1, b + 1, b + 2, b + 3, b + 2, b + 4, b + 3);
+  };
+  for (const s of [-1, 1]) {
+    paddle(s * halfW(0.70) * 0.76, (0.70 - 0.5) * L, L * 0.55, L * 0.22, -L * 0.30, 1);
+    paddle(s * halfW(0.16) * 0.74, (0.16 - 0.5) * L, L * 0.21, L * 0.13, -L * 0.26, 2);
+  }
+
+  // ---- head : blunt wedge in front of the shell
+  {
+    const b = P.length / 3;
+    const z0 = L * 0.46, z1 = L * 0.5 + L * 0.22, hw = W * 0.23;
+    const V = [
+      [-hw, -0.035, z0, -1, 0.25], [hw, -0.035, z0, 1, 0.25],
+      [-hw * 0.92, 0.080, z0, -0.92, 0.25], [hw * 0.92, 0.080, z0, 0.92, 0.25],
+      [-hw * 0.52, 0.010, z1, -0.52, 1.0], [hw * 0.52, 0.010, z1, 0.52, 1.0]
+    ];
+    V.forEach(vv => { P.push(vv[0], vv[1], vv[2]); UVs.push(vv[3], vv[4]); PT.push(3); SH.push(0); });
+    IDX.push(b + 2, b + 3, b + 5, b + 2, b + 5, b + 4,
+             b + 0, b + 4, b + 5, b + 0, b + 5, b + 1,
+             b + 0, b + 2, b + 4, b + 1, b + 5, b + 3);
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('aUV', new THREE.Float32BufferAttribute(UVs, 2));
+  g.setAttribute('aPart', new THREE.Float32BufferAttribute(PT, 1));
+  g.setAttribute('aSheet', new THREE.Float32BufferAttribute(SH, 1));
+  g.setIndex(IDX);
+  g.computeVertexNormals();
+  return g;
+}
+
 // ---------------------------------------------------------------- shaders
 const RAY_VS = `
   uniform float uTime, uRate, uAmpScale;
@@ -1540,13 +1773,79 @@ const JELLY_VS = `
   }
 `;
 
-const RAY_FS_COMMON = `
-  precision highp float;
-  uniform float uTime;
-  uniform vec3 uSun;
+// ---------------------------------------------------------------- swimmer + turtle vertex shaders
+// Fish: a lateral wave runs nose→tail, growing toward the tail; fins flutter on top.
+const FISH_VS = `
+  uniform float uTime, uRate, uAmpScale, uLen, uSway;
+  attribute vec2 aUV;
+  attribute float aPart, aPhase, aAmp, aHold;
+  attribute vec3 aVel;
   varying vec2 vUv;
   varying float vPart, vSheet, vHold;
   varying vec3 vWP, vN;
+
+  void main(){
+    vec3 pos = position;
+    vec3 nrm = normal;
+    float ph = uTime * uRate + aPhase;
+    float v = aUV.y;                                  // 0 tail base .. 1 nose
+    float k = pow(1.0 - v, 1.7);                      // the wave dies out at the head
+    float sway = uLen * uSway * aAmp * uAmpScale;
+    pos.x += sin(ph - v * 4.6) * k * sway;
+    pos.y += sin(ph * 0.5 + 1.7) * 0.010 * uLen;
+    if (aPart > 0.5 && aPart < 1.5) {                 // pectoral flutter
+      pos.y += sin(uTime * uRate * 2.4 + aPhase + aUV.x * 2.2) * 0.028 * uLen;
+    }
+    // a held fish wriggles harder
+    pos.x += sin(uTime * 8.5 + aPhase + v * 6.0) * aHold * uLen * 0.045;
+
+    vec4 wp = modelMatrix * instanceMatrix * vec4(pos, 1.0);
+    vWP = wp.xyz;
+    vN = normalize(mat3(instanceMatrix) * nrm);
+    vUv = aUV; vPart = aPart; vSheet = 0.0; vHold = aHold;
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+
+// Turtle: the two front paddles row together, the rear pair only trims, the head looks around.
+const TURTLE_VS = `
+  uniform float uTime, uRate, uAmpScale, uLen;
+  attribute vec2 aUV;
+  attribute float aPart, aSheet, aPhase, aAmp, aHold;
+  attribute vec3 aVel;
+  varying vec2 vUv;
+  varying float vPart, vSheet, vHold;
+  varying vec3 vWP, vN;
+
+  void main(){
+    vec3 pos = position;
+    vec3 nrm = normal;
+    float ph = uTime * uRate + aPhase;
+    float amp = aAmp * uAmpScale * (1.0 + aHold * 1.6);
+    if (aPart > 0.5 && aPart < 1.5) {                 // front flippers row
+      float t = aUV.x;
+      pos.y += sin(ph) * amp * 0.34 * pow(t, 1.35);
+      pos.z += cos(ph) * amp * 0.09 * pow(t, 1.7);
+    } else if (aPart > 1.5 && aPart < 2.5) {           // rear flippers trim
+      pos.y += sin(ph * 0.85 + 1.2) * amp * 0.09 * aUV.x;
+    } else if (aPart > 2.5) {                          // head
+      pos.x += sin(uTime * 0.62 + aPhase) * 0.05 * aUV.x;
+      pos.y += sin(uTime * 0.88 + aPhase) * 0.012;
+    }
+    pos.y += sin(ph * 0.42) * 0.006 * uLen;
+
+    vec4 wp = modelMatrix * instanceMatrix * vec4(pos, 1.0);
+    vWP = wp.xyz;
+    vN = normalize(mat3(instanceMatrix) * nrm);
+    vUv = aUV; vPart = aPart; vSheet = aSheet; vHold = aHold;
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+
+// shared creature lighting / water column — keep exactly one copy of these
+const CREATURE_LIGHT = `
+  uniform float uTime;
+  uniform vec3 uSun;
 
   float hash21(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 
@@ -1555,7 +1854,9 @@ const RAY_FS_COMMON = `
     float ndv = max(dot(N, V), 0.0);
     float fres = pow(1.0 - ndv, 2.4);
     vec3 col = base * (0.34 + 0.86 * ndl);
-    col += uSun * pow(max(dot(reflect(-uSun, N), V), 0.0), 26.0) * gloss;
+    // uSun is a DIRECTION, so the highlight needs its own colour — adding uSun here
+    // painted a green blob on every broad, smooth surface (puffer, turtle shell).
+    col += vec3(1.0, 0.97, 0.90) * pow(max(dot(reflect(-uSun, N), V), 0.0), 26.0) * gloss;
     col += vec3(0.30, 0.52, 0.60) * fres * 0.30;
     col += base * fres * 0.30;
     return col;
@@ -1569,6 +1870,25 @@ const RAY_FS_COMMON = `
     return c * ab + vec3(0.030, 0.150, 0.170) * sc;
   }
 `;
+
+const RAY_FS_COMMON = `
+  precision highp float;
+  varying vec2 vUv;
+  varying float vPart, vSheet, vHold;
+  varying vec3 vWP, vN;
+  ${CREATURE_LIGHT}
+`;
+
+const FISH_FS_COMMON = `
+  precision highp float;
+  varying vec2 vUv;
+  varying float vPart, vSheet, vHold;
+  varying vec3 vWP, vN;
+  ${CREATURE_LIGHT}
+  // body panels: counted shading — back on top, pale belly below
+  float bellyMask(vec3 N){ return smoothstep(0.30, -0.62, N.y); }
+`;
+
 
 const MANTA_FS = RAY_FS_COMMON + `
   void main(){
@@ -1742,6 +2062,160 @@ const JELLY_FS = `
   }
 `;
 
+// ---------------------------------------------------------------- swimmer fragment shaders
+const SHARK_FS = FISH_FS_COMMON + `
+  void main(){
+    vec3 N = normalize(vN);
+    if (!gl_FrontFacing) N = -N;
+    vec3 V = normalize(cameraPosition - vWP);
+    float v = vUv.y;
+    vec3 back = vec3(0.238, 0.248, 0.268);
+    vec3 belly = vec3(0.86, 0.87, 0.84);
+    vec3 base = mix(back, belly, bellyMask(N));
+    base *= 0.93 + 0.14 * hash21(floor(vec2(vUv.x * 12.0, v * 24.0)));
+    if (vPart > 0.5) {
+      // fins: grey with the black tip every blacktip reef shark is named for
+      base = mix(back * 1.08, vec3(0.055, 0.058, 0.068), smoothstep(0.50, 0.90, vUv.x));
+    }
+    base = mix(base, back * 0.84, smoothstep(0.90, 0.995, v));   // snout
+    // small black eye behind the snout
+    float au = abs(vUv.x);
+    float eye = smoothstep(0.095, 0.050, length(vec2((au - 0.58) * 1.3, (v - 0.870) * 3.6)));
+    base = mix(base, vec3(0.018, 0.018, 0.022), eye * 0.92);
+    vec3 col = throughWater(shade(base, N, V, 0.30), vWP.y);
+    gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
+  }
+`;
+
+const CLOWN_FS = FISH_FS_COMMON + `
+  void main(){
+    vec3 N = normalize(vN);
+    if (!gl_FrontFacing) N = -N;
+    vec3 V = normalize(cameraPosition - vWP);
+    float v = vUv.y, au = abs(vUv.x);
+    vec3 orange = vec3(0.92, 0.30, 0.055);
+    vec3 base = orange;
+
+    // three white bars wrapping the body, each with a thin black border
+    float w1 = 0.042, w2 = 0.050, w3 = 0.036;
+    float b1 = smoothstep(w1, w1 * 0.55, abs(v - 0.800));
+    float b2 = smoothstep(w2, w2 * 0.55, abs(v - 0.575));
+    float b3 = smoothstep(w3, w3 * 0.55, abs(v - 0.330));
+    float bars = clamp(b1 + b2 + b3, 0.0, 1.0);
+    float e1 = smoothstep(w1 * 1.75, w1 * 1.15, abs(v - 0.800));
+    float e2 = smoothstep(w2 * 1.70, w2 * 1.15, abs(v - 0.575));
+    float e3 = smoothstep(w3 * 1.85, w3 * 1.20, abs(v - 0.330));
+    float edge = clamp(e1 + e2 + e3, 0.0, 1.0) - bars;
+
+    base = mix(base, vec3(0.07, 0.06, 0.06), clamp(edge, 0.0, 1.0) * 0.85);
+    base = mix(base, vec3(0.96, 0.95, 0.92), bars * 0.97);
+    base *= 0.94 + 0.10 * hash21(floor(vec2(vUv.x * 9.0, v * 30.0)));
+
+    if (vPart > 0.5) {
+      // translucent fins: orange with a black margin
+      base = mix(vec3(0.94, 0.44, 0.14), vec3(0.06, 0.055, 0.055), smoothstep(0.55, 0.95, vUv.x));
+    }
+    // eyes
+    float eye = smoothstep(0.105, 0.055, length(vec2((au - 0.54) * 1.05, (v - 0.825) * 3.1)));
+    base = mix(base, vec3(0.05, 0.045, 0.05), eye * 0.92);
+    float spec = smoothstep(0.040, 0.0, length(vec2((au - 0.585) * 1.05, (v - 0.845) * 3.1)));
+    base = mix(base, vec3(0.95), spec * 0.8);
+
+    vec3 col = throughWater(shade(base, N, V, 0.34), vWP.y);
+    gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
+  }
+`;
+
+const PUFFER_FS = FISH_FS_COMMON + `
+  void main(){
+    vec3 N = normalize(vN);
+    if (!gl_FrontFacing) N = -N;
+    vec3 V = normalize(cameraPosition - vWP);
+    float v = vUv.y, au = abs(vUv.x);
+
+    vec3 base = mix(vec3(0.40, 0.355, 0.205), vec3(0.91, 0.88, 0.73), bellyMask(N));
+    base *= 0.88 + 0.20 * hash21(floor(vec2(vUv.x * 12.0, v * 16.0)));
+    // dark freckles over the back
+    float fr = step(0.82, hash21(floor(vec2(vUv.x * 20.0, v * 24.0))));
+    base = mix(base, vec3(0.22, 0.20, 0.14), fr * 0.55 * (1.0 - bellyMask(N)));
+
+    if (vPart > 2.5) {
+      // spines: bone tips, darker roots
+      base = mix(vec3(0.17, 0.16, 0.12), vec3(0.78, 0.72, 0.52), smoothstep(0.2, 1.0, fract(vUv.y * 11.0)));
+    } else if (vPart > 0.5) {
+      base = mix(vec3(0.60, 0.55, 0.36), vec3(0.20, 0.19, 0.13), smoothstep(0.45, 0.95, vUv.x));
+    }
+    // big round eyes on the sides of the head
+    float eye = smoothstep(0.135, 0.080, length(vec2((au - 0.50) * 1.2, (v - 0.790) * 3.2)));
+    base = mix(base, vec3(0.035, 0.03, 0.045), eye * 0.95);
+    float spec = smoothstep(0.050, 0.0, length(vec2((au - 0.555) * 1.2, (v - 0.812) * 3.2)));
+    base = mix(base, vec3(0.96), spec * 0.9);
+    // small beak
+    float beak = smoothstep(0.055, 0.020, length(vec2(vUv.x * 1.2, (v - 0.972) * 5.0)));
+    base = mix(base, vec3(0.36, 0.24, 0.18), beak * 0.8);
+
+    vec3 col = throughWater(shade(base, N, V, 0.26), vWP.y);
+    gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
+  }
+`;
+
+const TURTLE_FS = FISH_FS_COMMON + `
+  void main(){
+    vec3 N = normalize(vN);
+    if (!gl_FrontFacing) N = -N;
+    vec3 V = normalize(cameraPosition - vWP);
+    float u = vUv.x, v = vUv.y, au = abs(u);
+    vec3 base;
+
+    if (vPart < 0.5 && vSheet < 0.5) {
+      // ---- carapace: olive scutes in a brick grid, dark seams, lighter centres
+      base = vec3(0.300, 0.262, 0.128);
+      float uu = clamp(u / 0.80, -1.0, 1.0);
+      float rows = 5.0, cols = 6.0;
+      vec2 q = vec2((uu * 0.5 + 0.5) * cols + mod(floor(v * rows), 2.0) * 0.5, v * rows);
+      vec2 cf = fract(q) - 0.5;
+      float seam = smoothstep(0.40, 0.475, max(abs(cf.x), abs(cf.y)));
+      float cell = hash21(floor(q));
+      base *= 0.86 + 0.34 * cell;
+      base = mix(base, vec3(0.62, 0.52, 0.25), (1.0 - seam) * 0.26 * (1.0 - abs(uu)));
+      base = mix(base, vec3(0.070, 0.065, 0.038), seam * 0.84);
+      // growth rings inside each scute
+      float rings = 0.5 + 0.5 * sin(length(cf) * 30.0);
+      base *= 0.94 + 0.10 * rings;
+      // marginal scutes: a band of radial ticks around the rim
+      float rimT = smoothstep(0.78, 0.92, au);
+      float ticks = smoothstep(0.40, 0.50, abs(fract(v * 13.0) - 0.5));
+      base = mix(base, vec3(0.30, 0.26, 0.13), rimT * 0.45);
+      base = mix(base, vec3(0.085, 0.080, 0.048), rimT * ticks * 0.65);
+      base = mix(base, vec3(0.44, 0.37, 0.17), rimT * (1.0 - ticks) * 0.22);
+      base = mix(base, vec3(0.10, 0.10, 0.06), smoothstep(0.95, 0.998, au) * 0.8);
+    } else if (vPart < 0.5) {
+      // ---- plastron
+      base = vec3(0.83, 0.78, 0.58);
+      float seam = smoothstep(0.40, 0.47, abs(fract(v * 5.0) - 0.5)) * 0.6
+                 + smoothstep(0.44, 0.49, abs(fract(u * 2.0 + 0.5) - 0.5)) * 0.6;
+      base = mix(base, vec3(0.52, 0.46, 0.32), clamp(seam, 0.0, 1.0) * 0.55);
+    } else if (vPart > 2.5) {
+      // ---- head: pale olive with fine speckles, dark eye
+      base = vec3(0.255, 0.270, 0.170);
+      base *= 0.90 + 0.22 * hash21(floor(vec2(u * 16.0, v * 16.0)));
+      float eye = smoothstep(0.155, 0.080, length(vec2((au - 0.62) * 1.6, (v - 0.60) * 2.4)));
+      base = mix(base, vec3(0.025, 0.025, 0.02), eye * 0.95);
+      base = mix(base, vec3(0.62, 0.58, 0.38), smoothstep(0.88, 0.99, v) * 0.45);
+    } else {
+      // ---- flippers: darker scales, pale trailing edge
+      base = vec3(0.255, 0.275, 0.195);
+      base *= 0.88 + 0.24 * hash21(floor(vec2(u * 14.0, vUv.y * 14.0 + 3.0)));
+      float scale = smoothstep(0.42, 0.50, abs(fract(vUv.x * 7.0) - 0.5));
+      base = mix(base, vec3(0.13, 0.14, 0.10), scale * 0.45);
+      base = mix(base, vec3(0.62, 0.60, 0.45), smoothstep(0.72, 1.0, vUv.x) * 0.35);
+    }
+
+    vec3 col = throughWater(shade(base, N, V, 0.18), vWP.y);
+    gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
+  }
+`;
+
 // ---------------------------------------------------------------- materials + meshes
 function instMaterial(vs, fs, extra, opts) {
   const m = new THREE.ShaderMaterial(Object.assign({
@@ -1848,6 +2322,50 @@ function makeJellyRig(key) {
 makeRayRig('manta'); makeRayRig('eagle'); makeRayRig('sting');
 makeJellyRig('moon'); makeJellyRig('nettle');
 
+// fish + turtle share one rig shape: a body that swims under the surface
+function makeSwimmerRig(key) {
+  const cfg = SPECIES[key];
+  const isTurtle = cfg.kind === 'turtle';
+  const geo = isTurtle ? buildTurtle(cfg) : buildFish(cfg);
+  const cap = 16;
+  const vs = isTurtle ? TURTLE_VS : FISH_VS;
+  const fs = isTurtle ? TURTLE_FS
+    : (key === 'shark' ? SHARK_FS : (key === 'clown' ? CLOWN_FS : PUFFER_FS));
+  const mkMat = under => {
+    const m = instMaterial(vs, fs, {
+      uRate: { value: cfg.flapRate },
+      uAmpScale: { value: 1 },
+      uLen: { value: cfg.L || 1 },
+      uSway: { value: cfg.sway !== undefined ? cfg.sway : 0.10 }
+    }, { side: THREE.DoubleSide, transparent: false });
+    if (under) { m.depthTest = true; m.depthWrite = true; }
+    return m;
+  };
+  const attach = (g, layer, mat) => {
+    g.setAttribute('aPhase', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
+    g.setAttribute('aAmp', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
+    g.setAttribute('aHold', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
+    g.setAttribute('aVel', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3));
+    const mesh = new THREE.InstancedMesh(g, mat, cap);
+    mesh.items = [];
+    mesh.frustumCulled = false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.count = 0;
+    mesh.layers.set(layer);
+    return mesh;
+  };
+  const gU = geo, gA = geo.clone();
+  const matU = mkMat(true), matA = mkMat(false);
+  const mUnder = attach(gU, 1, matU);
+  mUnder.renderOrder = 4;
+  const mAir = attach(gA, 1, matA);
+  mAir.renderOrder = 8;
+  scene.add(mUnder); scene.add(mAir);
+  rigs[key] = { cfg, geoU: gU, geoA: gA, mat: matA, matU, matA, under: mUnder, air: mAir, cap, items: [], kind: cfg.kind };
+}
+
+makeSwimmerRig('shark'); makeSwimmerRig('clown'); makeSwimmerRig('puffer'); makeSwimmerRig('turtle');
+
 // ---------------------------------------------------------------- creature state
 const creatures = [];
 let creatureUid = 1;
@@ -1869,7 +2387,8 @@ function spawnCreature(kind, x, z, y, opts) {
     depthPref: rand(cfg.dep[0], cfg.dep[1]),
     scale: 1, opacity: 1,
     arcFrom: null, arcTo: null, arcT: 0, arcDur: 1,
-    spin: 0, dripCd: 0, sunk: false
+    spin: 0, dripCd: 0, sunk: false,
+    puff: 1, surfCd: rand(16, 40), surfCd2: 0
   };
   // start position above the seabed
   c.p.y = Math.max(c.p.y, bedH(c.p.x, c.p.z) + 0.8);
@@ -1881,10 +2400,11 @@ function spawnCreature(kind, x, z, y, opts) {
 }
 
 function pickWander(c) {
+  const deep = c.rig.cfg.deep;
   for (let i = 0; i < 24; i++) {
     const x = rand(-42, 72), z = rand(-56, 34);
     if (shoreDist(x, z) < 6) continue;
-    if (bedH(x, z) > -0.9) continue;
+    if (bedH(x, z) > (deep ? -2.2 : -0.9)) continue;   // big fish keep to open water
     c.target.set(x, 0, z);
     return;
   }
@@ -1909,7 +2429,10 @@ function currentAt(p, t, out) {
 function updateCreature(c, dt, time) {
   const cfg = c.rig.cfg;
   c.age += dt;
-  const isJelly = c.rig.kind === 'jelly';
+  const kind = c.rig.kind;
+  const isJelly = kind === 'jelly';
+  const isTurtle = kind === 'turtle';
+  const isFish = kind === 'fish';
 
   if (c.state === 'held') {
     c.t += dt;
@@ -1944,14 +2467,50 @@ function updateCreature(c, dt, time) {
       c.p.y = 0.1; c.state = 'swim'; c.pitch = 0; c.roll = 0; c.spin = 0;
       splash(c, 1.4); c.breachCd = rand(14, 40);
     }
+  } else if (c.state === 'surf') {
+    // turtle taking a breath: rise, hang at the surface, then sink back to its depth
+    c.t += dt;
+    if (c.t < 0.85) { c.p.y += 1.5 * dt; c.pitch = lerp(c.pitch, 0.27, Math.min(1, dt * 3)); }
+    else if (c.t < 1.9) { c.p.y = lerp(c.p.y, -0.02, Math.min(1, dt * 4)); c.pitch = lerp(c.pitch, 0.05, Math.min(1, dt * 3)); }
+    else { c.p.y -= 0.95 * dt; c.pitch = lerp(c.pitch, -0.17, Math.min(1, dt * 2.5)); }
+    c.p.x += c.v.x * dt * 0.5; c.p.z += c.v.z * dt * 0.5;
+    c.v.multiplyScalar(1 - Math.min(1, dt * 1.1));
+    if (!c.gasped && c.p.y > -0.14) {
+      c.gasped = true;
+      addRing(c.p.x, c.p.z, cfg.rad * 1.7, 0.30, 1.9);
+      for (let i = 0; i < 4; i++) {
+        const a = Math.random() * TAU;
+        pAir.emit(c.p.x + Math.cos(a) * 0.25, 0.06, c.p.z + Math.sin(a) * 0.25,
+          Math.cos(a) * 0.3, rand(0.5, 1.1), Math.sin(a) * 0.3, 0.8, rand(0.04, 0.08), 0.96, 0.99, 1.0, 0);
+      }
+      playPlink(0.03);
+    }
+    if (c.t > 2.4 && c.p.y <= c.depthPref + 0.12) { c.state = 'swim'; c.pitch = 0; }
   } else {
-    // ------- swimming
     const cur = currentAt(c.p, time, _tmpV);
     const toT = _tmpV2.copy(c.target).sub(c.p); toT.y = 0;
     const dist = toT.length();
     if (dist < 3.5 || c.wander <= 0) { pickWander(c); c.wander = rand(6, 14); }
     c.wander -= dt;
     toT.normalize();
+
+    // schooling: little fish drift toward their own kind so a tank of clownfish clumps
+    if (cfg.school) {
+      let sx = 0, sz = 0, sn = 0;
+      for (let i = 0; i < creatures.length; i++) {
+        const o = creatures[i];
+        if (o === c || o.kind !== c.kind) continue;
+        const dx = o.p.x - c.p.x, dz = o.p.z - c.p.z;
+        if (dx * dx + dz * dz < cfg.school * cfg.school) { sx += dx; sz += dz; sn++; }
+      }
+      if (sn) {
+        const l = Math.hypot(sx, sz) || 1;
+        toT.x = toT.x * 0.55 + (sx / l) * 0.45;
+        toT.z = toT.z * 0.55 + (sz / l) * 0.45;
+        const l2 = Math.hypot(toT.x, toT.z) || 1;
+        toT.x /= l2; toT.z /= l2;
+      }
+    }
 
     let ax = toT.x, az = toT.z, accel = isJelly ? 0.55 : 1.5;
     if (c.flee > 0) {
@@ -2010,10 +2569,10 @@ function updateCreature(c, dt, time) {
     c.roll = lerp(c.roll, clamp(-turn * 9.0, -0.55, 0.55), Math.min(1, dt * 6));
     c.pitch = lerp(c.pitch, isJelly ? 0 : clamp(-c.v.y * 0.4, -0.35, 0.35), Math.min(1, dt * 4));
 
-    // breach for rays
-    if (!isJelly) {
+    // breach: only the rays somersault out of the water
+    if (kind === 'ray') {
       c.breachCd -= dt;
-      if (!REDUCED && c.breachCd <= 0 && c.p.y > -2.4 && c.state === 'swim' && c.flee <= 0) {
+      if (!REDUCED && c.breachCd <= 0 && c.p.y > -2.4 && c.flee <= 0) {
         c.breachCd = rand(16, 46);
         if (Math.random() < 0.5) {
           c.state = 'breach'; c.t = 0; c.spin = 0;
@@ -2022,18 +2581,33 @@ function updateCreature(c, dt, time) {
         }
       }
     }
+    // turtles come up for air every so often
+    if (cfg.surf) {
+      c.surfCd -= dt;
+      if (c.surfCd <= 0) {
+        c.surfCd = rand(24, 52);
+        if (c.flee <= 0 && c.p.y < -0.4) { c.state = 'surf'; c.t = 0; c.gasped = false; }
+      }
+    }
     c.amp = lerp(c.amp, cfg.amp * (c.flee > 0 ? 1.9 : 1.0), Math.min(1, dt * 3));
 
-    // wake rings near the surface
+    // wake rings near the surface (small fish barely disturb it)
     c.wakeCd -= dt;
-    if (!isJelly && c.wakeCd <= 0 && c.p.y > -1.5 && c.wakeCd < 0) {
-      c.wakeCd = rand(0.45, 0.9);
-      addRing(c.p.x, c.p.z, cfg.rad * (0.7 + Math.random() * 0.5), 0.55, 1.9);
+    if (!isJelly && c.p.y > -1.5 && c.wakeCd < 0) {
+      c.wakeCd = rand(0.45, 0.9) * (kind === 'fish' ? 2.6 : 1);
+      addRing(c.p.x, c.p.z, cfg.rad * (0.7 + Math.random() * 0.5), kind === 'fish' ? 0.28 : 0.55, 1.9);
     }
   }
 
+  // a startled puffer inflates and deflates again
+  if (cfg.puff) {
+    const want = (c.flee > 0 || c.state === 'held') ? cfg.puff : 1;
+    c.puff = lerp(c.puff, want, Math.min(1, dt * 2.0));
+  }
+
   // ------- instance write
-  const above = c.p.y > 0.02 || c.state === 'held' || c.state === 'arc' || c.state === 'breach';
+  const above = c.p.y > 0.02 || c.state === 'held' || c.state === 'arc' || c.state === 'breach'
+             || (c.state === 'surf' && c.p.y > -0.25);
   const rig = c.rig;
   const bucket = above ? 'air' : 'under';
   c.bucket = bucket;
@@ -2042,7 +2616,7 @@ function updateCreature(c, dt, time) {
   const idx = arr.indexOf(c);
   if (idx < 0 || idx >= rig.cap) return;
 
-  const s = c.size;
+  const s = c.size * (c.puff || 1);
   _euler.set(c.pitch, c.yaw, c.roll, 'YXZ');
   _quat.setFromEuler(_euler);
   _sc.set(s, s, s);
@@ -2111,14 +2685,22 @@ function seedLife() {
   const starts = [
     ['manta', 12, -14], ['manta', 30, 6], ['eagle', -6, 6], ['eagle', 22, -24],
     ['moon', 2, -2], ['moon', 16, 14], ['moon', -12, -8],
-    ['nettle', 26, -4], ['nettle', 8, 18]
+    ['nettle', 26, -4], ['nettle', 8, 18],
+    ['shark', 44, -26], ['turtle', 4, 10], ['turtle', 26, 20],
+    ['puffer', -2, 2], ['puffer', 18, -6]
   ];
   starts.forEach(([k, x, z]) => {
     const c = spawnCreature(k, x + rand(-1.5, 1.5), z + rand(-1.5, 1.5), rand(-4, -1.5));
     if (c) c.phase = rand(0, TAU);
   });
+  // a little school of clownfish, plus the stingrays that hug the sand
+  for (let i = 0; i < 5; i++) {
+    const sx = 8 + rand(-2.4, 2.4), sz = 6 + rand(-2.4, 2.4);
+    if (spawnCreature('clown', sx, sz, rand(-1.4, -0.8))) { /* clustered by cfg.school */ }
+  }
   for (let i = 0; i < 3; i++) {
-    { const sx = rand(-8, 30), sz = rand(-18, 10); spawnCreature('sting', sx, sz, bedH(sx, sz) + 0.45); }
+    const sx = rand(-8, 30), sz = rand(-18, 10);
+    spawnCreature('sting', sx, sz, bedH(sx, sz) + 0.45);
   }
 }
 
@@ -2338,12 +2920,21 @@ function renderThumbs() {
   renderer.getClearColor(prevClear);
   const prevAlpha = renderer.getClearAlpha();
   const prevRT = renderer.getRenderTarget();
-  const bgFor = { manta: 0xbfe6ea, eagle: 0xbfe6ea, sting: 0xc6e8e9, moon: 0x3f8492, nettle: 0x35707f };
+  const bgFor = { manta: 0xbfe6ea, eagle: 0xbfe6ea, sting: 0xc6e8e9, moon: 0x3f8492, nettle: 0x35707f,
+                  shark: 0x9ed4dd, clown: 0x8bc9d6, puffer: 0xaadde4, turtle: 0x93ccd6 };
   renderer.setClearColor(0xbfe6ea, 1);
   const buf = new Uint8Array(S * S * 4);
 
-  const ext = { manta: 4.9, eagle: 5.0, sting: 2.7, moon: 3.0, nettle: 4.6 };
-  const lift = { manta: 0.0, eagle: 0.0, sting: 0.0, moon: -0.15, nettle: -0.55 };
+  // `ext` ≈ the model's largest dimension: 2.0/ext is the fit scale, so it fills the frame
+  const ext = { manta: 4.9, eagle: 5.0, sting: 2.7, moon: 3.0, nettle: 4.6,
+                shark: 3.1, clown: 1.20, puffer: 1.12, turtle: 1.62 };
+  const lift = { manta: 0.0, eagle: 0.0, sting: 0.0, moon: -0.15, nettle: -0.55,
+                 shark: 0.0, clown: 0.0, puffer: -0.04, turtle: -0.06 };
+  const rot = {
+    manta: [0.30, 0.62, -0.10], eagle: [0.30, 0.62, -0.10], sting: [0.30, 0.62, -0.10],
+    moon: [0.12, 0.50, 0], nettle: [0.12, 0.50, 0],
+    shark: [0.22, 0.95, -0.10], clown: [0.34, 0.62, -0.06], puffer: [0.30, 0.55, 0], turtle: [0.30, 0.42, 0]
+  };
 
   Object.keys(SPECIES).forEach(key => {
     renderer.setClearColor(bgFor[key] || 0xbfe6ea, 1);
@@ -2352,7 +2943,8 @@ function renderThumbs() {
     const ps = 2.0 / e;
     const mesh = new THREE.InstancedMesh(rig.geoU, rig.mat, 1);
     const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(key === 'moon' || key === 'nettle' ? 0.12 : 0.30, key === 'moon' || key === 'nettle' ? 0.5 : 0.62, key === 'moon' || key === 'nettle' ? 0 : -0.10, 'YXZ'));
+    const rr = rot[key] || [0.30, 0.62, -0.10];
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rr[0], rr[1], rr[2], 'YXZ'));
     m.compose(new THREE.Vector3(0, 0, 0), q, new THREE.Vector3(ps, ps, ps));
     mesh.setMatrixAt(0, m);
     const gU = rig.geoU;
@@ -2517,7 +3109,7 @@ const dock = document.getElementById('dock');
 const cntEl = document.getElementById('cnt');
 const toastEl = document.getElementById('toast');
 const hintEl = document.getElementById('hint');
-const CARD_ORDER = ['manta', 'eagle', 'sting', 'moon', 'nettle'];
+const CARD_ORDER = ['manta', 'eagle', 'sting', 'shark', 'clown', 'puffer', 'turtle', 'moon', 'nettle'];
 const state = { rain: false, whirl: false, calm: false, clear: false, sound: false, hidden: false };
 
 let toastT = 0;
@@ -2529,11 +3121,9 @@ function toast(msg) {
 }
 
 function updateCounter() {
-  let rays = 0, jelly = 0;
-  for (let i = 0; i < creatures.length; i++) {
-    if (creatures[i].rig.kind === 'jelly') jelly++; else rays++;
-  }
-  cntEl.textContent = rays + ' 条鳐 · ' + jelly + ' 只水母';
+  const n = { ray: 0, jelly: 0, fish: 0, turtle: 0 };
+  for (let i = 0; i < creatures.length; i++) n[creatures[i].rig.kind]++;
+  cntEl.textContent = '鳐 ' + n.ray + ' · 水母 ' + n.jelly + ' · 鱼 ' + n.fish + ' · 龟 ' + n.turtle;
 }
 
 const ndc = new THREE.Vector2();
