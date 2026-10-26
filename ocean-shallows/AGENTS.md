@@ -8,12 +8,12 @@
 ## 1. 项目定位
 
 - **是什么**：一个可以直接双击打开的 WebGL 小场景。俯视视角看一片热带浅海，左上角有一小片弧形沙滩，
-  海底有沙纹、海草、珊瑚与碎石；底部磨砂玻璃卡片可以把 9 种海洋生物（3 种鳐、2 种水母、
-  3 种鱼、1 种海龟）抛进 / 放进海里。
+  海底有沙纹、海草、珊瑚与碎石；底部磨砂玻璃卡片可以把 14 种海洋生物（3 种鳐、2 种水母、
+  3 种鱼、1 种海龟、5 种鲸豚）抛进 / 放进海里。
 - **不是什么**：不是游戏，没有分数、关卡、存档；不引入构建工具、不做模块拆分、不接后端。
 - **现在的目标**：作为**桌面互动背景**常驻。没人碰它时界面自动淡出，只剩海面与生物；
   鼠标掠过留下细环，点击 / 拖动才有反应；可全屏、可锁帧、标签页隐藏时完全停下。
-- **交付物**：`ocean-shallows/index.html`（唯一运行文件，约 150 KB）与本文 `AGENTS.md`。
+- **交付物**：`ocean-shallows/index.html`（唯一运行文件，约 174 KB）与本文 `AGENTS.md`。
 
 ## 2. 硬约束（不可协商）
 
@@ -24,7 +24,7 @@
 | 构建 | 无。不许出现 `npm`、`import`、打包器、外链脚本（three 除外） | 同上 |
 | 外部资源 | 仅 Google Fonts（Fraunces + Nunito Sans）与 three CDN | 断网时标题降级为系统字体，场景仍须可用 |
 | 语言 | 界面文案**全部中文**，代码注释可英文 | 用户要求 |
-| 生物上限 | `CREATURE_CAP = 48` | 实例池 `cap = 16`/物种，共 9 物种 = 144 上限，逻辑层提前拦截 48 并 toast |
+| 生物上限 | `CREATURE_CAP = 48` | 实例池 `cap = 16`/物种，共 14 物种 = 224 上限，逻辑层提前拦截 48 并 toast |
 | 增量原则 | 改一个点就验证一个点；不要在未截图验证的情况下批量改色 | 见 §11 踩坑，色彩/曝光很容易连锁崩 |
 
 > 之所以锁 r128：全文依赖 `THREE.sRGBEncoding`、`renderer.outputEncoding`、`RGBFormat` 时代的
@@ -37,8 +37,8 @@
 
 | 区块 | 内容 |
 | --- | --- |
-| `<style>` | 全部 UI 样式。命名空间：`.hud .brand .tools .tool .dock .card .thumb .hint .toast`，`body.hideui` |
-| `<body>` | `#c` 画布、`.vignette`、`.grain`、HUD、7 个工具按钮、dock、提示、toast、`.fatal` 兜底层 |
+| `<style>` | 全部 UI 样式。命名空间：`.hud .brand .tools .tool .dock .pick .pickMenu .deck .card .thumb .hint .toast`，`body.hideui` |
+| `<body>` | `#c` 画布、`.vignette`、`.grain`、HUD、7 个工具按钮、dock（`pickWrap` + `deck`）、提示、toast、`.fatal` 兜底层 |
 | boot guards | `fatal()` 兜底、three 加载检查、`REDUCED`（prefers-reduced-motion）、`QS` 启动参数 |
 | 世界常量 | `BEACH` `WORLD` `shoreDist()` `bedH()` |
 | `renderer` / `scene` / `camera` | 渲染器设置、相机初始机位、`SUN_DIR`、`PALM_POS` |
@@ -52,13 +52,13 @@
 | 沙地 / 海床 | `sandMat.onBeforeCompile` 注入沙纹法线、湿度、焦散、swash |
 | 海草 / 珊瑚 / 乱石 / 碎石 / 海星 / 贝壳 / 海胆 | 全部 `InstancedMesh` |
 | 棕榈 | `TubeGeometry` 树干 + 程序化 frond 三角带，`fronds[]` 摆动 |
-| 生物几何 | `buildRay(cfg)` / `buildJelly(cfg)` / `buildFish(cfg)` / `buildTurtle(cfg)`，`SPECIES` 参数表 |
-| 生物着色器 | `RAY_VS` `MANTA_FS` `EAGLE_FS` `STING_FS` `JELLY_VS` `JELLY_FS` `FISH_VS` `TURTLE_VS` `SHARK_FS` `CLOWN_FS` `PUFFER_FS` `TURTLE_FS`、共享的 `CREATURE_LIGHT`（`shade()` / `throughWater()` / `hash21()`） |
-| `makeRayRig` / `makeJellyRig` / `makeSwimmerRig` | 每个物种一对 `InstancedMesh`（`under` / `air`）+ `items[]`；`makeSwimmerRig` 同时服务鱼与海龟 |
+| 生物几何 | `buildRay(cfg)` / `buildJelly(cfg)` / `buildFish(cfg)` / `buildTurtle(cfg)` / `buildWhale(cfg)`，`SPECIES` 参数表 |
+| 生物着色器 | `RAY_VS` `MANTA_FS` `EAGLE_FS` `STING_FS` `JELLY_VS` `JELLY_FS` `FISH_VS` `TURTLE_VS` `SHARK_FS` `CLOWN_FS` `PUFFER_FS` `TURTLE_FS` `WHALE_FS`（五种鲸豚共用，靠 `W_*` define 分叉）、共享的 `CREATURE_LIGHT`（`shade()` / `throughWater()` / `hash21()`） |
+| `makeRayRig` / `makeJellyRig` / `makeSwimmerRig` | 每个物种一对 `InstancedMesh`（`under` / `air`）+ `items[]`；`makeSwimmerRig` 同时服务鱼、海龟与鲸豚 |
 | 生物状态机 | `spawnCreature` `updateCreature` `beginCreatureFrame` `endCreatureFrame` |
 | 生物阴影 / 环境群 | `cShadow` 实例化贴地阴影、初始 12 只种群 |
 | 粒子 / 涟漪 / 音频 | `pAir` `pUnder` `ringMesh` `addRing` `initAudio` `playSplash` `playPlink` |
-| 卡片 / 工具 / 交互 | `CARD_ORDER` `bindCard` `throwArc` `dropCreature` `toggle` 键盘 |
+| 卡片 / 工具 / 交互 | `GROUPS` `buildCard` `buildCards` `buildGroupMenu` `selectGroup` `openMenu` `closeMenu` `throwArc` `dropCreature` `toggle` 键盘 |
 | ambient / 壁纸 | `sleepUI` `wakeUI` `setUIOffscreen` `togglePause` `toggleFullscreen` `applyDayCycle` |
 | 主循环 | `resize()`、`warmUp()`、`startLoop` / `stopLoop`、`renderFrame()`、自适应画质 |
 
@@ -164,7 +164,7 @@ pass 2  camera.layers = 1  →  屏幕：quadScene（把 rtScene 当背景铺满
 
 ### 8.1 物种参数（`SPECIES`）
 
-`kind` 决定行为分支（`ray` / `jelly` / `fish` / `turtle`），`rad` 只用于阴影与尾波半径。
+`kind` 决定行为分支（`ray` / `jelly` / `fish` / `turtle` / `whale`），`rad` 只用于阴影与尾波半径。
 
 | key | 中文 | kind | 尺寸 | 拍翅/脉动 | 速度 | 深度 `dep` | 半径 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -177,8 +177,19 @@ pass 2  camera.layers = 1  →  屏幕：quadScene（把 rtScene 当背景铺满
 | `clown` | 小丑鱼 | fish | L 0.78 / W 0.175 | 6.2 | 1.35 | [-1.5, -0.66] | 0.34 |
 | `puffer` | 刺鲀 | fish | L 0.78 / W 0.355 | 4.6 | 0.82 | [-1.9, -0.80] | 0.40 |
 | `turtle` | 绿海龟 | turtle | L 1.12 / W 0.44 | 1.05 | 0.80 | [-3.2, -1.05] | 0.95 |
+| `humpback` | 座头鲸 | whale | L 4.40 / W 0.60 / H 0.64 | 0.70 | 1.05 | [-6.2, -2.6] | 2.30 |
+| `orca` | 虎鲸 | whale | L 3.40 / W 0.55 / H 0.57 | 0.95 | 1.55 | [-5.6, -2.2] | 1.85 |
+| `sperm` | 抹香鲸 | whale | L 3.60 / W 0.55 / H 0.53 | 0.66 | 0.95 | [-6.6, -2.8] | 2.05 |
+| `dolphin` | 宽吻海豚 | whale | L 1.70 / W 0.205 / H 0.225 | 1.55 | 2.75 | [-3.4, -1.10] | 0.98 |
+| `spinner` | 飞旋海豚 | whale | L 1.38 / W 0.152 / H 0.168 | 1.90 | 3.05 | [-3.0, -1.05] | 0.80 |
 
-鱼的 `L` 是吻端到尾柄长度（不含尾鳍），`W/H` 是半宽 / 半高；海龟的 `L/W` 是背甲长 / 半宽。
+鱼的 `L` 是吻端到尾柄长度（不含尾鳍），`W/H` 是半宽 / 半高；海龟的 `L/W` 是背甲长 / 半宽；
+鲸豚的 `L` 是吻端到尾柄（同样不含尾鳍），`W/H` 是中段**半宽 / 半高**。
+
+鲸豚专属字段：`wave`（沿体半波数，鱼 4.6）、`blunt`（头部收窄量）、`dome`（吻端圆化量）、
+`beak`（有喙海豚的吻突）、`boxHead`（抹香鲸方形头）、`fluke:[span,len]`、`dorsal:[h,len,z]`、
+`pect:[len,width,sweep]`、`tubercles`（座头鲸结节排数）、`blow`（喷气强度，0 为不喷）、
+`surfCd`（上浮周期基准，秒）、`breachOk`（允许跃水）、`school`（结群半径）。
 
 花纹与结构（改动须保持"能从俯视认出来"）：
 
@@ -191,9 +202,17 @@ pass 2  camera.layers = 1  →  屏幕：quadScene（把 rtScene 当背景铺满
 - **Clown**：橙底 + 三道包身白环（各带黑边）、黑鳍缘、大黑眼
 - **Puffer**：浑圆桶身 + 62 根短刺、背部深色雀斑、两只大眼、小喙
 - **Turtle**：橄榄色鳞甲（砖砌网格 + 生长纹 + 缘盾齿）、奶黄腹甲、四支桨状鳍、钝头
+- **Humpback**：炭灰背 + 白下颌、喉腹褶（ventral pleats）、**白色长胸鳍**（体长 1/4）、
+  吻端 16 颗结节（tubercles）、低矮背鳍、深缺口尾鳍
+- **Orca**：纯黑背 + 纯白腹、**眼后白斑**、灰色鞍斑（saddle patch）、所有鳍纯黑、
+  雄性高背鳍（`dorsal[2] = 0.82` 是全场最高的鳍）
+- **Sperm**：灰褐色、**方形巨头**（`boxHead` 把截面方化）、尾柄褶皱、下颌只有一条唇线（仅腹面）
+- **Dolphin**：灰蓝三色带（深背 / 中灰 / 浅腹）、深色吻端、镰刀背鳍、宽吻突（`beak: 0.30`）
+- **Spinner**：深色披风 + 浅赭侧带 + 白腹、极细长吻突（`beak: 0.38`）、三角小背鳍
 
 > 鱼的尾鳍被刻意做**近水平**（两个叶片只微微上翘）。真实鱼尾是竖直的，但在俯视机位下
 > 只剩一条线；压平之后叉尾才看得出来。这是场景的取舍，别"修正"回解剖正确。
+> 鲸豚的尾鳍（fluke）本来就是水平的，俯视下反而是全场最好认的特征。
 
 ### 8.2 几何与实例
 
@@ -206,34 +225,56 @@ pass 2  camera.layers = 1  →  屏幕：quadScene（把 rtScene 当背景铺满
   剖面函数 `prof(v)`：吻端 `smooth(0.74,1.0)` 收到 18 %，尾柄 26 %，中段最粗。
 - `buildTurtle(cfg)`：背甲 / 腹甲两片 sheet + 4 支桨状鳍 + 钝头，属性 `aUV / aPart / aSheet`
   （`aPart`：0 甲 / 1 前鳍 / 2 后鳍 / 3 头；`aUV.u` 对鳍是 0 根 → 1 尖）
+- `buildWhale(cfg)`：**更粗的封闭管**（`NU=26` 环 × `NV=20` 边）+ 鼻/尾端盖 + 胸鳍 + 背鳍 + 尾鳍 +
+  可选结节，属性同 `buildFish`（`aUV / aPart`）。
+  - 剖面 `prof(v)` 是五个因子的乘积，比鱼多一层 `dome`：
+    `tail(0.19→1) × barrel(1 + 0.09·sin) × head(1 - blunt·s) × snout(有喙才收) × dome(1 - d·s)`
+  - `cfg.boxHead` 用 `Math.pow(|sin(角)|, 1 - sq)` 把截面方化（抹香鲸）
+  - 胸鳍是三片渐窄叶片（`wR / wM / wT` = `L·0.080 / 0.050 / 0.012`），带 `sweep` 后掠
+  - 背鳍是**薄四面体**（`b0 / b1(±h·0.52) / t`），不是平面片——见 §11.18
+  - 尾鳍是**曲线采样扇形**：`N=6` 段，leading edge `z0 - len·0.62·t^1.6`、
+    trailing edge `z0 - len·(0.48 + 0.14·t^0.7)`，两条曲线在 `t=1` 汇于尖端，
+    `t→0` 的间隙自然形成中央缺口（notch）——见 §11.19
+  - `cfg.tubercles` 在吻端 4×4 排布：`v = 0.765 + 0.195·(row+.5)/rows`、`ang = ((col+.5)/cols·2 - 1)·0.86`
 - 实例属性：`aPhase / aAmp / aHold / aVel`
 - ⚠️ **单几何体的 attribute 数量上限是 8 个 float**。水母曾因 `aHold` 超限编译失败，
   才把 `t/width/ang/len` 合并进 `aInfo`。新增属性前先数一遍。
-- `define`：鳐 → `FLAP`（蝠鲼/鹰鳐拍翅）；魟 → `UNDULATE`（圆盘起伏）；水母用 `vPulse` 快收慢张
-- 鱼与海龟不靠 define，各有自己的顶点着色器，全部由 uniform 驱动（每个物种一套材质）：
-  - `FISH_VS`：侧向波 `sin(ph - v*4.6)` 从头向尾增强（`uSway` 由 `cfg.sway` 给），
+- `define`：鳐 → `FLAP`（蝠鲼/鹰鳐拍翅）；魟 → `UNDULATE`（圆盘起伏）；水母用 `vPulse` 快收慢张；
+  鲸豚 → `W_<KEY>`（`W_HUMPBACK` `W_ORCA` `W_SPERM` `W_DOLPHIN` `W_SPINNER`），
+  五个物种**共用同一份 `WHALE_FS` 源码**，靠 `#ifdef` 编译期分叉，改一处花纹不会连锁影响别人。
+- 鱼、海龟、鲸豚不靠 define 走顶点路径，各有自己的顶点着色器，全部由 uniform 驱动（每个物种一套材质）：
+  - `FISH_VS`（鱼与鲸豚共用）：侧向波 `sin(ph - v * uWave)` 从头向尾增强（`uSway` 由 `cfg.sway` 给），
     胸鳍高频抖动，`aHold` 时被"捏住"的鱼挣扎更凶
+  - `uWave` 是**沿体半波数**：鱼 4.6，鲸 3.0–3.2（长而慢的起伏），海豚 4.0–4.2。
+    这个值原本硬编码在 `FISH_VS` 里，加鲸鱼时必须抽成 uniform，否则 4.4 m 的座头鲸会像条抽搐的鳗鱼
   - `TURTLE_VS`：两只前鳍同步划水（`pow(aUV.x,1.35)` 让尖端摆幅最大）、后鳍只做微调、头会左右看
 - `uLen`（= `cfg.L`）是所有位移的尺寸基准，**换了物种尺寸必须跟着换**，否则鳍的摆幅不成比例
 - 触手是 **camera-facing billboard 飘带**：随速度流向身后，静止时垂下，被悬空时滴水
 
 ### 8.3 状态机
 
-`swim → held → arc / fall → swim`，另有 `breach`（**只给 `kind === 'ray'`**：蝠鲼/鹰鳐偶尔跃出
-水面翻转）与 `surf`（**只给海龟**）。
+`swim → held → arc / fall → swim`，另有 `breach`（**鳐类全部 + `cfg.breachOk` 的海豚**：偶尔跃出
+水面翻转）与 `surf`（**海龟 + 所有鲸豚**：上浮换气）。
 
 - `held`：跟随指针，`p.y` 平滑到 `holdY`，每 0.3–0.7 s 滴一滴水，并周期性在海面留湿环
 - `arc`：`p.lerpVectors(from, to, k)` + `sin(kπ) * arcH` 抛物线，落地 `splash()`
 - `swim`：洋流 `currentAt()` 叠加、朝 `target` 转向、`roll = clamp(-turn*9, ±0.55)` 侧倾、
   浅滩回避、漩涡吸引、被点击时 `flee`
-- `surf`（海龟）：每 24–52 s 上浮一次。0–0.85 s 抬升（pitch +0.27）、0.85–1.9 s 贴水面呼吸、
-  之后下沉；越过 `y = -0.14` 时留一圈环 + 几滴水珠（`c.gasped` 保证只触发一次）。
-  `t > 2.4` 且回到 `depthPref` 才退出，**否则会卡在水面**。
+- `surf`（`cfg.surf || cfg.blow`，海龟与全部鲸豚）：每 `surfCd·(0.65–1.45)` 秒上浮一次。
+  0–0.85 s 抬升（pitch +0.27）、0.85–1.9 s 贴水面换气、之后下沉；越过 `y = -0.14` 时留一圈环，
+  且 `c.gasped` 保证只触发一次。`t > 2.4` 且回到 `depthPref` 才退出，**否则会卡在水面**。
+  - 鲸豚的抬升 / 下沉更慢（`riseRate 1.15`、`sinkRate 1.05 + 0.20·L`），大个体要给它足够时间
+  - **喷气**（`cfg.blow`）：从**鼻端** `c.p + (sin yaw, cos yaw)·L·0.32` 而不是体心发出，
+    否则水雾会从背中间冒出来。粒子数 `round(34·blow)`、初速 `4.2–5.8·blow`、
+    寿命 1.10–1.80 s、尺寸 0.15–0.30。海龟走同一分支，只是滴 4 颗小水珠
 - `flee`：`puffer` 会鼓到 1.5 倍（`c.puff` 平滑插值，进 `_sc` 的缩放），松开后自己缩回去
-- `cfg.school`（小丑鱼 3.4 m）：对同类做一次轻量聚合——目标方向 55 % 原方向 + 45 % 同伴质心，
-  这样一缸小丑鱼会自然聚群
-- `cfg.deep`（鲨鱼）：`pickWander` 只挑 `bedH < -2.2` 的开阔水域，不会蹭到沙滩
-- 种群数量变化 → `updateCounter()` 输出 `鳐 N · 水母 M · 鱼 K · 龟 J`（`n[rig.kind]++`，四个种类固定次序，
+- `cfg.school`：对同类做一次轻量聚合——目标方向 55 % 原方向 + 45 % 同伴质心，
+  这样一缸小丑鱼（3.4 m）或一群飞旋海豚（5.2 m）会自然聚群，而不会被硬拉成一个点
+- `cfg.deep`：鲨鱼与三种大鲸只挑 `bedH < -2.2` 的开阔水域，不会蹭到沙滩
+- 深度下限会算进体高：`wantY = max(wantY, bed + max(0.55, L·0.34))`，否则大鲸的腹部会插进海床
+- 转向速率按体型分档：水母 2.0、鲸豚 2.5、其余 3.4 —— 4 m 的鲸不可能像小丑鱼一样急转
+- 尾波间隔也按体型放慢：`isWhale ? 2.0 : 1`（鱼 2.6），强度 `isWhale ? 0.42 : 0.55`
+- `updateCounter()` 输出 `鳐 N · 水母 M · 鱼 K · 龟 J · 鲸豚 P`（`n[rig.kind]++`，五个种类固定次序，
   缺项显示 0 而不是省略，避免计数行抖动换行）
 
 ### 8.4 帧内实例写入
@@ -256,13 +297,24 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 - 四张查询表控制每个物种的取景，新增物种必须四张都填：
   `bgFor` 背景色、`ext` **取景尺度（≈ 模型最大尺寸，`2.0/ext` 是缩放）**、
   `lift` 视线目标的高度、`rot` 姿态 `[x, y, z]`。
-- `ext` 不是"留白系数"而是"模型的包围尺寸"：小鱼给 1.2，鲨鱼给 3.1。填大了模型缩成一点，
+- `ext` 不是"留白系数"而是"模型的包围尺寸"：小鱼给 1.2，座头鲸给 5.20。填大了模型缩成一点，
   填小了直接裁掉尾鳍。
-- 背景色**按物种区分**：鳐与鱼用浅天蓝 `#bfe6ea` ~ `#aadde4`；水母用深水 `#3f8492` / `#35707f`。
+- 现有 `ext` 值：`manta 3.1 / eagle 2.5 / sting 1.5 / moon 1.5 / nettle 1.4 / shark 3.1 /
+  clown 1.2 / puffer 1.25 / turtle 1.5 / humpback 5.20 / orca 4.10 / sperm 4.30 /
+  dolphin 1.95 / spinner 1.62`。
+  鲸豚的取值空间极窄——从 5.85 降到 4.55 会裁尾鳍，再降到 4.55 以下又顶到画框，只能小步试。
+- 鲸豚的姿态 `rot` 用俯视 3/4 角（`[0.46, 0.72, -0.05]` 一类）：`x` 越小越接近平视，
+  尾鳍会被压缩；`x` 接近 0.5 时尾鳍展开最完整，但身体变成一条线。`lift` 基本留 0，
+  只有虎鲸给 −0.05（它的高背鳍会把构图顶偏）。
+- 背景色**按物种区分**：鳐与鱼用浅天蓝 `#bfe6ea` ~ `#aadde4`；水母用深水 `#3f8492` / `#35707f`；
+  鲸豚用偏青的 `#84c1d1`（座头）/ `#7dbdd0`（虎鲸）/ `#8ac5d3`（抹香）/ `#93cdd9`（宽吻）/
+  `#9ad3dd`（飞旋），越小的海豚底色越亮，卡片按组看时有层次。
   浅底上的半透明水母会直接消失，这是必须保留的设定。
 - 卡片尺寸桌面 96 px（`.thumb` 同尺寸），≤1180 px 降 80，≤760 px 降 64，≤430 px 降 56。
 - 英文名 `Blue-spotted Stingray` 正好吃满 96 px，**不要**再缩小卡片或加大字号，否则溢出到相邻卡片。
-- 9 张卡片在 96 px 下需要约 946 px 宽，所以 `.dock` 常开 `overflow-x:auto`（滚动条隐藏）兜底。
+  `Bottlenose Dolphin` 与 `Humpback Whale` 同样接近上限。
+- 一屏只显示**一组**物种（3–5 张），最宽的一组是「鲸豚」5 张 ≈ 5×96 + 4×8 = 512 px，
+  960 px 以上视口完全放得下；`.deck` 仍留 `overflow-x:auto` 兜底。
 
 ## 9. 交互规格
 
@@ -276,8 +328,36 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 | 达到 48 只 | toast `海中最多容纳 48 只生物`，不再生成 |
 
 卡片是 `<button>`，桌面 96 px 宽；`pointerdown` 里 `setPointerCapture` 必须包 `try/catch`。
-判定阈值为位移 < 9 px 且时长 < 420 ms。卡片顺序由 `CARD_ORDER` 决定（鳐 → 鱼 → 龟 → 水母），
-**`SPECIES` 的插入顺序也要与之一致**，`renderThumbs()` 是按 `Object.keys(SPECIES)` 遍历的。
+判定阈值为位移 < 9 px 且时长 < 420 ms。
+
+### 物种分组下拉（`GROUPS` / `pickMenu`）
+
+14 个物种平铺需要约 1.4 k px，所以卡座改成「左侧一个分组按钮 + 右侧该组的卡片」：
+
+```js
+GROUPS = [
+  { cn: '鳐类', keys: ['manta', 'eagle', 'sting'] },
+  { cn: '水母', keys: ['moon', 'nettle'] },
+  { cn: '鱼类', keys: ['shark', 'clown', 'puffer'] },
+  { cn: '海龟', keys: ['turtle'] },
+  { cn: '鲸豚', keys: ['humpback', 'orca', 'sperm', 'dolphin', 'spinner'] }
+]
+```
+
+- `pickWrap > button.pick`（`aria-haspopup="listbox"`、`aria-expanded` 跟随开合）＋
+  `div.pickMenu[role="listbox"]`，每个选项是 `button[aria-selected]`。
+- `buildGroupMenu()` 只建一次；`selectGroup(i)` 更新 `groupIdx` → `buildCards()` 重建 `deck`。
+- **`deck` 重建时必须先 `if (drag) { dropCreature(drag.c); drag = null; }`**，否则换组后
+  正在被拖的卡片从 DOM 里消失，生物永远卡在 `held`。
+- 换组有 `deck.classList.remove('swap')` → 强制重排 → `add('swap')` 的淡入，不加会"啪"地跳一下。
+- 键盘：`pick` 上 `ArrowDown/ArrowUp` 循环切组（并立即 `selectGroup`）、`Escape` 关闭；
+  全局 `keydown` 也接了 `Escape → closeMenu()`。
+- 点外部关闭：`document` 上 `pointerdown`，`!pickWrap.contains(e.target)` 时 `closeMenu()`。
+- **`.dock` 必须 `overflow:visible`**，滚动交给 `.deck`；否则向上弹出的菜单会被 dock 裁掉。
+  菜单 `bottom: calc(100% + 8px)`、`background: rgba(249,254,254,.93)`（低于 .90 会看不清）。
+- `.pick` 没有固定高度：`align-self: stretch` + `height: 100%` + `justify-content: flex-end`
+  + `padding-bottom: 12px`，才能和 96 px 的卡片等高、文字贴底对齐。
+- 断点内尺寸：1180 px → 72×80，760 px → 60×64，430 px → 54×56 且隐藏 `.pkN`（「N 种」）。
 
 ### 工具条（7 个，含键盘）
 
@@ -350,8 +430,13 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
    反复验证过）——海床能透出、生物不能。现状是 layer 1 自绘 + `throughWater` 吸收。
 3. **深度纹理重建厚度不可靠**：`DepthTexture` 采样在这条管线里拿不到稳定值（水面全浅绿 / 全亮）。
    已改为解析水深（与海床 mesh 同公式）。
-4. **GLSL 保留字**：`patch` 是 r128 的保留字，变量名用 `ptc`；`PI` 已由 three 内置 `#define`，
+4. **GLSL 保留字 `patch`**：加虎鲸眼后白斑时变量名写作 `patch`，整个页面直接
+   `ERROR: 0:147: 'patch' : Illegal use of reserved word`，着色器编译失败 → 全屏只剩背景。
+   已改为 `cheek`。`ptc` 同理（鳐的花纹变量）。`PI` 已由 three 内置 `#define`，
    不要在 `GLSL_COMMON` 里重复定义。
+   附带踩坑：想在注释里写 ``patch``（反引号）说明这件事，但整段 shader 本身就是 JS 模板字符串，
+   反引号会提前闭合字符串 → `Uncaught SyntaxError: Unexpected identifier 'patch'`。
+   **在 shader 模板串里不要出现反引号。**
 5. **`normalMatrix` 不是片元内建**：在 `onBeforeCompile` 的片元头部手动声明
    `uniform mat3 normalMatrix;`。
 6. **attribute 上限 8**：见 §8.2。
@@ -373,6 +458,23 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
     鱼用 `1 - 0.82*smooth(0.74,1.0,v)` 把吻端收到 18 %，再加端盖才不显平。
 16. **腹部反荫蔽的边界不能太窄**：`bellyMask` 用 `smoothstep(0.30,-0.62,N.y)`；
     早期 `(0.12,-0.30)` 在鱼身上会画出一条像折痕的硬边。
+17. **俯视下竖直薄片的投影面积为零**：背鳍第一版是一个竖直的平面片（两条三角形拼的 quad），
+    相机在正上方时它退化成一条 1 px 的线，五只鲸看起来都"没有背鳍"。
+    必须建成**有厚度的四面体**（底边 `±h·0.52`、顶点后掠），俯视才有可见的梯形轮廓。
+    同理，胸鳍初版藏在腹下（`y = -H·0.72`），俯视完全看不到，抬到 `-H·0.05 ~ -H·0.21` 才露出来。
+18. **鲸鱼尾鳍很容易做成"领结"**：第一版让两个叶片各自从中心点向斜后方铺开，
+    俯视就是标准的蝴蝶结/领结；第二版改成"四点多边形整体向后"→ 变成锤头鲛的锤头。
+    正确解法是**沿两条曲线采样**：leading edge `t^1.6`（前缘几乎平直、末端急速收）、
+    trailing edge `0.48 + 0.14·t^0.7`（后缘缓慢跟随），两条线在 `t=1` 汇于尖端，
+    `t→0` 的间隙就是中央缺口。数一下顶点顺序，别让扇形自交。
+19. **管状体收尾不够就成"餐盘"**：`buildWhale` 的 `prof(v)` 早期只有 `head` 项，
+    吻端仍然是一个半径 0.3 的平面圆盘，座头鲸从上方看像顶了个盘子。
+    加 `dome` 项（`1 - d·smooth(0.92, 1.0, v)`）并按物种配 `dome`：
+    座头 0.28 / 虎鲸 0.42 / 抹香 0.16（它本来就是方的）/ 宽吻海豚 0.55 / 飞旋 0.62。
+20. **喷气粒子"看不见"要先分清是没喷还是没画**：截图为空时先读
+    `pAir.P` 与 `aAlpha` 数组（`blew=-1 live=0` → 根本没触发），别急着调粒子尺寸。
+    无头环境下 rAF 帧数不可控，`--virtual-time-budget` 常常只跑十几帧，
+    要手动 `for` 循环调 `window.__update(1/60, t)` 驱动，并在循环里锁死 `c.p` 与相机。
 
 ## 12. 验证流程
 
@@ -390,7 +492,7 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 
 - 取色：自写 `px.py`（zlib 解 PNG，无第三方依赖），用来判断是不是真的告警/过曝/欠曝，
   不要只靠肉眼看截图缩略图。
-- DOM 断言：`--dump-dom` + `grep` 读计数器文本（`鳐 N · 水母 M · 鱼 K · 龟 J`）与按钮 `class="tool on"`。
+- DOM 断言：`--dump-dom` + `grep` 读计数器文本（`鳐 N · 水母 M · 鱼 K · 龟 J · 鲸豚 P`）与按钮 `class="tool on"`。
 - 交互验证：注入合成 `PointerEvent`（`pointerdown/move/up`）驱动卡片拖拽与点击，
   比手点更可复现。
 - 临时调试图**必须**用 `dbg*.html` 命名并在结束时删除，仓库里只留 `index.html`。
@@ -402,11 +504,14 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 - [ ] 生物看不见 → 先看 `rig.under.count` 与 `items`
 - [ ] 改色后重新截图，确认近岸青绿 / 远海深蓝没有翻转
 - [ ] 竖屏 430px 宽下工具条与卡片不溢出（无头最小 500 宽，需按 500 判断）
-- [ ] 9 张卡片在 1440 / 1100 / 500 宽下都能拿到：1100 走 80 px，500 靠横向滚动
+- [ ] 5 个分组在 1440 / 1100 / 500 宽下都能切到，最宽的「鲸豚」组 5 张卡不溢出
+- [ ] 换组时若手上有拖动中的生物，先 `dropCreature` 再重建，不会留下卡在 `held` 的幽灵
 - [ ] 新物种能在场景里被认出来（用 `dbg*.html` 把相机压低到 3~4 m 单只观察，看完删掉）
+- [ ] 鲸豚上浮会喷气（`BLOW:whales=N | airParticles=M`，且粒子从鼻端冒出、不在背中间）
 - [ ] 海龟会浮上水面再沉回去、刺鲀受惊鼓起 1.5 倍（直接连调 `window.__update(dt,t)` 400 步最省事，
       无头环境下 rAF 帧数不可控，用帧数等待会等不到）
-- [ ] 控制台无 shader 编译错误（用 §12 的 `errlog` 注入法）
+- [ ] 控制台无 shader 编译错误（用 §12 的 `errlog` 注入法）；新增鲸豚后尤其要看
+      `W_*` define 是否漏传，漏了会掉进 `#else`（飞旋海豚）分支而不是报错，花纹会"长错物种"
 - [ ] 水母缩略图仍能在深色底上辨认出钟体与触手
 - [ ] `.fatal` 覆盖层默认不出现（`#fatal` 的 class 不含 `show`）
 - [ ] 普通模式 6.5 s 后 `body` 带 `idle`；`?wallpaper=1` 一进来就带 `idle`
@@ -442,10 +547,16 @@ endCreatureFrame()              // 每个 rig: mesh.count = items.length，逐�
 - [x] 无 WebGL / CDN 失败兜底 —— 已加 `.fatal` 覆盖层与上下文丢失处理
 - [x] `prefers-reduced-motion` —— 已关跃水、降旋转、去 CSS 过渡
 - [x] 桌面背景模式 —— 静默淡出、全屏、锁帧、后台暂停、上下文自动恢复、首帧淡入
+- [x] 卡片过多 —— 已改为 `GROUPS` 五组 + `pickMenu` 分组下拉，一屏最多 5 张
 - [ ] 移动端工具条 6 个按钮（`full` 已隐藏）在 430px 下仍偏挤，可收进"更多"折叠菜单
-- [ ] 移动端 9 张卡片只能横向滚动，右侧露出半张卡作为提示；如果嫌隐晦，可改成两行或分类切换
+- [ ] 分组下拉目前只有纵向列表，物种更多时（>8 组）可考虑带缩略图的网格弹层
 - [ ] 真正作为壁纸时无法接收鼠标事件（Wallpaper Engine 的源本身不转发），
       可考虑用 `?ambient=1` 让生物按更长的随机间隔自行投放，长时间不重样
+- [ ] 鲸豚目前只有 5 种，还能加：蓝鲸（超长体型）、灰鲸（白斑 + 无背鳍）、
+      白鲸（纯白 + 额隆）、拟虎鲸、真海豚（结群游）。加之前先确认 `WHALE_FS` 是否需要新的 `#ifdef`，
+      以及 `GROUPS` 的「鲸豚」组要拆成「须鲸 / 齿鲸」
+- [ ] 鲸豚的胸鳍只有俯仰摆动，没有真正的划水行程；远看的动态略"飘"
+- [ ] 喷气目前是纯白雾 + 重力回落，缺一个"喷完在水面留一层白沫圈"的收尾
 - [ ] 长时间运行（>24 h）后 `U.time` 精度下降可能导致噪声抖动，可考虑对 `uTime` 取模
 - [ ] 生物被拖到沙滩上时的落地表现（现在统一按水面处理）
 - [ ] 近距观察时水面泡沫呈"块状"，需要更细的 lace 分形（p×8 那层不够碎）

@@ -89,9 +89,64 @@
     box-shadow:0 30px 60px -34px rgba(0,34,40,.95), 0 1px 0 rgba(255,255,255,.75) inset;
     transition:opacity .55s cubic-bezier(.4,0,.2,1), transform .55s cubic-bezier(.4,0,.2,1);
     max-width:calc(100vw - 24px);
+    /* the deck scrolls, not the dock — the species menu has to be able to escape upward */
+    overflow:visible;
+  }
+  .deck{
+    display:flex;align-items:flex-end;gap:8px;min-width:0;
     overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   }
-  .dock::-webkit-scrollbar{display:none}
+  .deck::-webkit-scrollbar{display:none}
+  .deck.swap{animation:deckIn .46s cubic-bezier(.4,0,.2,1)}
+  @keyframes deckIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+  /* ---------- species picker ---------- */
+  /* the picker is a card-shaped button: same height as a card, so the row reads as one unit */
+  .pickWrap{position:relative;flex:0 0 auto;align-self:stretch}
+  .pick{
+    -webkit-appearance:none;appearance:none;cursor:pointer;font-family:inherit;
+    box-sizing:border-box;height:100%;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
+    width:80px;padding:0 4px 12px;border-radius:17px;
+    border:1px solid rgba(255,255,255,.66);
+    background:linear-gradient(170deg,rgba(255,255,255,.56) 0%,rgba(206,240,243,.44) 100%);
+    color:#0a373d;
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset, 0 12px 20px -16px rgba(0,30,36,.95);
+    transition:background .2s, transform .2s cubic-bezier(.34,1.4,.5,1), box-shadow .2s;
+  }
+  .pick:hover{transform:translateY(-3px);background:linear-gradient(170deg,rgba(255,255,255,.76),rgba(206,240,243,.60))}
+  .pick .pkC{font-size:12px;font-weight:700;letter-spacing:.08em}
+  .pick .pkN{font-size:9.5px;letter-spacing:.12em;opacity:.56;font-variant-numeric:tabular-nums}
+  .pick .pkA{
+    width:0;height:0;margin-top:2px;opacity:.5;
+    border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #0d4a50;
+    transition:transform .22s;
+  }
+  .pickWrap.open .pkA{transform:rotate(180deg)}
+  .pick:focus-visible{outline:2px solid #0c4a52;outline-offset:3px}
+
+  .pickMenu{
+    position:absolute;left:0;bottom:calc(100% + 8px);z-index:3;
+    display:none;flex-direction:column;gap:1px;padding:6px;min-width:156px;border-radius:16px;
+    background:rgba(249,254,254,.93);
+    border:1px solid rgba(255,255,255,.9);
+    backdrop-filter:blur(24px) saturate(1.9);-webkit-backdrop-filter:blur(24px) saturate(1.9);
+    box-shadow:0 26px 48px -30px rgba(0,28,34,.95), 0 1px 0 rgba(255,255,255,.9) inset;
+  }
+  .pickWrap.open .pickMenu{display:flex;animation:menuIn .18s cubic-bezier(.4,0,.2,1)}
+  @keyframes menuIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .pickMenu button{
+    -webkit-appearance:none;appearance:none;cursor:pointer;font-family:inherit;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:8px 11px;border:0;border-radius:10px;background:transparent;
+    font-size:12px;font-weight:700;letter-spacing:.08em;color:#0a373d;text-align:left;
+    transition:background .16s, color .16s;
+  }
+  .pickMenu button i{font-style:normal;font-size:10px;font-weight:700;letter-spacing:0;opacity:.48;font-variant-numeric:tabular-nums}
+  .pickMenu button:hover{background:rgba(9,60,66,.09)}
+  .pickMenu button[aria-selected="true"]{background:rgba(12,74,82,.9);color:#eafcfb}
+  .pickMenu button[aria-selected="true"] i{opacity:.72}
+  .pickMenu button:focus-visible{outline:2px solid #0c4a52;outline-offset:1px}
   .card{
     -webkit-appearance:none;appearance:none;border:0;background:transparent;padding:0;cursor:grab;
     display:flex;flex-direction:column;align-items:center;gap:5px;width:96px;flex:0 0 auto;
@@ -113,7 +168,7 @@
 
   /* ---------- misc ---------- */
   .hint{
-    position:fixed;z-index:7;left:50%;bottom:calc(max(16px, env(safe-area-inset-bottom)) + 122px);
+    position:fixed;z-index:7;left:50%;bottom:calc(max(16px, env(safe-area-inset-bottom)) + 158px);
     transform:translateX(-50%);
     font-size:11px;letter-spacing:.16em;color:#0d4a50;opacity:.62;white-space:nowrap;
     transition:opacity .5s;pointer-events:none;text-shadow:0 1px 0 rgba(255,255,255,.5);
@@ -162,7 +217,8 @@
     .card{width:80px}
     .thumb{width:80px;height:80px;border-radius:15px}
     .card .lt{font-size:8px}
-    .hint{bottom:calc(max(16px, env(safe-area-inset-bottom)) + 108px)}
+    .pick{width:72px;height:80px}
+    .hint{bottom:calc(max(16px, env(safe-area-inset-bottom)) + 132px)}
   }
   @media (max-width: 760px){
     .brand{left:16px;top:14px}
@@ -174,23 +230,30 @@
     .tool i{display:none}
     .tool[data-act="full"]{display:none}
     .dock{gap:6px;padding:7px;border-radius:22px;bottom:max(10px, env(safe-area-inset-bottom));
-          max-width:calc(100vw - 20px);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;justify-content:flex-start}
-    .dock::-webkit-scrollbar{display:none}
+          max-width:calc(100vw - 20px)}
+    .deck{gap:6px}
     .card{width:64px}
     .thumb{width:64px;height:64px;border-radius:13px}
     .card .nm{font-size:9.5px}
     .card .lt{display:none}
-    .hint{bottom:calc(max(10px, env(safe-area-inset-bottom)) + 92px);font-size:9.5px;letter-spacing:.1em}
+    .pick{width:60px;height:64px;border-radius:13px}
+    .pick .pkC{font-size:10.5px}
+    .pick .pkN{font-size:8.5px}
+    .hint{bottom:calc(max(10px, env(safe-area-inset-bottom)) + 100px);font-size:9.5px;letter-spacing:.1em}
   }
   @media (max-width: 430px){
     .brand .cn{font-size:20px}
     .tools{top:10px;right:10px;gap:4px}
     .tool{padding:5px 7px;font-size:9px;letter-spacing:.02em}
     .dock{gap:5px;padding:6px;border-radius:20px}
+    .deck{gap:5px}
     .card{width:56px}
     .thumb{width:56px;height:56px;border-radius:11px}
     .card .nm{font-size:8.5px}
-    .hint{font-size:8.5px;bottom:calc(max(10px, env(safe-area-inset-bottom)) + 80px)}
+    .pick{width:54px;height:56px;border-radius:11px}
+    .pick .pkC{font-size:9.5px;letter-spacing:.02em}
+    .pick .pkN{display:none}
+    .hint{font-size:8.5px;bottom:calc(max(10px, env(safe-area-inset-bottom)) + 88px)}
   }
 </style>
 </head>
@@ -202,7 +265,7 @@
 <div class="hud brand">
   <div class="cn">浅海</div>
   <div class="en">Ocean Shallows</div>
-  <div class="cnt" id="cnt" aria-live="polite">鳐 0 · 水母 0 · 鱼 0 · 龟 0</div>
+  <div class="cnt" id="cnt" aria-live="polite">鳐 0 · 水母 0 · 鱼 0 · 龟 0 · 鲸豚 0</div>
 </div>
 
 <div class="tools" id="tools">
@@ -215,8 +278,18 @@
   <button class="tool" data-act="hide"><span>隐藏</span><i>H</i></button>
 </div>
 
-<div class="hint" id="hint">点击卡片抛入海中 · 拖动卡片把它放在水面</div>
-<div class="dock" id="dock"></div>
+<div class="hint" id="hint">点击卡片抛入海中 · 拖动卡片把它放在水面 · 左侧切换物种</div>
+<div class="dock" id="dock">
+  <div class="pickWrap" id="pickWrap">
+    <button class="pick" id="pick" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="pickMenu">
+      <span class="pkC" id="pickCn">鳐类</span>
+      <span class="pkN" id="pickN">3 种</span>
+      <span class="pkA" aria-hidden="true"></span>
+    </button>
+    <div class="pickMenu" id="pickMenu" role="listbox" aria-label="物种分类"></div>
+  </div>
+  <div class="deck" id="deck"></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <div class="fatal" id="fatal" role="alert">
@@ -1324,7 +1397,36 @@ const SPECIES = {
   // ---- turtle: its own shell builder, breathes at the surface ----
   turtle: { cn: '绿海龟', en: 'Green Turtle', kind: 'turtle',
             L: 1.12, W: 0.44, H: 0.13, amp: 0.60, flapRate: 1.05, speed: 0.80,
-            dep: [-3.2, -1.05], rad: 0.95, surf: true }
+            dep: [-3.2, -1.05], rad: 0.95, surf: true },
+
+  // ---- cetaceans: own loft builder, horizontal flukes, a spout at the surface ----
+  // L = nose→tail-base, W/H = half width / half height, blunt = how flat the nose stays,
+  // fluke = [length, half span] of the horizontal tail, blow = spout strength
+  humpback: { cn: '座头鲸', en: 'Humpback Whale', kind: 'whale',
+              L: 4.40, W: 0.60, H: 0.64, sway: 0.050, wave: 3.0, blunt: 0.20, dome: 0.28,
+              fluke: [1.22, 1.10], dorsal: [0.34, 0.30, 0.22], pect: [0.58, 1.24, 1.05],
+              tubercles: 16, amp: 0.50, flapRate: 0.70, speed: 1.05,
+              dep: [-6.2, -2.6], rad: 2.30, deep: true, surfCd: 19, blow: 1.35 },
+  orca:     { cn: '虎鲸', en: 'Orca', kind: 'whale',
+              L: 3.40, W: 0.55, H: 0.57, sway: 0.042, wave: 3.2, blunt: 0.25, dome: 0.42,
+              fluke: [0.96, 0.86], dorsal: [0.48, 0.24, 0.82], pect: [0.60, 0.66, 0.72],
+              amp: 0.55, flapRate: 0.95, speed: 1.55,
+              dep: [-5.6, -2.2], rad: 1.85, deep: true, surfCd: 14, blow: 1.10 },
+  sperm:    { cn: '抹香鲸', en: 'Sperm Whale', kind: 'whale',
+              L: 3.60, W: 0.55, H: 0.53, sway: 0.038, wave: 3.1, blunt: 0.22, boxHead: 0.62, dome: 0.16,
+              fluke: [1.06, 1.00], dorsal: [0.28, 0.20, 0.14], pect: [0.62, 0.40, 0.55],
+              amp: 0.45, flapRate: 0.66, speed: 0.95,
+              dep: [-6.6, -2.8], rad: 2.05, deep: true, surfCd: 23, blow: 1.25 },
+  dolphin:  { cn: '宽吻海豚', en: 'Bottlenose Dolphin', kind: 'whale',
+              L: 1.70, W: 0.205, H: 0.225, sway: 0.072, wave: 4.0, blunt: 0.22, beak: 0.30, dome: 0.55,
+              fluke: [0.44, 0.42], dorsal: [0.40, 0.22, 0.30], pect: [0.60, 0.30, 0.44],
+              amp: 0.88, flapRate: 1.55, speed: 2.75,
+              dep: [-3.4, -1.10], rad: 0.98, surfCd: 12, blow: 0.72, breachOk: true },
+  spinner:  { cn: '飞旋海豚', en: 'Spinner Dolphin', kind: 'whale',
+              L: 1.38, W: 0.152, H: 0.168, sway: 0.078, wave: 4.2, blunt: 0.18, beak: 0.38, dome: 0.62,
+              fluke: [0.36, 0.34], dorsal: [0.38, 0.19, 0.21], pect: [0.58, 0.24, 0.34],
+              amp: 0.98, flapRate: 1.90, speed: 3.05,
+              dep: [-3.0, -1.05], rad: 0.80, surfCd: 10, blow: 0.62, breachOk: true, school: 5.2 }
 };
 
 // ---------------------------------------------------------------- ray geometry
@@ -1677,6 +1779,170 @@ function buildTurtle(cfg) {
   return g;
 }
 
+// ---------------------------------------------------------------- cetacean geometry
+// A whale is a lofted tube like a fish, but three things differ:
+//   · the rostrum stays blunt; a sperm whale's head additionally squares off
+//   · the tail carries a HORIZONTAL fluke, so from above it reads as two swept blades
+//   · humpbacks get tubercles (bumps) along the rostrum
+//   aPart: 0 = body, 1 = pectoral flipper, 2 = dorsal fin + fluke, 3 = tubercle
+function buildWhale(cfg) {
+  const P = [], UVs = [], PT = [], IDX = [];
+  const NU = 26, NV = 20;
+  const L = cfg.L, W = cfg.W, H = cfg.H;
+  const zBase = -L * 0.5;
+  const blunt = cfg.blunt || 0.10, beak = cfg.beak || 0, box = cfg.boxHead || 0;
+
+  // tail peduncle → barrel → blunt rostrum; `beak` pulls a dolphin's snout back out
+  const prof = v => {
+    const tail = 0.19 + 0.81 * smooth(0, 0.36, v);
+    const barrel = 1.0 + 0.09 * Math.sin(v * Math.PI * 0.92);
+    const head = 1 - blunt * smooth(0.58, 1.0, v);
+    const snout = beak ? 1 - beak * smooth(0.86, 1.0, v) : 1;
+    // round off the very tip, otherwise the nose cap is a dinner plate facing the camera.
+    // A humpback keeps a broad rostrum, a dolphin runs out to a narrow beak.
+    const dome = 1 - (cfg.dome !== undefined ? cfg.dome : 0.45) * smooth(0.92, 1.0, v);
+    return Math.max(0.03, tail * barrel * head * snout * dome);
+  };
+
+  // ---- body : closed tube.  aUV.x = sin(angle) stays continuous, so no seam is visible.
+  for (let i = 0; i <= NU; i++) {
+    const v = i / NU, r = prof(v), z = zBase + v * L;
+    const sq = box * smooth(0.52, 0.94, v);          // only the head squares off
+    for (let j = 0; j < NV; j++) {
+      const a = (j / NV) * TAU, ca = Math.cos(a), sa = Math.sin(a);
+      const px = Math.sign(sa) * Math.pow(Math.abs(sa), 1 - sq);
+      const py = Math.sign(ca) * Math.pow(Math.abs(ca), 1 - sq);
+      P.push(px * W * r, py * H * r * (ca > 0 ? 1.0 : 0.88), z);
+      UVs.push(sa, v); PT.push(0);
+    }
+  }
+  for (let i = 0; i < NU; i++) {
+    for (let j = 0; j < NV; j++) {
+      const a = i * NV + j, b = i * NV + ((j + 1) % NV);
+      IDX.push(a, a + NV, b, b, a + NV, b + NV);
+    }
+  }
+  // tail + nose caps
+  for (let end = 0; end < 2; end++) {
+    const ringBase = end ? 0 : NU * NV;
+    const zc = end ? zBase : zBase + L;
+    const centre = P.length / 3;
+    P.push(0, 0, zc); UVs.push(0, end ? 0 : 1); PT.push(0);
+    for (let j = 0; j < NV; j++) {
+      const a = ringBase + j, b = ringBase + ((j + 1) % NV);
+      if (end) IDX.push(centre, b, a); else IDX.push(centre, a, b);
+    }
+  }
+
+  const tri = (p1, p2, p3, uv, part) => {
+    const b = P.length / 3;
+    P.push(p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2]);
+    UVs.push(uv[0], uv[1], uv[2], uv[3], uv[4], uv[5]);
+    PT.push(part, part, part);
+    IDX.push(b, b + 1, b + 2);
+  };
+
+  // ---- pectoral flippers : long swept blades (the humpback's reach a third of the body)
+  if (cfg.pect && cfg.pect[1] > 0.001) {
+    const [at, len, sweep] = cfg.pect;
+    const v0 = clamp(at, 0.05, 0.95), z0 = zBase + v0 * L, rx = W * prof(v0) * 0.66;
+    // a blade that narrows toward the tip and trails aft — sweeping it back is what makes a
+    // humpback's flipper read as a flipper rather than as a wing stuck to the flank
+    const wR = L * 0.080, wM = L * 0.050, wT = L * 0.012;
+    for (const s of [-1, 1]) {
+      const rf = [s * rx, -H * 0.05, z0 + wR];
+      const rb = [s * rx, -H * 0.10, z0 - wR];
+      const mf = [s * (rx + len * 0.54), -H * 0.14, z0 + wM - sweep * 0.46];
+      const mb = [s * (rx + len * 0.54), -H * 0.17, z0 - wM - sweep * 0.58];
+      const tp = [s * (rx + len), -H * 0.21, z0 - sweep * 0.98];
+      tri(rf, mf, rb, [0, 1, 0.5, 1, 0, 1], 1);
+      tri(rb, mf, mb, [0, 1, 0.5, 1, 0.5, 1], 1);
+      tri(mf, tp, mb, [0.5, 1, 1, 1, 0.5, 1], 1);
+    }
+  }
+
+  // ---- dorsal fin : a tall blade on an orca, a stub on a sperm whale.
+  // A flat vertical sheet has ZERO area from a top-down camera, so the fin is built as a
+  // thin tetrahedron — the same reason the fish caudal fin is squashed flat.
+  if (cfg.dorsal && cfg.dorsal[2] > 0.001) {
+    const [at, len, h] = cfg.dorsal;
+    const v0 = clamp(at, 0.10, 0.92);
+    const zs = zBase + v0 * L, ze = zs - len * L;
+    const yS = H * prof(v0) * 0.95;
+    // 0.52 of the height in width: a true blade is a hairline from above, and this scene is
+    // only ever seen from above.  Wide enough to read as a fin, narrow enough not to be a sail.
+    const b0 = [0, yS - h * 0.08, zs];
+    const b1 = [-h * 0.52, yS - h * 0.02, ze];
+    const b2 = [h * 0.52, yS - h * 0.02, ze];
+    const t = [0, yS + h, zs - len * L * 0.52];
+    tri(b0, b1, t, [0, 0.5, 0.5, 0.5, 1, 0.5], 2);
+    tri(b0, t, b2, [0, 0.5, 1, 0.5, 0.5, 0.5], 2);
+    tri(b1, b2, t, [0, 0.5, 1, 0.5, 0.5, 0.5], 2);
+  }
+
+  // ---- fluke : horizontal, two blades with a central notch.  Kept in the xz plane so the
+  //      silhouette survives the top-down camera (the rays' wings are flat for the same reason).
+  if (cfg.fluke) {
+    // One fluke, fanned from the peduncle.  The outline is sampled from two curves:
+    // a leading edge that sweeps out and aft, and a trailing edge that comes back to the
+    // centre line — so the central notch falls out of the geometry instead of being faked.
+    //   leading :  z = z0 - len * 0.62 * t^1.6
+    //   trailing:  z = z0 - len * (0.48 + 0.14 * t^0.7)
+    // Both meet at t = 1, which is the tip; at t -> 0 the trailing edge sits 0.48len aft of
+    // the peduncle, and that gap IS the notch.
+    const [len, span] = cfg.fluke;
+    const z0 = zBase + L * 0.02;
+    const N = 6, half = [];
+    for (let i = 1; i <= N; i++) {
+      const t = i / N;
+      half.push([-span * t, z0 - len * 0.62 * Math.pow(t, 1.6)]);
+    }
+    for (let i = N - 1; i >= 1; i--) {
+      const t = i / N;
+      half.push([-span * t, z0 - len * (0.48 + 0.14 * Math.pow(t, 0.7))]);
+    }
+    const right = half.map(q => [-q[0], q[1]]).reverse();
+    const all = [[0, z0]].concat(half, [[0, z0 - len * 0.48]], right, [[0, z0]]);
+    for (let i = 0; i < all.length - 1; i++) {
+      const a = all[i], b = all[i + 1];
+      const t0 = 0.5 - a[0] / (2 * span), t1 = 0.5 - b[0] / (2 * span);
+      tri([0, 0, z0], [a[0], 0, a[1]], [b[0], 0, b[1]], [0, 0.5, t0, 0.5, t1, 0.5], 2);
+    }
+  }
+
+  // ---- tubercles : squat cones across a humpback's rostrum
+  if (cfg.tubercles) {
+    const rows = 4, cols = 4;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const v = 0.765 + 0.195 * ((r + 0.5) / rows);
+        const ang = (((c + 0.5) / cols) * 2 - 1) * 0.86;    // wrap up the head, not past the sides
+        const rr = prof(v);
+        const px = Math.sin(ang) * W * rr * 0.93;
+        const py = Math.cos(ang) * H * rr * 0.93;
+        const pz = zBase + v * L;
+        const rad = W * 0.085;
+        const apex = [px + Math.sin(ang) * rad * 1.7, py + Math.cos(ang) * rad * 1.7, pz];
+        const bx = Math.cos(ang), by = -Math.sin(ang);
+        for (let s = 0; s < 4; s++) {
+          const a1 = (s / 4) * TAU, a2 = ((s + 1) / 4) * TAU;
+          const q1 = [px + bx * Math.sin(a1) * rad, py + by * Math.sin(a1) * rad, pz + Math.cos(a1) * rad];
+          const q2 = [px + bx * Math.sin(a2) * rad, py + by * Math.sin(a2) * rad, pz + Math.cos(a2) * rad];
+          tri(q1, apex, q2, [0, v, 0.5, v, 0, v], 3);
+        }
+      }
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('aUV', new THREE.Float32BufferAttribute(UVs, 2));
+  g.setAttribute('aPart', new THREE.Float32BufferAttribute(PT, 1));
+  g.setIndex(IDX);
+  g.computeVertexNormals();
+  return g;
+}
+
 // ---------------------------------------------------------------- shaders
 const RAY_VS = `
   uniform float uTime, uRate, uAmpScale;
@@ -1776,7 +2042,7 @@ const JELLY_VS = `
 // ---------------------------------------------------------------- swimmer + turtle vertex shaders
 // Fish: a lateral wave runs nose→tail, growing toward the tail; fins flutter on top.
 const FISH_VS = `
-  uniform float uTime, uRate, uAmpScale, uLen, uSway;
+  uniform float uTime, uRate, uAmpScale, uLen, uSway, uWave;
   attribute vec2 aUV;
   attribute float aPart, aPhase, aAmp, aHold;
   attribute vec3 aVel;
@@ -1791,7 +2057,9 @@ const FISH_VS = `
     float v = aUV.y;                                  // 0 tail base .. 1 nose
     float k = pow(1.0 - v, 1.7);                      // the wave dies out at the head
     float sway = uLen * uSway * aAmp * uAmpScale;
-    pos.x += sin(ph - v * 4.6) * k * sway;
+    // uWave is the number of half-waves along the body: 4.6 for a fish, ~3.1 for a whale,
+    // which gives the long slow heave a cetacean reads with from above.
+    pos.x += sin(ph - v * uWave) * k * sway;
     pos.y += sin(ph * 0.5 + 1.7) * 0.010 * uLen;
     if (aPart > 0.5 && aPart < 1.5) {                 // pectoral flutter
       pos.y += sin(uTime * uRate * 2.4 + aPhase + aUV.x * 2.2) * 0.028 * uLen;
@@ -2216,6 +2484,76 @@ const TURTLE_FS = FISH_FS_COMMON + `
   }
 `;
 
+// ---------------------------------------------------------------- cetacean fragment shaders
+// One source, five species: the marking pass is chosen by a define, so every branch is
+// resolved at compile time and the shader stays a single program per species.
+const WHALE_FS = FISH_FS_COMMON + `
+  void main(){
+    vec3 N = normalize(vN);
+    if (!gl_FrontFacing) N = -N;
+    vec3 V = normalize(cameraPosition - vWP);
+    float u = vUv.x, v = vUv.y, au = abs(u);
+    float belly = bellyMask(N);
+    vec3 base;
+
+#ifdef W_HUMPBACK
+    // charcoal back, white chin, long throat grooves, white flippers
+    base = mix(vec3(0.082, 0.090, 0.108), vec3(0.905, 0.910, 0.885), belly);
+    float grooves = smoothstep(0.42, 0.50, abs(fract(v * 26.0) - 0.5)) * smoothstep(0.62, 0.18, v) * belly;
+    base *= 1.0 - grooves * 0.22;
+    base *= 0.94 + 0.12 * hash21(floor(vec2(u * 14.0, v * 22.0)));
+    if (vPart > 0.5 && vPart < 1.5) {
+      base = mix(vec3(0.885, 0.895, 0.870), vec3(0.235, 0.250, 0.268), smoothstep(0.78, 0.99, au));
+    } else if (vPart > 2.5) {
+      base = vec3(0.245, 0.245, 0.232);
+    }
+#elif defined(W_ORCA)
+    base = mix(vec3(0.050, 0.053, 0.062), vec3(0.945, 0.950, 0.932), belly);
+    // the white post-ocular patch, one per cheek — the marking that names the animal
+    // (never name this variable "patch": it is a reserved word in GLSL ES 3.0)
+    float cheek = smoothstep(0.125, 0.045, length(vec2((au - 0.48) * 1.7, (v - 0.750) * 1.5)));
+    base = mix(base, vec3(0.930, 0.938, 0.918), cheek * 0.95);
+    // grey saddle behind the dorsal fin
+    float saddle = smoothstep(0.62, 0.14, length(vec2(u * 1.2, (v - 0.470) * 6.0))) * (1.0 - belly);
+    base = mix(base, vec3(0.395, 0.415, 0.450), saddle * 0.62);
+    if (vPart > 0.5) base = vec3(0.048, 0.051, 0.060);
+#elif defined(W_SPERM)
+    base = mix(vec3(0.190, 0.176, 0.164), vec3(0.560, 0.536, 0.505), belly);
+    // the head is a darker box, seamed with wrinkles
+    float head = smoothstep(0.58, 0.70, v);
+    base = mix(base, vec3(0.120, 0.112, 0.108), head * 0.55);
+    base *= 1.0 - smoothstep(0.40, 0.50, abs(fract(v * 34.0) - 0.5)) * head * 0.22;
+    base *= 0.92 + 0.16 * hash21(floor(vec2(u * 12.0, v * 20.0)));
+    // pale lip line, but only under the jaw — across the back it read as a bandage
+    float lip = smoothstep(0.022, 0.0, abs(v - 0.700)) * smoothstep(0.05, -0.35, N.y);
+    base = mix(base, vec3(0.660, 0.620, 0.560), lip * 0.55);
+    if (vPart > 0.5) base *= 0.62;
+#elif defined(W_DOLPHIN)
+    vec3 mid = vec3(0.395, 0.470, 0.505);
+    base = mix(vec3(0.178, 0.262, 0.318), mid, smoothstep(0.85, 0.22, N.y));
+    base = mix(base, vec3(0.878, 0.888, 0.876), belly);
+    base = mix(base, vec3(0.175, 0.220, 0.250), smoothstep(0.90, 0.99, v) * 0.78);   // melon to beak
+    if (vPart > 0.5) base = mix(base, mid * 0.78, 0.5);
+#else
+    // spinner dolphin: dark cape over a pale flank, then a white belly
+    base = mix(vec3(0.112, 0.168, 0.238), vec3(0.470, 0.545, 0.580), smoothstep(0.86, 0.22, N.y));
+    base = mix(base, vec3(0.895, 0.900, 0.885), belly);
+    base = mix(base, vec3(0.945, 0.945, 0.930), smoothstep(0.075, 0.0, abs(N.y - 0.02)) * 0.50);
+    base = mix(base, vec3(0.072, 0.088, 0.108), smoothstep(0.88, 0.99, v) * 0.86);
+    if (vPart > 0.5) base = mix(base, vec3(0.055, 0.060, 0.070), 0.75);
+#endif
+
+    // eyes sit low on the head, just behind the gape
+    float eye = smoothstep(0.070, 0.028, length(vec2((au - 0.50) * 2.1, (v - 0.735) * 9.5)));
+    base = mix(base, vec3(0.020, 0.018, 0.024), eye * 0.95);
+    float spec = smoothstep(0.030, 0.0, length(vec2((au - 0.535) * 2.1, (v - 0.745) * 9.5)));
+    base = mix(base, vec3(0.92), spec * 0.50);
+
+    vec3 col = throughWater(shade(base, N, V, 0.22), vWP.y);
+    gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
+  }
+`;
+
 // ---------------------------------------------------------------- materials + meshes
 function instMaterial(vs, fs, extra, opts) {
   const m = new THREE.ShaderMaterial(Object.assign({
@@ -2322,22 +2660,25 @@ function makeJellyRig(key) {
 makeRayRig('manta'); makeRayRig('eagle'); makeRayRig('sting');
 makeJellyRig('moon'); makeJellyRig('nettle');
 
-// fish + turtle share one rig shape: a body that swims under the surface
+// fish + turtle + cetaceans share one rig shape: a body that swims under the surface
 function makeSwimmerRig(key) {
   const cfg = SPECIES[key];
   const isTurtle = cfg.kind === 'turtle';
-  const geo = isTurtle ? buildTurtle(cfg) : buildFish(cfg);
+  const isWhale = cfg.kind === 'whale';
+  const geo = isTurtle ? buildTurtle(cfg) : (isWhale ? buildWhale(cfg) : buildFish(cfg));
   const cap = 16;
   const vs = isTurtle ? TURTLE_VS : FISH_VS;
-  const fs = isTurtle ? TURTLE_FS
-    : (key === 'shark' ? SHARK_FS : (key === 'clown' ? CLOWN_FS : PUFFER_FS));
+  const fs = isTurtle ? TURTLE_FS : (isWhale ? WHALE_FS
+    : (key === 'shark' ? SHARK_FS : (key === 'clown' ? CLOWN_FS : PUFFER_FS)));
   const mkMat = under => {
     const m = instMaterial(vs, fs, {
       uRate: { value: cfg.flapRate },
       uAmpScale: { value: 1 },
       uLen: { value: cfg.L || 1 },
-      uSway: { value: cfg.sway !== undefined ? cfg.sway : 0.10 }
+      uSway: { value: cfg.sway !== undefined ? cfg.sway : 0.10 },
+      uWave: { value: cfg.wave || 4.6 }
     }, { side: THREE.DoubleSide, transparent: false });
+    if (isWhale) m.defines = { ['W_' + key.toUpperCase()]: '' };
     if (under) { m.depthTest = true; m.depthWrite = true; }
     return m;
   };
@@ -2365,6 +2706,8 @@ function makeSwimmerRig(key) {
 }
 
 makeSwimmerRig('shark'); makeSwimmerRig('clown'); makeSwimmerRig('puffer'); makeSwimmerRig('turtle');
+makeSwimmerRig('humpback'); makeSwimmerRig('orca'); makeSwimmerRig('sperm');
+makeSwimmerRig('dolphin'); makeSwimmerRig('spinner');
 
 // ---------------------------------------------------------------- creature state
 const creatures = [];
@@ -2431,8 +2774,7 @@ function updateCreature(c, dt, time) {
   c.age += dt;
   const kind = c.rig.kind;
   const isJelly = kind === 'jelly';
-  const isTurtle = kind === 'turtle';
-  const isFish = kind === 'fish';
+  const isWhale = kind === 'whale';
 
   if (c.state === 'held') {
     c.t += dt;
@@ -2468,20 +2810,39 @@ function updateCreature(c, dt, time) {
       splash(c, 1.4); c.breachCd = rand(14, 40);
     }
   } else if (c.state === 'surf') {
-    // turtle taking a breath: rise, hang at the surface, then sink back to its depth
+    // air: a turtle lifts its head for a breath, a cetacean rises to blow
     c.t += dt;
-    if (c.t < 0.85) { c.p.y += 1.5 * dt; c.pitch = lerp(c.pitch, 0.27, Math.min(1, dt * 3)); }
+    const riseRate = isWhale ? 1.15 : 1.5;
+    const sinkRate = isWhale ? (1.05 + 0.20 * (cfg.L || 0)) : 0.95;
+    if (c.t < 0.85) { c.p.y += riseRate * dt; c.pitch = lerp(c.pitch, 0.27, Math.min(1, dt * 3)); }
     else if (c.t < 1.9) { c.p.y = lerp(c.p.y, -0.02, Math.min(1, dt * 4)); c.pitch = lerp(c.pitch, 0.05, Math.min(1, dt * 3)); }
-    else { c.p.y -= 0.95 * dt; c.pitch = lerp(c.pitch, -0.17, Math.min(1, dt * 2.5)); }
+    else { c.p.y -= sinkRate * dt; c.pitch = lerp(c.pitch, -0.17, Math.min(1, dt * 2.5)); }
     c.p.x += c.v.x * dt * 0.5; c.p.z += c.v.z * dt * 0.5;
     c.v.multiplyScalar(1 - Math.min(1, dt * 1.1));
     if (!c.gasped && c.p.y > -0.14) {
       c.gasped = true;
-      addRing(c.p.x, c.p.z, cfg.rad * 1.7, 0.30, 1.9);
-      for (let i = 0; i < 4; i++) {
-        const a = Math.random() * TAU;
-        pAir.emit(c.p.x + Math.cos(a) * 0.25, 0.06, c.p.z + Math.sin(a) * 0.25,
-          Math.cos(a) * 0.3, rand(0.5, 1.1), Math.sin(a) * 0.3, 0.8, rand(0.04, 0.08), 0.96, 0.99, 1.0, 0);
+      addRing(c.p.x, c.p.z, cfg.rad * (isWhale ? 1.5 : 1.7), 0.30, 1.9);
+      if (cfg.blow) {
+        // a spout: fine white mist, thrown up and drifting back down onto the surface
+        // the blowhole sits forward of the body centre, so the spout leaves from the head
+        const hx = c.p.x + Math.sin(c.yaw) * (cfg.L || 1) * 0.32;
+        const hz = c.p.z + Math.cos(c.yaw) * (cfg.L || 1) * 0.32;
+        const n = Math.round(34 * cfg.blow);
+        for (let i = 0; i < n; i++) {
+          const a = Math.random() * TAU, r = Math.random() * 0.05 * (cfg.L || 1);
+          // a tight fountain: nearly the same lift for every droplet, but spreading sideways,
+          // which is what turns a line of dots into a plume.  Gravity here is 11 m/s², so a
+          // weak spout collapses back onto the surface within half a second.
+          pAir.emit(hx + Math.cos(a) * r, 0.14, hz + Math.sin(a) * r,
+            Math.cos(a) * rand(0.15, 0.70), rand(4.2, 5.8) * cfg.blow, Math.sin(a) * rand(0.15, 0.70),
+            rand(1.10, 1.80), rand(0.15, 0.30), 0.97, 0.99, 1.0, 0);
+        }
+      } else {
+        for (let i = 0; i < 4; i++) {
+          const a = Math.random() * TAU;
+          pAir.emit(c.p.x + Math.cos(a) * 0.25, 0.06, c.p.z + Math.sin(a) * 0.25,
+            Math.cos(a) * 0.3, rand(0.5, 1.1), Math.sin(a) * 0.3, 0.8, rand(0.04, 0.08), 0.96, 0.99, 1.0, 0);
+        }
       }
       playPlink(0.03);
     }
@@ -2555,7 +2916,7 @@ function updateCreature(c, dt, time) {
     const bed = bedH(c.p.x, c.p.z);
     let wantY = c.depthPref;
     if (cfg.dep[0] > -1.2) wantY = bed + 0.55;                       // stingrays hug the floor
-    wantY = Math.max(wantY, bed + (isJelly ? 0.8 : 0.55));
+    wantY = Math.max(wantY, bed + (isJelly ? 0.8 : Math.max(0.55, (cfg.L || 0) * 0.34)));
     wantY = Math.min(wantY, -0.55);
     c.p.y += (wantY - c.p.y) * Math.min(1, dt * 0.55);
 
@@ -2564,28 +2925,29 @@ function updateCreature(c, dt, time) {
 
     const tgtYaw = Math.atan2(c.v.x, c.v.z);
     let d = ((tgtYaw - c.yaw + Math.PI * 3) % TAU) - Math.PI;
-    const turn = d * Math.min(1, dt * (isJelly ? 2.0 : 3.4));
+    const turn = d * Math.min(1, dt * (isJelly ? 2.0 : (isWhale ? 2.5 : 3.4)));
     c.yaw += turn;
     c.roll = lerp(c.roll, clamp(-turn * 9.0, -0.55, 0.55), Math.min(1, dt * 6));
     c.pitch = lerp(c.pitch, isJelly ? 0 : clamp(-c.v.y * 0.4, -0.35, 0.35), Math.min(1, dt * 4));
 
-    // breach: only the rays somersault out of the water
-    if (kind === 'ray') {
+    // breach: rays somersault out of the water, dolphins leap in a cleaner arc
+    if (kind === 'ray' || cfg.breachOk) {
       c.breachCd -= dt;
       if (!REDUCED && c.breachCd <= 0 && c.p.y > -2.4 && c.flee <= 0) {
-        c.breachCd = rand(16, 46);
-        if (Math.random() < 0.5) {
+        c.breachCd = cfg.breachOk ? rand(9, 26) : rand(16, 46);
+        if (Math.random() < (cfg.breachOk ? 0.72 : 0.5)) {
           c.state = 'breach'; c.t = 0; c.spin = 0;
-          c.v.y = rand(6.2, 9.0);
+          c.v.y = rand(6.2, 9.0) * (1 + (cfg.L || 0) * 0.22);
           c.v.x *= 2.4; c.v.z *= 2.4;
         }
       }
     }
-    // turtles come up for air every so often
-    if (cfg.surf) {
+    // air-breathers surface on their own clock: a turtle for a breath, a cetacean to blow
+    if (cfg.surf || cfg.blow) {
       c.surfCd -= dt;
       if (c.surfCd <= 0) {
-        c.surfCd = rand(24, 52);
+        const iv = cfg.surfCd || 30;
+        c.surfCd = rand(iv * 0.65, iv * 1.45);
         if (c.flee <= 0 && c.p.y < -0.4) { c.state = 'surf'; c.t = 0; c.gasped = false; }
       }
     }
@@ -2594,8 +2956,9 @@ function updateCreature(c, dt, time) {
     // wake rings near the surface (small fish barely disturb it)
     c.wakeCd -= dt;
     if (!isJelly && c.p.y > -1.5 && c.wakeCd < 0) {
-      c.wakeCd = rand(0.45, 0.9) * (kind === 'fish' ? 2.6 : 1);
-      addRing(c.p.x, c.p.z, cfg.rad * (0.7 + Math.random() * 0.5), kind === 'fish' ? 0.28 : 0.55, 1.9);
+      c.wakeCd = rand(0.45, 0.9) * (kind === 'fish' ? 2.6 : (isWhale ? 2.0 : 1));
+      addRing(c.p.x, c.p.z, cfg.rad * (0.7 + Math.random() * 0.5),
+              kind === 'fish' ? 0.28 : (isWhale ? 0.42 : 0.55), 1.9);
     }
   }
 
@@ -2687,7 +3050,10 @@ function seedLife() {
     ['moon', 2, -2], ['moon', 16, 14], ['moon', -12, -8],
     ['nettle', 26, -4], ['nettle', 8, 18],
     ['shark', 44, -26], ['turtle', 4, 10], ['turtle', 26, 20],
-    ['puffer', -2, 2], ['puffer', 18, -6]
+    ['puffer', -2, 2], ['puffer', 18, -6],
+    // cetaceans keep to the open water out past the reef
+    ['humpback', 38, -38], ['sperm', 58, -46], ['orca', 28, -44], ['dolphin', 11, -31],
+    ['spinner', 15, -27], ['spinner', 19, -24]
   ];
   starts.forEach(([k, x, z]) => {
     const c = spawnCreature(k, x + rand(-1.5, 1.5), z + rand(-1.5, 1.5), rand(-4, -1.5));
@@ -2921,19 +3287,26 @@ function renderThumbs() {
   const prevAlpha = renderer.getClearAlpha();
   const prevRT = renderer.getRenderTarget();
   const bgFor = { manta: 0xbfe6ea, eagle: 0xbfe6ea, sting: 0xc6e8e9, moon: 0x3f8492, nettle: 0x35707f,
-                  shark: 0x9ed4dd, clown: 0x8bc9d6, puffer: 0xaadde4, turtle: 0x93ccd6 };
+                  shark: 0x9ed4dd, clown: 0x8bc9d6, puffer: 0xaadde4, turtle: 0x93ccd6,
+                  humpback: 0x84c1d1, orca: 0x7dbdd0, sperm: 0x8ac5d3,
+                  dolphin: 0x93cdd9, spinner: 0x9ad3dd };
   renderer.setClearColor(0xbfe6ea, 1);
   const buf = new Uint8Array(S * S * 4);
 
   // `ext` ≈ the model's largest dimension: 2.0/ext is the fit scale, so it fills the frame
   const ext = { manta: 4.9, eagle: 5.0, sting: 2.7, moon: 3.0, nettle: 4.6,
-                shark: 3.1, clown: 1.20, puffer: 1.12, turtle: 1.62 };
+                shark: 3.1, clown: 1.20, puffer: 1.12, turtle: 1.62,
+                humpback: 5.20, orca: 4.10, sperm: 4.30, dolphin: 1.95, spinner: 1.62 };
   const lift = { manta: 0.0, eagle: 0.0, sting: 0.0, moon: -0.15, nettle: -0.55,
-                 shark: 0.0, clown: 0.0, puffer: -0.04, turtle: -0.06 };
+                 shark: 0.0, clown: 0.0, puffer: -0.04, turtle: -0.06,
+                 humpback: 0.0, orca: -0.05, sperm: 0.0, dolphin: 0.0, spinner: 0.0 };
   const rot = {
     manta: [0.30, 0.62, -0.10], eagle: [0.30, 0.62, -0.10], sting: [0.30, 0.62, -0.10],
     moon: [0.12, 0.50, 0], nettle: [0.12, 0.50, 0],
-    shark: [0.22, 0.95, -0.10], clown: [0.34, 0.62, -0.06], puffer: [0.30, 0.55, 0], turtle: [0.30, 0.42, 0]
+    shark: [0.22, 0.95, -0.10], clown: [0.34, 0.62, -0.06], puffer: [0.30, 0.55, 0], turtle: [0.30, 0.42, 0],
+    // a whale reads best from higher up: the horizontal fluke needs the top-down axis
+    humpback: [0.46, 0.72, -0.05], orca: [0.44, 0.74, -0.05], sperm: [0.46, 0.70, -0.04],
+    dolphin: [0.36, 0.68, -0.06], spinner: [0.36, 0.66, -0.06]
   };
 
   Object.keys(SPECIES).forEach(key => {
@@ -3105,11 +3478,15 @@ function playPlink(vol) {
 // ==================================================================
 //  UI  ·  INTERACTION
 // ==================================================================
-const dock = document.getElementById('dock');
 const cntEl = document.getElementById('cnt');
 const toastEl = document.getElementById('toast');
 const hintEl = document.getElementById('hint');
-const CARD_ORDER = ['manta', 'eagle', 'sting', 'shark', 'clown', 'puffer', 'turtle', 'moon', 'nettle'];
+const deckEl = document.getElementById('deck');
+const pickWrap = document.getElementById('pickWrap');
+const pickEl = document.getElementById('pick');
+const pickMenu = document.getElementById('pickMenu');
+const pickCn = document.getElementById('pickCn');
+const pickN = document.getElementById('pickN');
 const state = { rain: false, whirl: false, calm: false, clear: false, sound: false, hidden: false };
 
 let toastT = 0;
@@ -3121,9 +3498,10 @@ function toast(msg) {
 }
 
 function updateCounter() {
-  const n = { ray: 0, jelly: 0, fish: 0, turtle: 0 };
+  const n = { ray: 0, jelly: 0, fish: 0, turtle: 0, whale: 0 };
   for (let i = 0; i < creatures.length; i++) n[creatures[i].rig.kind]++;
-  cntEl.textContent = '鳐 ' + n.ray + ' · 水母 ' + n.jelly + ' · 鱼 ' + n.fish + ' · 龟 ' + n.turtle;
+  cntEl.textContent = '鳐 ' + n.ray + ' · 水母 ' + n.jelly + ' · 鱼 ' + n.fish +
+                      ' · 龟 ' + n.turtle + ' · 鲸豚 ' + n.whale;
 }
 
 const ndc = new THREE.Vector2();
@@ -3208,22 +3586,86 @@ function bindCard(el, kind) {
   el.addEventListener('lostpointercapture', end);
 }
 
+// The deck only ever shows one group at a time: fourteen cards in a row is a strip nobody
+// can read, and the picker above it keeps every species one click away.
+const GROUPS = [
+  { cn: '鳐类', keys: ['manta', 'eagle', 'sting'] },
+  { cn: '水母', keys: ['moon', 'nettle'] },
+  { cn: '鱼类', keys: ['shark', 'clown', 'puffer'] },
+  { cn: '海龟', keys: ['turtle'] },
+  { cn: '鲸豚', keys: ['humpback', 'orca', 'sperm', 'dolphin', 'spinner'] }
+];
+let groupIdx = 0;
+
+function buildCard(k) {
+  const sp = SPECIES[k];
+  const b = document.createElement('button');
+  b.className = 'card'; b.dataset.k = k; b.type = 'button';
+  b.setAttribute('aria-label', sp.cn + ' · ' + sp.en + '，点击抛入海中，拖动放置');
+  const th = document.createElement('div');
+  th.className = 'thumb' + (SPECIES[k].R ? ' deep' : '');
+  if (thumbs[k]) th.appendChild(thumbs[k]);
+  const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = sp.cn;
+  const lt = document.createElement('div'); lt.className = 'lt'; lt.textContent = sp.en;
+  b.appendChild(th); b.appendChild(nm); b.appendChild(lt);
+  bindCard(b, k);
+  deckEl.appendChild(b);
+}
+
 function buildCards() {
-  CARD_ORDER.forEach(k => {
-    const sp = SPECIES[k];
+  const g = GROUPS[groupIdx];
+  pickCn.textContent = g.cn;
+  pickN.textContent = g.keys.length + ' 种';
+  // a drag in flight owns a card that is about to be discarded — let the creature go first
+  if (drag) { dropCreature(drag.c); drag = null; }
+  deckEl.innerHTML = '';
+  g.keys.forEach(buildCard);
+  deckEl.classList.remove('swap');
+  void deckEl.offsetWidth;                 // restart the fade without a second frame
+  deckEl.classList.add('swap');
+}
+
+function buildGroupMenu() {
+  GROUPS.forEach((g, i) => {
     const b = document.createElement('button');
-    b.className = 'card'; b.dataset.k = k; b.type = 'button';
-    b.setAttribute('aria-label', sp.cn + ' · ' + sp.en + '，点击抛入海中，拖动放置');
-    const th = document.createElement('div');
-    th.className = 'thumb' + (SPECIES[k].R ? ' deep' : '');
-    if (thumbs[k]) th.appendChild(thumbs[k]);
-    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = sp.cn;
-    const lt = document.createElement('div'); lt.className = 'lt'; lt.textContent = sp.en;
-    b.appendChild(th); b.appendChild(nm); b.appendChild(lt);
-    bindCard(b, k);
-    dock.appendChild(b);
+    b.type = 'button';
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', i === groupIdx ? 'true' : 'false');
+    const lbl = document.createElement('span'); lbl.textContent = g.cn;
+    const num = document.createElement('i'); num.textContent = g.keys.length;
+    b.appendChild(lbl); b.appendChild(num);
+    b.addEventListener('click', () => { selectGroup(i); closeMenu(); pickEl.focus(); });
+    pickMenu.appendChild(b);
   });
 }
+
+function selectGroup(i) {
+  if (i === groupIdx) return;
+  groupIdx = i;
+  Array.prototype.forEach.call(pickMenu.children, (b, j) => {
+    b.setAttribute('aria-selected', j === i ? 'true' : 'false');
+  });
+  buildCards();
+}
+
+function openMenu() { pickWrap.classList.add('open'); pickEl.setAttribute('aria-expanded', 'true'); }
+function closeMenu() { pickWrap.classList.remove('open'); pickEl.setAttribute('aria-expanded', 'false'); }
+
+pickEl.addEventListener('click', e => {
+  e.stopPropagation();
+  if (pickWrap.classList.contains('open')) closeMenu(); else openMenu();
+});
+pickEl.addEventListener('keydown', e => {
+  const n = GROUPS.length;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!pickWrap.classList.contains('open')) openMenu();
+    selectGroup((groupIdx + (e.key === 'ArrowDown' ? 1 : n - 1)) % n);
+  } else if (e.key === 'Escape') { closeMenu(); }
+});
+document.addEventListener('pointerdown', e => {
+  if (!pickWrap.contains(e.target)) closeMenu();
+});
 
 // ---- canvas interactions
 let whirlDrag = false;
@@ -3313,6 +3755,7 @@ window.addEventListener('keydown', e => {
   else if (k === 'h') toggle('hide');
   else if (k === 'f') toggleFullscreen();
   else if (k === 'p') togglePause();
+  else if (e.key === 'Escape') closeMenu();
 });
 
 // ==================================================================
@@ -3378,6 +3821,7 @@ window.__update = function (dt, time) {
 //  BOOT
 // ==================================================================
 renderThumbs();
+buildGroupMenu();
 buildCards();
 seedLife();
 updateCounter();
