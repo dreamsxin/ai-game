@@ -1,0 +1,203 @@
+{
+  "models": {
+    "hero": {
+      "file": "hero.fbx",
+      "texture": "hero.jpg",
+      "take": "Take 001",
+      "fps": 30,
+      "duration": 11.5,
+      "clips": {
+        "idle": {
+          "from": 0,
+          "to": 1.3333333333333333
+        },
+        "attack": {
+          "from": 2.3333333333333335,
+          "to": 3.6666666666666665
+        },
+        "die": {
+          "from": 4.666666666666667,
+          "to": 6.166666666666667
+        },
+        "revive": {
+          "from": 7,
+          "to": 8.4
+        },
+        "run": {
+          "from": 9.333333333333334,
+          "to": 10
+        }
+      }
+    },
+    "aula": {
+      "file": "aula.fbx",
+      "texture": "aula.jpg",
+      "take": "Take 001",
+      "fps": 30,
+      "duration": 9,
+      "clips": {
+        "idle": {
+          "from": 0,
+          "to": 1.2
+        },
+        "attack": {
+          "from": 1.6666666666666667,
+          "to": 2.6666666666666665
+        },
+        "hit": {
+          "from": 3,
+          "to": 4.133333333333334
+        },
+        "run": {
+          "from": 4.666666666666667,
+          "to": 5.2
+        },
+        "die": {
+          "from": 5.666666666666667,
+          "to": 9
+        }
+      }
+    },
+    "boomDragon": {
+      "file": "boomDragon.fbx",
+      "texture": "boomDragon.jpg",
+      "take": "Take 001",
+      "fps": 30,
+      "duration": 6.75,
+      "clips": {
+        "idle": {
+          "from": 0.3333333333333333,
+          "to": 1.2666666666666666
+        },
+        "attack": {
+          "from": 1.6666666666666667,
+          "to": 2.7333333333333334
+        },
+        "hit": {
+          "from": 3.3333333333333335,
+          "to": 3.7333333333333334
+        },
+        "die": {
+          "from": 4.333333333333333,
+          "to": 5.2
+        },
+        "run": {
+          "from": 5.666666666666667,
+          "to": 6.75
+        }
+      }
+    },
+    "dragon": {
+      "file": "dragon.fbx",
+      "texture": "dragon.jpg",
+      "take": "Take 001",
+      "fps": 30,
+      "duration": 10,
+      "clips": {
+        "idle": {
+          "from": 0,
+          "to": 2
+        },
+        "attack": {
+          "from": 2.3333333333333335,
+          "to": 5.333333333333333
+        },
+        "die": {
+          "from": 5.666666666666667,
+          "to": 7.666666666666667
+        },
+        "run": {
+          "from": 8,
+          "to": 10
+        }
+      }
+    },
+    "hellFire": {
+      "file": "hellFire.fbx",
+      "texture": "hellFire.jpg",
+      "take": "Take 001",
+      "fps": 30,
+      "duration": 8,
+      "clips": {
+        "idle": {
+          "from": 0,
+          "to": 1
+        },
+        "attack1": {
+          "from": 1.3333333333333333,
+          "to": 2.966666666666667
+        },
+        "attack2": {
+          "from": 3.3333333333333335,
+          "to": 4.466666666666667
+        },
+        "hit": {
+          "from": 4.666666666666667,
+          "to": 5.433333333333334
+        },
+        "die": {
+          "from": 5.666666666666667,
+          "to": 6.733333333333333
+        },
+        "run": {
+          "from": 7,
+          "to": 8
+        }
+      }
+    },
+    "magician": {
+      "file": "magician.fbx",
+      "texture": "magician.jpg",
+      "take": "Take 001",
+      "fps": 30,
+      "duration": 7,
+      "clips": {
+        "idle": {
+          "from": 0,
+          "to": 1
+        },
+        "attack": {
+          "from": 1.3333333333333333,
+          "to": 3.1666666666666665
+        },
+        "hit": {
+          "from": 3.3333333333333335,
+          "to": 4.166666666666667
+        },
+        "die": {
+          "from": 4.333333333333333,
+          "to": 5.2
+        },
+        "run": {
+          "from": 6,
+          "to": 7
+        }
+      }
+    }
+  },
+  "sounds": {
+    "hit": "hit.mp3",
+    "hurt": "hurt.mp3",
+    "kill": "kill.mp3",
+    "killElite": "killElite.mp3",
+    "killBoss": "killBoss.mp3",
+    "die": "die.mp3",
+    "levelUp": "levelUp.mp3",
+    "pickItem": "pickItem.mp3",
+    "pickPotion": "pickPotion.mp3",
+    "potion": "potion.mp3",
+    "rift": "rift.mp3",
+    "floor": "floor.mp3",
+    "skill_melee": "skill_melee.mp3",
+    "skill_bolt": "skill_bolt.mp3",
+    "skill_nova": "skill_nova.mp3",
+    "skill_beam": "skill_beam.mp3",
+    "skill_summon": "skill_summon.mp3",
+    "skill_buff": "skill_buff.mp3",
+    "blast": "blast.mp3",
+    "slamWarn": "slamWarn.mp3",
+    "dash": "dash.mp3",
+    "lunge": "lunge.mp3",
+    "enemyShot": "enemyShot.mp3"
+  }
+}

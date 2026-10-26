@@ -4,3 +4,18 @@
 **/*.log
 .DS_Store
 __pycache__/
+
+# 工具与本地会话数据
+.comate/
+.zcode/
+.workbuddy/
+
+# neon-echo 的 public/assets 有 355 MB 生成素材，本机保留，不入库
+neon-echo/
+
+# 原生构建产物
+**/.gradle/
+**/build/
+**/local.properties
+**/.tmp/
+**/shots/
