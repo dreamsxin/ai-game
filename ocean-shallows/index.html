@@ -97,36 +97,69 @@
     overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   }
   .deck::-webkit-scrollbar{display:none}
-  .deck.swap{animation:deckIn .46s cubic-bezier(.4,0,.2,1)}
-  @keyframes deckIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .deck.swap{animation:deckIn .40s cubic-bezier(.4,0,.2,1)}
+  /* opacity only.  A translate here slides the whole strip, and the picker beside it does not
+     move — so for the length of the animation the cards sit lower than the picker button. */
+  @keyframes deckIn{from{opacity:0}to{opacity:1}}
 
   /* ---------- species picker ---------- */
-  /* the picker is a card-shaped button: same height as a card, so the row reads as one unit */
-  .pickWrap{position:relative;flex:0 0 auto;align-self:stretch}
+  /* The picker is a card like any other: same 96 px tile, same two caption lines underneath.
+     An earlier version painted the whole pick as one tall frosted panel, which left a
+     rectangle whose top and bottom edges lined up with nothing in the row. */
+  /* `display:flex` matters: a block wrapper around an inline-block <button> adds a line box,
+     and that stray leading pushed the whole picker 9 px above the rest of the row. */
+  .pickWrap{position:relative;flex:0 0 auto;align-self:flex-end;display:flex;align-items:flex-end}
   .pick{
     -webkit-appearance:none;appearance:none;cursor:pointer;font-family:inherit;
-    box-sizing:border-box;height:100%;
-    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;
-    width:80px;padding:0 4px 12px;border-radius:17px;
-    border:1px solid rgba(255,255,255,.66);
-    background:linear-gradient(170deg,rgba(255,255,255,.56) 0%,rgba(206,240,243,.44) 100%);
-    color:#0a373d;
-    box-shadow:0 1px 0 rgba(255,255,255,.9) inset, 0 12px 20px -16px rgba(0,30,36,.95);
-    transition:background .2s, transform .2s cubic-bezier(.34,1.4,.5,1), box-shadow .2s;
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    width:96px;padding:0;border:0;background:transparent;color:#0a373d;
+    touch-action:manipulation;
   }
-  .pick:hover{transform:translateY(-3px);background:linear-gradient(170deg,rgba(255,255,255,.76),rgba(206,240,243,.60))}
-  .pick .pkC{font-size:12px;font-weight:700;letter-spacing:.08em}
-  .pick .pkN{font-size:9.5px;letter-spacing:.12em;opacity:.56;font-variant-numeric:tabular-nums}
+  .pick .pkTile{
+    position:relative;display:grid;place-items:center;box-sizing:border-box;
+    width:96px;height:96px;border-radius:17px;
+    border:1px solid rgba(255,255,255,.72);
+    background:linear-gradient(170deg,#b7e1e8 0%,#96ccd7 55%,#7cbbc8 100%);
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset, 0 12px 20px -16px rgba(0,30,36,.95),
+               0 0 0 1px rgba(255,255,255,.5);
+    transition:transform .22s cubic-bezier(.34,1.4,.5,1), box-shadow .22s, background .2s;
+  }
+  .pick:hover .pkTile{
+    transform:translateY(-3px) scale(1.035);
+    background:linear-gradient(170deg,#c8ebf0 0%,#a5d8e1 55%,#8ac7d3 100%);
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset, 0 18px 26px -16px rgba(0,30,36,.95),
+               0 0 0 1px rgba(255,255,255,.7);
+  }
+  /* three bars = a list, which is exactly what this button is */
+  .pick .pkIco{
+    width:30px;height:21px;opacity:.52;
+    background:repeating-linear-gradient(180deg,#0c454b 0 2.5px,transparent 2.5px 9.25px);
+    border-radius:1px;
+  }
   .pick .pkA{
-    width:0;height:0;margin-top:2px;opacity:.5;
-    border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #0d4a50;
-    transition:transform .22s;
+    position:absolute;right:6px;bottom:6px;width:15px;height:15px;border-radius:50%;
+    display:grid;place-items:center;background:rgba(12,74,82,.88);
+    transition:transform .22s, background .2s;
   }
-  .pickWrap.open .pkA{transform:rotate(180deg)}
-  .pick:focus-visible{outline:2px solid #0c4a52;outline-offset:3px}
+  .pick .pkA::before{
+    content:'';display:block;width:0;height:0;margin-top:-1px;
+    border-left:3.5px solid transparent;border-right:3.5px solid transparent;
+    border-top:4.5px solid #eafcfb;transition:transform .22s;
+  }
+  .pickWrap.open .pkA{background:rgba(9,58,64,.98)}
+  .pickWrap.open .pkA::before{transform:rotate(180deg);margin-top:1px}
+  /* caption metrics are copied verbatim from .nm / .lt so the row reads as one baseline */
+  .pick .pkC{font-size:11px;font-weight:700;letter-spacing:.06em;color:#0a373d;text-shadow:0 1px 0 rgba(255,255,255,.55)}
+  .pick .pkN{
+    font-family:'Fraunces',serif;font-style:italic;font-size:8.5px;color:#1c5d63;opacity:.8;
+    margin-top:-3px;letter-spacing:.02em;font-variant-numeric:tabular-nums;
+  }
+  .pick:focus-visible{outline:none}
+  .pick:focus-visible .pkTile{outline:2px solid #0c4a52;outline-offset:3px}
+  .pick:focus-visible .pkC{color:#0c4a52}
 
   .pickMenu{
-    position:absolute;left:0;bottom:calc(100% + 8px);z-index:3;
+    position:absolute;left:0;bottom:calc(100% + 6px);z-index:3;
     display:none;flex-direction:column;gap:1px;padding:6px;min-width:156px;border-radius:16px;
     background:rgba(249,254,254,.93);
     border:1px solid rgba(255,255,255,.9);
@@ -217,7 +250,9 @@
     .card{width:80px}
     .thumb{width:80px;height:80px;border-radius:15px}
     .card .lt{font-size:8px}
-    .pick{width:72px;height:80px}
+    .pick{width:80px}
+    .pick .pkTile{width:80px;height:80px;border-radius:15px}
+    .pick .pkN{font-size:8px}
     .hint{bottom:calc(max(16px, env(safe-area-inset-bottom)) + 132px)}
   }
   @media (max-width: 760px){
@@ -236,9 +271,12 @@
     .thumb{width:64px;height:64px;border-radius:13px}
     .card .nm{font-size:9.5px}
     .card .lt{display:none}
-    .pick{width:60px;height:64px;border-radius:13px}
-    .pick .pkC{font-size:10.5px}
-    .pick .pkN{font-size:8.5px}
+    .pick{width:64px}
+    .pick .pkTile{width:64px;height:64px;border-radius:13px}
+    .pick .pkIco{width:22px;height:16px;background:repeating-linear-gradient(180deg,#0d4a50 0 2px,transparent 2px 7px)}
+    .pick .pkA{right:4px;bottom:4px;width:13px;height:13px}
+    .pick .pkC{font-size:9.5px}
+    .pick .pkN{display:none}
     .hint{bottom:calc(max(10px, env(safe-area-inset-bottom)) + 100px);font-size:9.5px;letter-spacing:.1em}
   }
   @media (max-width: 430px){
@@ -250,8 +288,11 @@
     .card{width:56px}
     .thumb{width:56px;height:56px;border-radius:11px}
     .card .nm{font-size:8.5px}
-    .pick{width:54px;height:56px;border-radius:11px}
-    .pick .pkC{font-size:9.5px;letter-spacing:.02em}
+    .pick{width:56px}
+    .pick .pkTile{width:56px;height:56px;border-radius:11px}
+    .pick .pkIco{width:19px;height:14px;background:repeating-linear-gradient(180deg,#0d4a50 0 2px,transparent 2px 6px)}
+    .pick .pkA{right:3px;bottom:3px;width:12px;height:12px}
+    .pick .pkC{font-size:8.5px;letter-spacing:.02em}
     .pick .pkN{display:none}
     .hint{font-size:8.5px;bottom:calc(max(10px, env(safe-area-inset-bottom)) + 88px)}
   }
@@ -281,10 +322,13 @@
 <div class="hint" id="hint">点击卡片抛入海中 · 拖动卡片把它放在水面 · 左侧切换物种</div>
 <div class="dock" id="dock">
   <div class="pickWrap" id="pickWrap">
-    <button class="pick" id="pick" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="pickMenu">
+    <button class="pick" id="pick" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="pickMenu" aria-label="切换物种分类">
+      <span class="pkTile" aria-hidden="true">
+        <span class="pkIco"></span>
+        <span class="pkA"></span>
+      </span>
       <span class="pkC" id="pickCn">鳐类</span>
       <span class="pkN" id="pickN">3 种</span>
-      <span class="pkA" aria-hidden="true"></span>
     </button>
     <div class="pickMenu" id="pickMenu" role="listbox" aria-label="物种分类"></div>
   </div>
@@ -1394,6 +1438,14 @@ const SPECIES = {
             pect: [0.74, 0.075, 0.13], spikes: 62, amp: 0.55, flapRate: 4.6, speed: 0.82,
             dep: [-1.9, -0.80], rad: 0.40, puff: 1.5 },
 
+  // a whale in name only: body: 'whale' picks the big loft and the whale shader, but kind stays
+  // 'fish', so it counts as a fish and never comes up to blow
+  whaleshark: { cn: '鲸鲨', en: 'Whale Shark', kind: 'fish', body: 'whale',
+            L: 6.20, W: 0.68, H: 0.50, sway: 0.090, wave: 3.6, blunt: 0.14, dome: 0.34,
+            headWide: 0.34, headFlat: 0.34, mouth: true,
+            fluke: [1.45, 1.42], dorsal: [0.50, 0.20, 0.74], pect: [0.66, 1.55, 0.60],
+            amp: 0.62, flapRate: 0.55, speed: 1.15, dep: [-5.4, -2.4], rad: 3.0, deep: true },
+
   // ---- turtle: its own shell builder, breathes at the surface ----
   turtle: { cn: '绿海龟', en: 'Green Turtle', kind: 'turtle',
             L: 1.12, W: 0.44, H: 0.13, amp: 0.60, flapRate: 1.05, speed: 0.80,
@@ -1808,11 +1860,14 @@ function buildWhale(cfg) {
   for (let i = 0; i <= NU; i++) {
     const v = i / NU, r = prof(v), z = zBase + v * L;
     const sq = box * smooth(0.52, 0.94, v);          // only the head squares off
+    // a whale shark's head is broad and dorsally flattened; the rest of the family is round
+    const hw = 1 + (cfg.headWide || 0) * smooth(0.50, 0.94, v);
+    const hf = 1 - (cfg.headFlat || 0) * smooth(0.50, 0.94, v);
     for (let j = 0; j < NV; j++) {
       const a = (j / NV) * TAU, ca = Math.cos(a), sa = Math.sin(a);
       const px = Math.sign(sa) * Math.pow(Math.abs(sa), 1 - sq);
       const py = Math.sign(ca) * Math.pow(Math.abs(ca), 1 - sq);
-      P.push(px * W * r, py * H * r * (ca > 0 ? 1.0 : 0.88), z);
+      P.push(px * W * r * hw, py * H * r * (ca > 0 ? 1.0 : 0.88) * hf, z);
       UVs.push(sa, v); PT.push(0);
     }
   }
@@ -1822,12 +1877,13 @@ function buildWhale(cfg) {
       IDX.push(a, a + NV, b, b, a + NV, b + NV);
     }
   }
-  // tail + nose caps
+  // tail + nose caps.  A mouth-breather (the whale shark) tags its nose disc as part 4, so the
+  // shader can paint the gape without guessing from v (the whole cap shares v = 1).
   for (let end = 0; end < 2; end++) {
     const ringBase = end ? 0 : NU * NV;
     const zc = end ? zBase : zBase + L;
     const centre = P.length / 3;
-    P.push(0, 0, zc); UVs.push(0, end ? 0 : 1); PT.push(0);
+    P.push(0, 0, zc); UVs.push(0, end ? 0 : 1); PT.push(!end && cfg.mouth ? 4 : 0);
     for (let j = 0; j < NV; j++) {
       const a = ringBase + j, b = ringBase + ((j + 1) % NV);
       if (end) IDX.push(centre, b, a); else IDX.push(centre, a, b);
@@ -2495,6 +2551,7 @@ const WHALE_FS = FISH_FS_COMMON + `
     float u = vUv.x, v = vUv.y, au = abs(u);
     float belly = bellyMask(N);
     vec3 base;
+    float gloss = 0.22;
 
 #ifdef W_HUMPBACK
     // charcoal back, white chin, long throat grooves, white flippers
@@ -2534,6 +2591,37 @@ const WHALE_FS = FISH_FS_COMMON + `
     base = mix(base, vec3(0.878, 0.888, 0.876), belly);
     base = mix(base, vec3(0.175, 0.220, 0.250), smoothstep(0.90, 0.99, v) * 0.78);   // melon to beak
     if (vPart > 0.5) base = mix(base, mid * 0.78, 0.5);
+#elif defined(W_WHALESHARK)
+    // Blue-grey hide under a checkerboard of pale spots: the only pattern in this sea that is
+    // neither countershading nor a band.  Keep the base dark — this back is huge and nearly
+    // flat, so the fresnel sheen in shade() lifts it far more than it lifts a small fish.
+    base = mix(vec3(0.105, 0.148, 0.192), vec3(0.455, 0.488, 0.478), belly * 0.58);
+    gloss = 0.12;
+    if (vPart > 0.5 && vPart < 3.5) {
+      // fins carry a single collapsed UV row, so the spot grid would smear into a streak:
+      // they get the plain hide instead.  Kept close to the body tone — painted much darker
+      // they stop reading as fins and start reading as a hole punched in the back.
+      base = mix(vec3(0.100, 0.138, 0.176), vec3(0.132, 0.172, 0.212), vPart > 2.5 ? 0.10 : 0.85);
+    } else {
+      vec2 g = vec2(au * 7.5, v * 19.0);
+      vec2 gi = floor(g), gf = fract(g);
+      float h = hash21(gi);
+      vec2 ctr = vec2(0.24 + 0.50 * fract(h * 37.1), 0.24 + 0.50 * fract(h * 71.3));
+      float spot = smoothstep(0.30, 0.16, length(gf - ctr)) * step(0.20, h);
+      base = mix(base, vec3(0.800, 0.822, 0.800), spot * 0.88 * (1.0 - belly * 0.45));
+      // the gape, seen from above: a dark transverse band right at the front of the snout
+      float gape = smoothstep(0.930, 0.988, v) * smoothstep(0.06, 0.50, N.y);
+      base = mix(base, vec3(0.055, 0.064, 0.076), gape * 0.90);
+      // eyes: tiny, tucked into the front corners of that broad head
+      float wEye = smoothstep(0.042, 0.014, length(vec2((au - 0.93) * 1.3, (v - 0.900) * 5.4)));
+      base = mix(base, vec3(0.020, 0.018, 0.024), wEye * 0.95);
+    }
+    // the nose disc IS the mouth.  Dark in the middle, hide at the rim: filled edge to edge
+    // it reads as a sharp black snout tip from any angle above the horizon.
+    if (vPart > 3.5) {
+      float gapeMask = smoothstep(0.94, 0.30, au);
+      base = mix(vec3(0.098, 0.132, 0.168), vec3(0.050, 0.058, 0.070), gapeMask * 0.95);
+    }
 #else
     // spinner dolphin: dark cape over a pale flank, then a white belly
     base = mix(vec3(0.112, 0.168, 0.238), vec3(0.470, 0.545, 0.580), smoothstep(0.86, 0.22, N.y));
@@ -2543,13 +2631,16 @@ const WHALE_FS = FISH_FS_COMMON + `
     if (vPart > 0.5) base = mix(base, vec3(0.055, 0.060, 0.070), 0.75);
 #endif
 
-    // eyes sit low on the head, just behind the gape
+    // eyes sit low on the head, just behind the gape.  The whale shark places its own:
+    // its eyes are in the corners of a wide flat head, nowhere near this spot.
+#ifndef W_WHALESHARK
     float eye = smoothstep(0.070, 0.028, length(vec2((au - 0.50) * 2.1, (v - 0.735) * 9.5)));
     base = mix(base, vec3(0.020, 0.018, 0.024), eye * 0.95);
     float spec = smoothstep(0.030, 0.0, length(vec2((au - 0.535) * 2.1, (v - 0.745) * 9.5)));
     base = mix(base, vec3(0.92), spec * 0.50);
+#endif
 
-    vec3 col = throughWater(shade(base, N, V, 0.22), vWP.y);
+    vec3 col = throughWater(shade(base, N, V, gloss), vWP.y);
     gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
   }
 `;
@@ -2664,11 +2755,13 @@ makeJellyRig('moon'); makeJellyRig('nettle');
 function makeSwimmerRig(key) {
   const cfg = SPECIES[key];
   const isTurtle = cfg.kind === 'turtle';
-  const isWhale = cfg.kind === 'whale';
-  const geo = isTurtle ? buildTurtle(cfg) : (isWhale ? buildWhale(cfg) : buildFish(cfg));
+  // `body` is about geometry, `kind` is about behaviour.  The whale shark rides the whale
+  // builder (broad flat head, huge fluke) but stays a fish: it never surfaces to blow.
+  const bigBody = cfg.body === 'whale' || cfg.kind === 'whale';
+  const geo = isTurtle ? buildTurtle(cfg) : (bigBody ? buildWhale(cfg) : buildFish(cfg));
   const cap = 16;
   const vs = isTurtle ? TURTLE_VS : FISH_VS;
-  const fs = isTurtle ? TURTLE_FS : (isWhale ? WHALE_FS
+  const fs = isTurtle ? TURTLE_FS : (bigBody ? WHALE_FS
     : (key === 'shark' ? SHARK_FS : (key === 'clown' ? CLOWN_FS : PUFFER_FS)));
   const mkMat = under => {
     const m = instMaterial(vs, fs, {
@@ -2678,7 +2771,7 @@ function makeSwimmerRig(key) {
       uSway: { value: cfg.sway !== undefined ? cfg.sway : 0.10 },
       uWave: { value: cfg.wave || 4.6 }
     }, { side: THREE.DoubleSide, transparent: false });
-    if (isWhale) m.defines = { ['W_' + key.toUpperCase()]: '' };
+    if (bigBody) m.defines = { ['W_' + key.toUpperCase()]: '' };
     if (under) { m.depthTest = true; m.depthWrite = true; }
     return m;
   };
@@ -2706,6 +2799,7 @@ function makeSwimmerRig(key) {
 }
 
 makeSwimmerRig('shark'); makeSwimmerRig('clown'); makeSwimmerRig('puffer'); makeSwimmerRig('turtle');
+makeSwimmerRig('whaleshark');
 makeSwimmerRig('humpback'); makeSwimmerRig('orca'); makeSwimmerRig('sperm');
 makeSwimmerRig('dolphin'); makeSwimmerRig('spinner');
 
@@ -2774,7 +2868,9 @@ function updateCreature(c, dt, time) {
   c.age += dt;
   const kind = c.rig.kind;
   const isJelly = kind === 'jelly';
-  const isWhale = kind === 'whale';
+  // big-bodied swimmers turn and rise more slowly; the whale shark is one of them even though
+  // it counts as a fish
+  const isWhale = kind === 'whale' || cfg.body === 'whale';
 
   if (c.state === 'held') {
     c.t += dt;
@@ -3053,7 +3149,9 @@ function seedLife() {
     ['puffer', -2, 2], ['puffer', 18, -6],
     // cetaceans keep to the open water out past the reef
     ['humpback', 38, -38], ['sperm', 58, -46], ['orca', 28, -44], ['dolphin', 11, -31],
-    ['spinner', 15, -27], ['spinner', 19, -24]
+    ['spinner', 15, -27], ['spinner', 19, -24],
+    // the whale shark cruises the deepest lane, well clear of the reef
+    ['whaleshark', 52, -56]
   ];
   starts.forEach(([k, x, z]) => {
     const c = spawnCreature(k, x + rand(-1.5, 1.5), z + rand(-1.5, 1.5), rand(-4, -1.5));
@@ -3287,7 +3385,7 @@ function renderThumbs() {
   const prevAlpha = renderer.getClearAlpha();
   const prevRT = renderer.getRenderTarget();
   const bgFor = { manta: 0xbfe6ea, eagle: 0xbfe6ea, sting: 0xc6e8e9, moon: 0x3f8492, nettle: 0x35707f,
-                  shark: 0x9ed4dd, clown: 0x8bc9d6, puffer: 0xaadde4, turtle: 0x93ccd6,
+                  shark: 0x9ed4dd, whaleshark: 0x86c3d3, clown: 0x8bc9d6, puffer: 0xaadde4, turtle: 0x93ccd6,
                   humpback: 0x84c1d1, orca: 0x7dbdd0, sperm: 0x8ac5d3,
                   dolphin: 0x93cdd9, spinner: 0x9ad3dd };
   renderer.setClearColor(0xbfe6ea, 1);
@@ -3295,15 +3393,16 @@ function renderThumbs() {
 
   // `ext` ≈ the model's largest dimension: 2.0/ext is the fit scale, so it fills the frame
   const ext = { manta: 4.9, eagle: 5.0, sting: 2.7, moon: 3.0, nettle: 4.6,
-                shark: 3.1, clown: 1.20, puffer: 1.12, turtle: 1.62,
+                shark: 3.1, whaleshark: 7.05, clown: 1.20, puffer: 1.12, turtle: 1.62,
                 humpback: 5.20, orca: 4.10, sperm: 4.30, dolphin: 1.95, spinner: 1.62 };
   const lift = { manta: 0.0, eagle: 0.0, sting: 0.0, moon: -0.15, nettle: -0.55,
-                 shark: 0.0, clown: 0.0, puffer: -0.04, turtle: -0.06,
+                 shark: 0.0, whaleshark: 0.0, clown: 0.0, puffer: -0.04, turtle: -0.06,
                  humpback: 0.0, orca: -0.05, sperm: 0.0, dolphin: 0.0, spinner: 0.0 };
   const rot = {
     manta: [0.30, 0.62, -0.10], eagle: [0.30, 0.62, -0.10], sting: [0.30, 0.62, -0.10],
     moon: [0.12, 0.50, 0], nettle: [0.12, 0.50, 0],
-    shark: [0.22, 0.95, -0.10], clown: [0.34, 0.62, -0.06], puffer: [0.30, 0.55, 0], turtle: [0.30, 0.42, 0],
+    shark: [0.22, 0.95, -0.10], whaleshark: [0.62, 0.60, -0.04],
+    clown: [0.34, 0.62, -0.06], puffer: [0.30, 0.55, 0], turtle: [0.30, 0.42, 0],
     // a whale reads best from higher up: the horizontal fluke needs the top-down axis
     humpback: [0.46, 0.72, -0.05], orca: [0.44, 0.74, -0.05], sperm: [0.46, 0.70, -0.04],
     dolphin: [0.36, 0.68, -0.06], spinner: [0.36, 0.66, -0.06]
@@ -3591,7 +3690,7 @@ function bindCard(el, kind) {
 const GROUPS = [
   { cn: '鳐类', keys: ['manta', 'eagle', 'sting'] },
   { cn: '水母', keys: ['moon', 'nettle'] },
-  { cn: '鱼类', keys: ['shark', 'clown', 'puffer'] },
+  { cn: '鱼类', keys: ['shark', 'whaleshark', 'clown', 'puffer'] },
   { cn: '海龟', keys: ['turtle'] },
   { cn: '鲸豚', keys: ['humpback', 'orca', 'sperm', 'dolphin', 'spinner'] }
 ];
@@ -3616,6 +3715,9 @@ function buildCards() {
   const g = GROUPS[groupIdx];
   pickCn.textContent = g.cn;
   pickN.textContent = g.keys.length + ' 种';
+  // the label deliberately repeats the visible text: the tile underneath it is decorative,
+  // so a screen reader would otherwise announce an unlabelled group switcher
+  pickEl.setAttribute('aria-label', '切换物种分类，当前' + g.cn + '，' + g.keys.length + ' 种');
   // a drag in flight owns a card that is about to be discarded — let the creature go first
   if (drag) { dropCreature(drag.c); drag = null; }
   deckEl.innerHTML = '';
