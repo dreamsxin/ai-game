@@ -6,6 +6,9 @@
 
 - `wuqizi`：五子棋，支持分级 AI、积分、自动升阶和对局交流。
 - `xiaoyuanmian`：校园谜案《回声画廊：消失的原作》，支持现场调查、角色询问、证据对质和最终指控。
+- `huanyi-s-jihua`：换翼S计划，`huanyi-jihua` 的 2.5D 重画版（three.js 斜俯视，程序生成全部模型与音效），
+  手机竖屏优先的纵版射击闯关：机翼既是火力也是装甲，弃翼换无敌，敌弹可以被打掉。
+  运行 `npm run dev:huanyi-s-jihua`（`http://127.0.0.1:4205`），改前先读它的 `README.md`。
 - `ocean-shallows`：浅海，单文件 Three.js 俯视热带海面，15 种海洋生物（鳐类 / 水母 / 鱼类 / 海龟 / 鲸豚）可投放，鲸鱼会上浮喷气、海豚会跃水、鲸鲨背着棋盘斑缓缓巡游；卡座左侧分组下拉切换物种，选择器与缩略图同尺寸对齐。空闲时界面自动淡出，可当桌面互动背景（`index.html?wallpaper=1`）。改前先读 `ocean-shallows/AGENTS.md`。
 - `neon-echo`：唤灵：镜影回响，横屏回合制手游 Demo（Vite + TypeScript，Vite/Spine 看板 + 速度轴战斗 + 抽卡养成），运行 `cd neon-echo && npm run dev`。
 

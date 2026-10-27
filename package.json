@@ -4,19 +4,23 @@
   "version": "0.1.0",
   "workspaces": [
     "wuqizi",
-    "xiaoyuanmian"
+    "xiaoyuanmian",
+    "huanyi-s-jihua"
   ],
   "scripts": {
     "dev": "npm run dev --workspace wuqizi",
     "dev:wuqizi": "npm run dev --workspace wuqizi",
     "dev:xiaoyuanmian": "npm run dev --workspace xiaoyuanmian",
+    "dev:huanyi-s-jihua": "npm run dev --workspace huanyi-s-jihua",
     "build": "npm run build --workspaces --if-present",
     "build:wuqizi": "npm run build --workspace wuqizi",
     "build:xiaoyuanmian": "npm run build --workspace xiaoyuanmian",
+    "build:huanyi-s-jihua": "npm run build --workspace huanyi-s-jihua",
     "start": "npm run start --workspace wuqizi",
     "start:xiaoyuanmian": "npm run start --workspace xiaoyuanmian",
     "test": "npm test --workspaces --if-present",
     "test:wuqizi": "npm test --workspace wuqizi",
-    "test:xiaoyuanmian": "npm test --workspace xiaoyuanmian"
+    "test:xiaoyuanmian": "npm test --workspace xiaoyuanmian",
+    "test:huanyi-s-jihua": "npm test --workspace huanyi-s-jihua"
   }
 }
