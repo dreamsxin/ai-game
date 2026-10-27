@@ -8,7 +8,7 @@ import {
   formatScore,
   formatTime,
   gateLabel,
-  jettisonLabel,
+  jettisonKey,
   labLabel,
   levelLabel,
   muteLabel,
@@ -80,10 +80,13 @@ test('实验机翼没解锁时，选翼界面要说清什么时候解锁', () =>
   assert.notEqual(labLabel(true), labLabel(false));
 });
 
-test('弃翼键会说明现在按下去有没有用', () => {
-  assert.equal(jettisonLabel({ wing: null, lock: 0 }), '无翼可弃');
-  assert.equal(jettisonLabel({ wing: 'H', lock: 0.2 }), '锁定中');
-  assert.equal(jettisonLabel({ wing: 'H', lock: 0 }), '弃翼下潜');
+test('弃翼动作键分得清四种状态：可按、锁定、没翼、下潜中', () => {
+  assert.deepEqual(jettisonKey({ wing: 'H', lock: 0, dive: 0 }), { tone: 'on', sub: '无敌 1s' });
+  assert.deepEqual(jettisonKey({ wing: 'H', lock: 0.2, dive: 0 }), { tone: 'lock', sub: '锁定中' });
+  assert.deepEqual(jettisonKey({ wing: null, lock: 0, dive: 0 }), { tone: 'off', sub: '无翼可弃' });
+  const diving = jettisonKey({ wing: null, lock: 0, dive: 0.9 });
+  assert.equal(diving.tone, 'dive');
+  assert.ok(diving.sub.includes('下潜'), '下潜中要给倒计时');
 });
 
 test('机翼名字和说明都取得到，取不到也不炸', () => {

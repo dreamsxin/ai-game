@@ -59,10 +59,20 @@ export const evolveLabel = (ship) => {
   return `再捡一个 ${ship.wing} 可升 ${tierOf(ship.tier + 1).name}`;
 };
 
-/** 弃翼键该显示什么。翅膀刚接上有一小段锁定，这时候按了不算。 */
-export const jettisonLabel = (ship) => {
-  if (!ship.wing) return '无翼可弃';
-  return ship.lock > 0 ? '锁定中' : '弃翼下潜';
+/**
+ * 弃翼动作键的状态。主标签永远是「弃翼」（它是这一局唯一的战术输入，名字不该变），
+ * 副行说清现在按下去会发生什么；tone 决定键亮成什么样：
+ * on=随时可按（金），lock=刚接上还没解锁（蓝灰），off=没翼可弃（灰），dive=正在下潜（蓝，脉动）。
+ */
+export const jettisonKey = (ship) => {
+  if (!ship.wing) {
+    return {
+      tone: ship.dive > 0 ? 'dive' : 'off',
+      sub: ship.dive > 0 ? `下潜 ${ship.dive.toFixed(1)}s` : '无翼可弃',
+    };
+  }
+  if (ship.lock > 0) return { tone: 'lock', sub: '锁定中' };
+  return { tone: 'on', sub: '无敌 1s' };
 };
 
 export const weakLabel = (weak) => WEAKNESS[weak]?.label ?? '';

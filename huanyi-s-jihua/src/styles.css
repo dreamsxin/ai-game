@@ -168,10 +168,10 @@ body {
 
 .banner {
   position: absolute;
-  /* 让开右上角那簇旁路键（top 92、宽两枚 38）：横幅是全宽居中文本，不留位就会穿过去。 */
+  /* 让开右上角那簇旁路键（top 92、宽两枚 44）：横幅是全宽居中文本，不留位就会穿过去。 */
   top: 96px;
   left: 8px;
-  right: 108px;
+  right: 116px;
   margin: 0;
   text-align: center;
   font-size: 15px;
@@ -235,57 +235,122 @@ body {
   background: var(--cool);
 }
 
-/* 弃翼键贴在舞台内底部：轻点画布任意处也能弃翼，但那是隐形操作，
-   这个键是它唯一看得见的提示，同时兼作状态显示（有翼／裸机）。
-   做成浮键而不是占一整行，舞台才吃得满高度。 */
+/* 弃翼动作键照手游的规矩摆在右下角——右手拇指的老家，那一枚就是全部的战术输入
+   （走位靠拖动，开火是自动的）。做成浮键而不是占一整行，舞台才吃得满高度。 */
 .pad {
   position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
+  right: 18px;
+  bottom: 22px;
   display: grid;
-  /* 不吞手势：走位是全屏拖动，这块提示条压在拇指老家，能吞事件就等于开了个死区。 */
+  /* 不吞手势：走位是全屏拖动，这枚键压在拇指老家，能吞事件就等于开了个死区。
+     它看着是按钮，摸上去是画布——轻点它就是轻点画布，弃翼照样生效。 */
   pointer-events: none;
 }
 
-/* 只有一个按钮：弃翼。走位靠拖动，开火是自动的，所以这一个键就是全部的战术输入。 */
 .pad-key {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  height: 52px;
-  padding: 0 22px;
-  border-radius: 999px;
+  align-content: center;
+  gap: 2px;
   backdrop-filter: blur(6px);
-  border: 1px solid rgba(127, 227, 255, 0.5);
-  background: rgba(127, 227, 255, 0.12);
-  color: var(--cool);
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: 2px;
+  border: 2px solid rgba(255, 212, 71, 0.92);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 212, 71, 0.3), rgba(255, 212, 71, 0.04) 64%),
+    rgba(8, 14, 32, 0.55);
+  color: var(--accent);
+  box-shadow: 0 0 20px rgba(255, 212, 71, 0.22);
   /* manipulation 会把「按住再滑一点」判成滚动，浏览器随即发 pointercancel，按住的键自己松了。 */
   touch-action: none;
 }
 
-.pad-key-off {
-  border-color: var(--edge);
-  background: rgba(12, 18, 38, 0.6);
+.pad-key b {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  /* letter-spacing 会把最后一个字后的空隙也算进去，往回挪半格才真居中。 */
+  text-indent: 4px;
+  line-height: 1;
+}
+
+.pad-key i {
+  font-style: normal;
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(255, 226, 138, 0.92);
+}
+
+/* 刚接上还没解锁：蓝灰收着光，告诉拇指「现在按不算」。 */
+.pad-key-lock {
+  border-color: rgba(127, 227, 255, 0.45);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(127, 227, 255, 0.14), rgba(127, 227, 255, 0.02) 64%),
+    rgba(8, 14, 32, 0.55);
   color: var(--muted);
+  box-shadow: none;
+}
+
+.pad-key-lock i {
+  color: var(--muted);
+}
+
+/* 没翼可弃：整枚压灰、描边改虚线——「这里现在没东西可扔」。 */
+.pad-key-off {
+  border-style: dashed;
+  border-color: var(--edge);
+  background: rgba(12, 18, 38, 0.55);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.pad-key-off i {
+  color: var(--muted);
+}
+
+/* 下潜中：蓝环脉动。这枚键刚才被「按」过，得让拇指知道它还热着。 */
+.pad-key-dive {
+  border-color: rgba(127, 227, 255, 0.9);
+  color: var(--cool);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(127, 227, 255, 0.24), rgba(127, 227, 255, 0.03) 64%),
+    rgba(8, 14, 32, 0.55);
+  animation: pad-dive 0.9s ease-in-out infinite;
+}
+
+.pad-key-dive i {
+  color: var(--cool);
+}
+
+@keyframes pad-dive {
+  50% {
+    box-shadow: 0 0 26px rgba(127, 227, 255, 0.5);
+  }
 }
 
 .pause-key,
 .mute-key {
   position: absolute;
-  /* 挪到右上：底部那一带是拇指走位与弃翼键的地盘，旁路操作不该掺在里面。
-     92 是让开 HUD（到 62）和 Boss 血条（70—84）之后的位置。 */
+  /* 挪到右上：底部那一带是拇指走位与弃翼动作键的地盘，旁路操作不该掺在里面。
+     92 是让开 HUD（到 62）和 Boss 血条（70—84）之后的位置。
+     44px 是指尖的及格线：38px 的圆钮在手机上要按两次才中。 */
   top: 92px;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
   border: 1px solid var(--edge);
   background: var(--panel);
   color: var(--ink);
+}
+
+/* 按下去要瘪一下：手指需要「碰到了」的实感，不然会再按一次。 */
+.pause-key:active,
+.mute-key:active {
+  transform: scale(0.9);
+  border-color: rgba(127, 227, 255, 0.6);
 }
 
 .pause-key {
@@ -294,7 +359,7 @@ body {
 
 /* 静音开关贴在暂停键左边：两个都是随时要按的旁路操作。 */
 .mute-key {
-  right: 58px;
+  right: 64px;
 }
 
 /* 键盘操作也要看得见焦点，否则按 Tab 就等于瞎点。 */
@@ -596,11 +661,15 @@ body {
   }
 }
 
-/* 关掉动效的人是真的不想看动效，庆祝动画也不例外——内容本身一条都不少。 */
+/* 关掉动效的人是真的不想看动效，庆祝动画和下潜脉动也不例外——内容本身一条都不少。 */
 @media (prefers-reduced-motion: reduce) {
   .panel-settle,
   .panel-badge,
   .panel-stars i {
+    animation: none;
+  }
+
+  .pad-key-dive {
     animation: none;
   }
 }

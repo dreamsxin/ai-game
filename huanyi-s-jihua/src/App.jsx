@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, Heart, Pause, Play, RotateCcw, Sparkles, Target, Trophy, Volume2, VolumeX } from 'lucide-react';
+import { ChevronRight, ChevronsDown, Heart, Pause, Play, RotateCcw, Sparkles, Target, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { createInput, mergeInput } from './game/input.js';
 import { STEP, advance, chooseWing, createGame, startGame, step, togglePause } from './game/simulation.js';
 import { WINGS } from './game/wings.js';
@@ -14,7 +14,7 @@ import {
   formatScore,
   formatTime,
   gateLabel,
-  jettisonLabel,
+  jettisonKey,
   labLabel,
   levelLabel,
   muteLabel,
@@ -177,6 +177,11 @@ export default function App() {
   const [banner, setBanner] = useState('');
   // 表现层挂掉时的提示。黑屏本身不说话，这行字替它说。
   const [fault, setFault] = useState('');
+  // 触屏和键盘是两套母语：提示、快捷键都按「这只手是什么」切换。
+  // 没有 matchMedia 就当触屏——这游戏本来就是触屏优先。
+  const [coarse, setCoarse] = useState(() =>
+    typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)').matches : true,
+  );
   // 最高分在结算时才写盘，但仍要拿开局那一刻的旧纪录比，重开一局才不会误报破纪录。
   const bestAtStartRef = useRef(readBest());
 
@@ -243,6 +248,43 @@ export default function App() {
   useEffect(() => {
     pauseRef.current = pause;
   }, [pause]);
+
+  const restartRef = useRef(restart);
+  useEffect(() => {
+    restartRef.current = restart;
+  }, [restart]);
+
+  // 触屏换键盘（插鼠标、接手写板）时把提示换掉。
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return undefined;
+    const mq = matchMedia('(pointer: coarse)');
+    const onChange = (event) => setCoarse(event.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+
+  // PC 的两枚快捷键。走位、弃翼、暂停归 input.js 管；静音和重开是纯 UI 动作，归这里。
+  // M 随时可用；R 只在暂停和结算时接手——打起来的时候误按 R 重开一局就太贵了。
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.repeat) return;
+      if (event.code === 'KeyM') {
+        setMuted((current) => {
+          const value = !current;
+          writeMuted(value);
+          if (audioRef.current) audioRef.current.setMuted(value);
+          return value;
+        });
+        return;
+      }
+      if (event.code === 'KeyR') {
+        const status = gameRef.current.status;
+        if (status === 'paused' || status === 'over' || status === 'won') restartRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -374,6 +416,7 @@ export default function App() {
   const record = finished && view.score > bestAtStartRef.current;
   const brief = briefing(view.levelIndex);
   const hp = bossRatio(view);
+  const jettison = jettisonKey(view.ship);
 
   return (
     <div className="app">
@@ -411,13 +454,16 @@ export default function App() {
           <i style={{ width: `${Math.round(progressRatio(view, bossAt(levelAt(view.levelIndex))) * 100)}%` }} />
         </div>
 
-        {/* 弃翼提示条**不吃指针事件**：走位是全屏拖动，一块会吞手势的按钮摆在拇指老家
+        {/* 弃翼动作键照手游的样子摆在右下拇指老家：大圆钮、亮的时候一眼知道能按。
+            但它**不吃指针事件**：走位是全屏拖动，一块能吞手势的钮摆在拇指老家
             就等于在最常按的地方开了个死区（从它上面起手拖动，船不动）。
             关掉 pointer-events 之后点它照样弃翼——事件穿到画布上，那本来就是「轻点即弃翼」。
-            所以它退回它真正的职责：看得见的提示 + 状态显示（带翼／裸机／下潜中）。 */}
+            所以它的职责是看得见 + 说清状态（可弃／锁定／无翼／下潜中）。 */}
         <div className="pad" aria-hidden="true">
-          <span className={`pad-key pad-jettison${view.ship.wing ? '' : ' pad-key-off'}`}>
-            {jettisonLabel(view.ship)}
+          <span className={`pad-key pad-key-${jettison.tone}`}>
+            <ChevronsDown size={26} strokeWidth={2.6} />
+            <b>弃翼</b>
+            <i>{jettison.sub}</i>
           </span>
         </div>
 
@@ -442,13 +488,27 @@ export default function App() {
           <div className={`panel${finished || cleared ? ' panel-settle' : ''}${selecting ? ' panel-wide' : ''}`}>
             <h1>{finished ? resultTitle(view.status) : selecting ? '选择机翼 · 第 2 步' : '换翼S计划'}</h1>
             <p className="panel-status">{statusLabel(view.status)}</p>
+            {/* 键盘玩家的快捷键摆在暂停里：这一屏停下来喘口气，正好看得进去。 */}
+            {paused && !coarse && <p className="panel-detail">Esc / P 继续 · R 重新开始 · M 静音</p>}
 
             {ready && (
               <>
                 <ul className="panel-tips">
-                  <li>屏幕任意处按住拖动走位，火力一直是自动开的</li>
+                  {/* 开头两三条是这只手怎么操作，按指针类型给：触屏说拖和点，键盘说键位。 */}
+                  {(coarse
+                    ? [
+                        '屏幕任意处按住拖动走位，火力一直是自动开的',
+                        '轻点一下弃翼：机翼脱落，主机下潜 1 秒无敌，但只剩小炮',
+                      ]
+                    : [
+                        '方向键 / WASD 走位，火力一直是自动开的',
+                        'Space / Z / X / J 弃翼下潜：机翼脱落，1 秒无敌，但只剩小炮',
+                        'Esc / P 暂停 · R 重开 · M 静音',
+                      ]
+                  ).map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
                   <li>斜俯视 2.5D 战场：往上是远方，敌人从地平线那头压过来</li>
-                  <li>轻点一下弃翼：机翼脱落，主机下潜 1 秒无敌，但只剩小炮</li>
                   <li>脱下来的翅膀会往上飘，接回来还能用；飘出画面就真没了</li>
                   <li>带着翼被打中只掉翼，裸机被打中才掉命——翅膀就是你的装甲</li>
                   <li>捡到<b>同型号</b>的机翼就升阶，Mk.III 火力翻一截；换型号从 Mk.I 重来</li>
