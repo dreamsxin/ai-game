@@ -236,3 +236,16 @@ test('notify 直接吃一批 effects，出几声就报几声', () => {
   assert.equal(audio.notify([{ type: 'die' }]), 1);
   assert.equal(audio.notify([]), 0);
 });
+
+test('门开了、翅膀飘了、火箭溜了：一次性的场上事件必须有声，且压过日常的消弹', () => {
+  assert.deepEqual(names([{ type: 'gate' }]), ['gate']);
+  assert.deepEqual(names([{ type: 'lost', code: 'C' }]), ['lost']);
+  assert.deepEqual(names([{ type: 'escaped', code: 'J' }]), ['escaped']);
+  // 一帧里同时有消弹，先报的该是这些一次性的事，不是又一声 pop。
+  const picks = names([{ type: 'pop', chain: 4 }, { type: 'lost', code: 'C' }]);
+  assert.equal(picks[0], 'lost');
+  // 这三件都不是关口大事，一概不震：弃翼和掉翼在发生的那一刻已经震过了。
+  assert.equal(vibrationFor([{ type: 'lost', code: 'C' }]), null);
+  assert.equal(vibrationFor([{ type: 'escaped', code: 'J' }]), null);
+  assert.equal(vibrationFor([{ type: 'gate' }]), null);
+});

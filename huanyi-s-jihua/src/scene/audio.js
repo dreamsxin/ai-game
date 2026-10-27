@@ -128,6 +128,28 @@ export const SOUNDS = {
     ],
     noise: { dur: 0.4, gain: 0.05, cutoff: 400 },
   },
+  // 跳关门开了：两记短促的钟声。它开在波次刚清完的空档，用声音把人从弹幕里叫回来
+  // 看一眼那道门——撞不撞是玩家的决定，但「有这道门」必须是知道的。
+  gate: {
+    tones: [
+      { wave: 'triangle', freq: NOTE.G4, to: NOTE.G4, dur: 0.12, gain: 0.08 },
+      { wave: 'triangle', freq: NOTE.C5, to: NOTE.C5, dur: 0.2, gain: 0.08, delay: 0.14 },
+    ],
+  },
+  // 自己弃掉的翅膀飘出了画面：一串往下的两音。一套攒过的火力真的没了，不该无声无息。
+  lost: {
+    tones: [
+      { wave: 'sine', freq: NOTE.E4, to: NOTE.C4, dur: 0.16, gain: 0.07 },
+      { wave: 'sine', freq: NOTE.C4, to: NOTE.A3, dur: 0.2, gain: 0.06, delay: 0.12 },
+    ],
+  },
+  // 运载火箭带着机翼飞出了画面：比 lost 硬一点、快一点——被拿走的和自已扔的不同。
+  escaped: {
+    tones: [
+      { wave: 'sawtooth', freq: NOTE.G4, to: NOTE.E4, dur: 0.12, gain: 0.06 },
+      { wave: 'sawtooth', freq: NOTE.E4, to: NOTE.C4, dur: 0.16, gain: 0.06, delay: 0.1 },
+    ],
+  },
   bossKill: {
     tones: [
       { wave: 'square', freq: 240, to: 70, dur: 0.4, gain: 0.13 },
@@ -237,6 +259,10 @@ export function soundsFor(effects = []) {
   else if (find('topped')) push('topped');
   if (find('jettison')) push('jettison');
   if (find('revive')) push('revive');
+  // 一次性的场上事件：门开了、火箭溜了、翅膀飘没了。不常发生，但发生了就必须有声。
+  if (find('gate')) push('gate');
+  if (find('escaped')) push('escaped');
+  if (find('lost')) push('lost');
   if (find('bossIn')) push('bossIn');
   if (find('carrier')) push('carrier');
   if (find('burst')) push('burst');

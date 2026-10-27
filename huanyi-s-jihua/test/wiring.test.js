@@ -23,6 +23,7 @@ const MODULES = [
   '../src/game/simulation.js',
   '../src/game/wings.js',
   '../src/scene/audio.js',
+  '../src/scene/loop.js',
   '../src/scene/models.js',
   '../src/scene/palette.js',
   '../src/scene/readout.js',

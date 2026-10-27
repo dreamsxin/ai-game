@@ -199,7 +199,7 @@ export const WINGS = {
     code: 'SS',
     name: 'SS 机翼',
     desc: '四向穿甲加两枚铁球，秘密机翼',
-    use: '后期极低概率掉落，被玩家叫做「无解」',
+    use: '选单上没有它，只在后期的运载火箭里装着；捡到就是碾压',
     secret: true,
     cool: 0.1,
     orbs: 2,

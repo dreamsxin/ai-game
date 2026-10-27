@@ -567,6 +567,24 @@ body {
   font-weight: 700;
 }
 
+/* 两个并排的动作键（继续 / 重新开始）：主键吃满剩余宽度，次键只占内容那么宽。 */
+.panel-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+}
+
+.panel-actions .panel-action {
+  margin-top: 0;
+}
+
+.panel-action-ghost {
+  flex: 0 0 auto;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid rgba(148, 163, 199, 0.4);
+}
+
 /* 宽屏上的限宽交给 .frame，这里只在矮屏上把 HUD 收一收，别跟舞台抢高度。 */
 @media (max-height: 560px) {
   .stat-score .stat-value {

@@ -13,6 +13,7 @@ import {
   evolveLabel,
   formatScore,
   formatTime,
+  gateLabel,
   jettisonLabel,
   labLabel,
   levelLabel,
@@ -32,6 +33,7 @@ import {
   wingName,
 } from './scene/readout.js';
 import { wingIcon } from './scene/wingIcon.js';
+import { createLoop } from './scene/loop.js';
 import { HAZARD, TIER_COLOR } from './scene/palette.js';
 
 const BEST_KEY = 'huanyi-s-jihua:best';
@@ -264,23 +266,14 @@ export default function App() {
     });
     padRef.current = touch;
 
-    let frame = 0;
-    let last = performance.now();
+    // 主循环交给 loop.js：它保证「时间在走、帧在跑」——rAF 缺席（无头、内嵌 webview、
+    // 省电模式）就自动落到 setTimeout 上，rAF 回来再交还。这里只管每帧做什么。
     let accumulator = 0;
     let lastUiUpdate = 0;
     let lastUiStatus = gameRef.current.status;
 
-    const animate = (stamp) => {
-      // **时间不能只信 rAF 给的那个时间戳**：无头浏览器、被虚拟化的时钟、某些省电模式下
-      // 它可能一直是同一个数（我这边实测整页的 performance.now() 都冻在 0）。
-      // 时间不走 → frameDelta 恒为 0 → 累加器永远够不上一步 → 世界一动不动，
-      // 而 HUD 还在正常显示，症状就是「打开了但玩不了」，最难查的一种。
-      // 所以：时间戳不走就退回固定步长，宁可当成匀速 60 帧，也不能停在原地。
-      const now = Number.isFinite(stamp) ? stamp : performance.now();
-      const measured = (now - last) / 1000;
-      const frameDelta = measured > 0 ? Math.min(measured, 0.1) : STEP;
-      last = now;
-      accumulator += frameDelta;
+    const loop = createLoop((dt) => {
+      accumulator += dt;
       while (accumulator >= STEP) {
         touch.tick(STEP);
         const merged = mergeInput(keys.snapshot(), touch.snapshot());
@@ -293,26 +286,21 @@ export default function App() {
       }
 
       // 手指位置交给渲染层画拖动指示：按下去画面毫无反应，玩家会以为不能触摸操控。
-      renderer.render(gameRef.current, frameDelta, touch.pointers());
+      renderer.render(gameRef.current, dt, touch.pointers());
+      const now = performance.now();
       if (now - lastUiUpdate > 90 || gameRef.current.status !== lastUiStatus) {
         setView(gameRef.current);
         lastUiUpdate = now;
         lastUiStatus = gameRef.current.status;
       }
-    };
-    const schedule = () => {
-      frame = requestAnimationFrame((now) => {
-        animate(now);
-        schedule();
-      });
-    };
-    // 先画一帧再进循环：万一 rAF 被浏览器掐着（后台标签、省电模式、无头环境），
-    // 至少画面上有场地而不是一整块黑——「黑屏」这种症状太容易被当成程序崩了。
+    });
+    // 先画一帧再进循环：万一环境连 setTimeout 都掐着，至少画面上有场地而不是一整块黑
+    // ——「黑屏」这种症状太容易被当成程序崩了。
     renderer.render(gameRef.current, 0, []);
-    schedule();
+    loop.start();
 
     return () => {
-      cancelAnimationFrame(frame);
+      loop.stop();
       keys.dispose();
       touch.dispose();
       renderer.dispose();
@@ -349,6 +337,15 @@ export default function App() {
     if (view.status !== 'playing') return;
     setBanner(`${levelLabel(view)} · ${weakHint(view.weak)}`);
   }, [view.levelKey, view.status]);
+
+  // 跳关门开了要喊一嗓子。它是「省 4 关，可 Boss 一点没削弱」的风险决策，
+  // 却闷声出现在波次刚清完的空档里——不喊，玩家根本不知道场上那道门能撞。
+  const gateOpen = view.status === 'playing' && Boolean(view.gate);
+  useEffect(() => {
+    if (!gateOpen) return;
+    setBanner(gateLabel(view.gate));
+    // 只在「没开 → 开了」这一跳上报。门开着的时候 gate 每帧都是新对象，不能跟着跑。
+  }, [gateOpen]);
 
   useEffect(() => {
     if (!banner) return;
@@ -447,17 +444,25 @@ export default function App() {
             <p className="panel-status">{statusLabel(view.status)}</p>
 
             {ready && (
-              <ul className="panel-tips">
-                <li>屏幕任意处按住拖动走位，火力一直是自动开的</li>
-                <li>斜俯视 2.5D 战场：往上是远方，敌人从地平线那头压过来</li>
-                <li>轻点一下弃翼：机翼脱落，主机下潜 1 秒无敌，但只剩小炮</li>
-                <li>脱下来的翅膀会往上飘，接回来还能用；飘出画面就真没了</li>
-                <li>带着翼被打中只掉翼，裸机被打中才掉命——翅膀就是你的装甲</li>
-                <li>捡到<b>同型号</b>的机翼就升阶，Mk.III 火力翻一截；换型号从 Mk.I 重来</li>
-                <li>敌弹可以被打掉，连消越多分越高、音越亮</li>
-                <li>打不进弱点的那一声又钝又闷，听到它就说明这只翅膀选错了</li>
-                <li>第 9 关起解锁实验机翼：引力井、链弧炮、相位激光、反物质弹、量子分身</li>
-              </ul>
+              <>
+                <ul className="panel-tips">
+                  <li>屏幕任意处按住拖动走位，火力一直是自动开的</li>
+                  <li>斜俯视 2.5D 战场：往上是远方，敌人从地平线那头压过来</li>
+                  <li>轻点一下弃翼：机翼脱落，主机下潜 1 秒无敌，但只剩小炮</li>
+                  <li>脱下来的翅膀会往上飘，接回来还能用；飘出画面就真没了</li>
+                  <li>带着翼被打中只掉翼，裸机被打中才掉命——翅膀就是你的装甲</li>
+                  <li>捡到<b>同型号</b>的机翼就升阶，Mk.III 火力翻一截；换型号从 Mk.I 重来</li>
+                  <li>敌弹可以被打掉，连消越多分越高、音越亮</li>
+                  <li>打不进弱点的那一声又钝又闷，听到它就说明这只翅膀选错了</li>
+                  <li>第 9 关起解锁实验机翼：引力井、链弧炮、相位激光、反物质弹、量子分身</li>
+                </ul>
+                {/* 旧纪录放在标题页：目标是什么，出发前就该看见。 */}
+                {best > 0 && (
+                  <p className="panel-detail panel-best">
+                    <Trophy size={13} aria-hidden="true" /> 最高 {formatScore(best)}
+                  </p>
+                )}
+              </>
             )}
 
             {selecting && (
@@ -543,10 +548,19 @@ export default function App() {
             )}
 
             {!selecting && !cleared && (
-              <button type="button" className="panel-action" onClick={finished || ready ? restart : pause}>
-                {finished ? <RotateCcw size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
-                {finished ? '再来一趟' : ready ? '出击' : '继续'}
-              </button>
+              <div className="panel-actions">
+                <button type="button" className="panel-action" onClick={finished || ready ? restart : pause}>
+                  {finished ? <RotateCcw size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
+                  {finished ? '再来一趟' : ready ? '出击' : '继续'}
+                </button>
+                {/* 暂停里给一条退路：打错了机翼、接了个电话，都该能重开而不必先送掉三条命。 */}
+                {paused && (
+                  <button type="button" className="panel-action panel-action-ghost" onClick={restart}>
+                    <RotateCcw size={18} aria-hidden="true" />
+                    重新开始
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

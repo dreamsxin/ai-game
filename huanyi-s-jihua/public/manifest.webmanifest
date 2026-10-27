@@ -1,0 +1,18 @@
+{
+  "name": "换翼S计划 · 2.5D 射击",
+  "short_name": "换翼S计划",
+  "description": "纵版飞行射击闯关：机翼是可拆卸的战术模块，弃翼换无敌，敌弹可以被打掉。",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#05081a",
+  "theme_color": "#05081a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

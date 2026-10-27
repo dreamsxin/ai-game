@@ -300,6 +300,12 @@ export function createRenderer(host) {
         stage.punch(1.4);
       } else if (effect.type === 'carrier') {
         note(FIELD_W / 2, 56, `掉落 ${effect.code} 机翼`, HAZARD.gold);
+      } else if (effect.type === 'escaped') {
+        // 火箭带着一套火力飞出了画面。一声不吭的话，玩家只会觉得「这关的机翼呢？」。
+        note(FIELD_W / 2, 64, `${effect.code} 机翼溜走了`, HAZARD.warm);
+      } else if (effect.type === 'lost') {
+        // 自己弃掉的翅膀飘出了画面：投资清零，同样不该静默。
+        note(FIELD_W / 2, 104, `${effect.code} 机翼飘走了`, HAZARD.warm);
       } else if (effect.type === 'skip') {
         note(FIELD_W / 2, 66, '跳关 · 省 4 关', HAZARD.cool);
         stage.punch(2.4);
