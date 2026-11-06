@@ -12,6 +12,9 @@ function play(index, wing, { immortal = false, frames = LIMIT, refuseDrops = fal
   let state = startGame(index, wing);
   let deaths = 0;
   let bossAtTime = null;
+  // Boss 战的时长量到「血量归零」为止：死亡演出（过载 1.3 秒）是典礼，
+  // 不该摊进火力效率的账里——否则演出会把短战斗的比例账压平。
+  let killedAtTime = null;
   for (let i = 0; i < frames; i += 1) {
     if (state.status !== 'playing' && state.status !== 'dying') break;
     state = step(state, botInput(state), STEP);
@@ -22,12 +25,13 @@ function play(index, wing, { immortal = false, frames = LIMIT, refuseDrops = fal
     for (const effect of state.effects) {
       if (effect.type === 'die') deaths += 1;
       if (effect.type === 'bossIn') bossAtTime = state.elapsed;
+      if (effect.type === 'bossDying') killedAtTime = state.elapsed;
     }
   }
   return {
     state,
     deaths,
-    fight: bossAtTime === null ? null : state.elapsed - bossAtTime,
+    fight: bossAtTime === null || killedAtTime === null ? null : killedAtTime - bossAtTime,
   };
 }
 

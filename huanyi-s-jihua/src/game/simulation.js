@@ -12,6 +12,8 @@ import {
   CATCH_R,
   CATCH_GRACE,
   BOSS_SCORE,
+  BOSS_DEATH_TIME,
+  BOSS_BLAST_EVERY,
   DIVE_BOOST,
   DIVE_TIME,
   EVOLVE_SCORE,
@@ -571,7 +573,8 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   }
 
   // 打 Boss。选对机翼是 pierce，选错是 chip——这两声必须分得开，否则「武器即钥匙」只写在文档里。
-  if (boss && !boss.entering) {
+  // 过载中的 Boss 不再吃伤害：它已经在谢幕了，别让余弹抢走爆炸的戏。
+  if (boss && !boss.entering && !boss.dying) {
     for (const shot of shots) {
       if (shot.dead || shot.hit?.includes('boss')) continue;
       if (!boxHit(shot, { w: 1.2, h: 1.6 }, boss, { w: boss.w / 2, h: boss.h / 2 })) continue;
@@ -603,7 +606,7 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     for (const enemy of enemyList) {
       if (enemy.hp > 0 && circleHit(orb, enemy, halfOf(enemy))) enemy.hp -= ORB_DPS * dt;
     }
-    if (boss && !boss.entering && circleHit(orb, boss, { w: boss.w / 2, h: boss.h / 2 })) {
+    if (boss && !boss.entering && !boss.dying && circleHit(orb, boss, { w: boss.w / 2, h: boss.h / 2 })) {
       const probe = { vx: 0, vy: -1, pierce: null, ground: false };
       boss = { ...boss, hp: boss.hp - ORB_DPS * dt * damageMultiplier(boss.weak, probe) };
     }
@@ -611,6 +614,18 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
 
   shots = shots.filter((item) => !item.dead);
   foes = foes.filter(Boolean);
+
+  // 血量归零不是当场结算，是进入死亡演出：1.3 秒的过载，爆炸节奏由结算段安排。
+  // 这一瞬间它打出来的弹幕全部化为火花——通关的礼节，不是给玩家刷分的清屏。
+  // 挪在 foes 过滤之后：消掉的弹在 pop 里只是置 null，这里拿到的才是干净的列表。
+  if (boss && !boss.entering && !boss.dying && boss.hp <= 0) {
+    boss = { ...boss, dying: true, deathTimer: BOSS_DEATH_TIME, blastTimer: 0.02 };
+    effects.push({ type: 'bossDying', x: boss.x, y: boss.y });
+    if (foes.length) {
+      effects.push({ type: 'hush', points: foes.slice(0, 48).map((foe) => [foe.x, foe.y]) });
+      foes = [];
+    }
+  }
 
   // ——— 敌人阵亡与掉落 ———
   const alive = [];
@@ -710,7 +725,7 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     fatal = takeHit('enemy');
     if (!enemy.blocks) enemy.hp = 0;
   }
-  if (!fatal && boss && !boss.entering && ship.invuln <= 0 && touchesShip(ship, boss, { w: boss.w / 2, h: boss.h / 2 })) {
+  if (!fatal && boss && !boss.entering && !boss.dying && ship.invuln <= 0 && touchesShip(ship, boss, { w: boss.w / 2, h: boss.h / 2 })) {
     fatal = takeHit('boss');
   }
 
@@ -726,12 +741,28 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     status = 'clear';
     gate = null;
     effects.push({ type: 'skip' });
-  } else if (boss && boss.hp <= 0) {
-    score += BOSS_SCORE;
-    status = 'clear';
-    boss = null;
-    effects.push({ type: 'bossKill' });
-    effects.push({ type: 'clear' });
+  } else if (boss && boss.dying) {
+    // 死亡演出：按固定节奏在壳体上炸开（抖动走 rng，回放可复现），
+    // 计时到了才真正结算——BOSS_SCORE、过关和弦都在最后一拍。
+    const timer = boss.deathTimer - dt;
+    let blastTimer = boss.blastTimer - dt;
+    if (blastTimer <= 0) {
+      blastTimer = BOSS_BLAST_EVERY;
+      effects.push({
+        type: 'bossBlast',
+        x: boss.x + (rng.next() - 0.5) * boss.w * 0.72,
+        y: boss.y + (rng.next() - 0.5) * boss.h * 0.72,
+      });
+    }
+    if (timer <= 0) {
+      score += BOSS_SCORE;
+      status = 'clear';
+      effects.push({ type: 'bossKill', x: boss.x, y: boss.y });
+      effects.push({ type: 'clear' });
+      boss = null;
+    } else {
+      boss = { ...boss, deathTimer: timer, blastTimer };
+    }
   }
 
   const settled = {

@@ -301,9 +301,22 @@ test('打掉 Boss 才算过关，过关后带着战果进下一关', () => {
   assert.ok(state.boss, 'Boss 该已经出场了');
   // 直接把 Boss 打到没血，省掉十几秒的实弹测试。
   state = step({ ...state, boss: { ...state.boss, hp: 0, entering: false } }, EMPTY_INPUT, STEP);
+  // 血量归零先进死亡演出：过载中的 Boss 不结算、弹幕化为火花。
+  assert.equal(state.status, 'playing');
+  assert.ok(state.boss?.dying, 'Boss 该进入过载');
+  assert.ok(types(state).includes('bossDying'));
+  assert.ok(!types(state).includes('bossKill'), '最后一拍还没到');
+  assert.equal(state.foes.length, 0, '死亡瞬间弹幕化为火花');
+  // effects 只活一帧，所以逐帧推进、在 clear 的那一拍断言。
+  let fired = 0;
+  for (let i = 0; i < Math.ceil(1.5 / STEP) && state.status !== 'clear'; i += 1) {
+    state = step(state, EMPTY_INPUT, STEP);
+    fired += state.effects.filter((effect) => effect.type === 'bossBlast').length;
+  }
   assert.equal(state.status, 'clear');
   assert.equal(state.skipped, false);
-  assert.ok(types(state).includes('bossKill'));
+  assert.ok(types(state).includes('bossKill'), '演出结束才给过关');
+  assert.ok(fired >= 5, `过载 1.3 秒该炸 6 处上下，实际 ${fired}`);
   assert.ok(state.stars > 0, '过关至少一星');
 
   const nextLevel = advance(state);

@@ -128,6 +128,14 @@ export const SOUNDS = {
     ],
     noise: { dur: 0.4, gain: 0.05, cutoff: 400 },
   },
+  // Boss 进入死亡过载：一段低频下坠加一层越绷越紧的高音——「它要炸了，看着」。
+  bossDying: {
+    tones: [
+      { wave: 'sawtooth', freq: 150, to: 42, dur: 1.1, gain: 0.1 },
+      { wave: 'triangle', freq: 620, to: 1240, dur: 0.9, gain: 0.05, delay: 0.25 },
+    ],
+    noise: { dur: 1.0, gain: 0.07, cutoff: 600 },
+  },
   // 跳关门开了：两记短促的钟声。它开在波次刚清完的空档，用声音把人从弹幕里叫回来
   // 看一眼那道门——撞不撞是玩家的决定，但「有这道门」必须是知道的。
   gate: {
@@ -263,6 +271,10 @@ export function soundsFor(effects = []) {
   if (find('gate')) push('gate');
   if (find('escaped')) push('escaped');
   if (find('lost')) push('lost');
+  // Boss 的死亡过载压过日常音：接下来 1.3 秒全是它的戏。
+  if (find('bossDying')) push('bossDying');
+  // 过载期间的连环爆炸用反物质那声闷响，一帧最多一声。
+  if (find('bossBlast')) push('burst');
   if (find('bossIn')) push('bossIn');
   if (find('carrier')) push('carrier');
   if (find('burst')) push('burst');

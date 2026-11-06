@@ -60,6 +60,7 @@ const fan = (id, x, y, count, spanDeg, speed, kind) => {
 /**
  * 推进 Boss。返回 `{ boss, shots }`。
  * 入场阶段（entering）不开火也不吃伤害之外的判定，给玩家看清体型和弱点的机会。
+ * 死亡演出阶段（dying）同理：过载中的 Boss 不再吐弹，爆炸节奏由 simulation 安排。
  */
 export function stepBoss(boss, dt, { ship, nextId }) {
   const next = { ...boss, age: boss.age + dt };
@@ -71,6 +72,7 @@ export function stepBoss(boss, dt, { ship, nextId }) {
     next.entering = next.y < boss.holdY;
     return { boss: next, shots, nextId: id };
   }
+  if (boss.dying) return { boss: next, shots, nextId: id };
 
   next.rage = boss.hp <= boss.maxHp * 0.5;
   const pace = next.rage ? 1.35 : 1;

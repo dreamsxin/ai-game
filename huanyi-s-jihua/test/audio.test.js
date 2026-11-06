@@ -249,3 +249,12 @@ test('门开了、翅膀飘了、火箭溜了：一次性的场上事件必须�
   assert.equal(vibrationFor([{ type: 'escaped', code: 'J' }]), null);
   assert.equal(vibrationFor([{ type: 'gate' }]), null);
 });
+
+test('Boss 的死亡过载压过日常音，过载爆炸走闷响', () => {
+  assert.deepEqual(names([{ type: 'bossDying' }]), ['bossDying']);
+  const picks = names([{ type: 'pop', chain: 3 }, { type: 'bossDying' }]);
+  assert.equal(picks[0], 'bossDying', '接下来 1.3 秒全是它的戏');
+  assert.deepEqual(names([{ type: 'bossBlast' }]), ['burst'], '过载爆炸用反物质那声闷响');
+  // bossDying 比 bossIn 长：入场是宣告，过载是整整一段下坠。
+  assert.ok(SOUNDS.bossDying.tones[0].dur > SOUNDS.bossIn.tones[0].dur);
+});

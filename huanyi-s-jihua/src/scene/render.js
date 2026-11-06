@@ -7,7 +7,7 @@
 //   而且这三样本来就是贴在屏幕上的，不该有透视。
 
 import * as THREE from 'three';
-import { FIELD_W, WING_DRIFT } from '../game/rules.js';
+import { BOSS_DEATH_TIME, FIELD_W, WING_DRIFT } from '../game/rules.js';
 import { WEAKNESS, WINGS, tierOf } from '../game/wings.js';
 import { orbsOf } from '../game/simulation.js';
 import { weakSpots } from '../game/boss.js';
@@ -213,8 +213,51 @@ export function createRenderer(host) {
   arcMesh.visible = false;
   let arcs = [];
 
+  // ---- 冲击波环：贴着爆炸高度向外扩散的一圈光。快出慢收，加色混合下才像「冲击」----
+  const ringGeo = new THREE.RingGeometry(0.82, 1, 48);
+  const ringPool = createPool(stage.world, () => {
+    const mesh = new THREE.Mesh(
+      ringGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        fog: false,
+      }),
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    return mesh;
+  });
+  const RING_MAX = 24;
+  let rings = [];
+  const shockwave = (x, y, color, maxR, life, alt = ALT.shot) => {
+    if (rings.length >= RING_MAX) rings.shift();
+    rings.push({ x, y, alt, color, maxR, life, age: 0 });
+  };
+
+  const updateRings = (dt) => {
+    rings = rings.filter((item) => item.age < item.life);
+    ringPool.begin();
+    for (const item of rings) {
+      item.age += dt;
+      const t = Math.min(1, item.age / item.life);
+      const ease = 1 - (1 - t) * (1 - t);
+      const mesh = ringPool.take();
+      mesh.material.color.set(item.color);
+      mesh.material.opacity = (1 - t) * 0.85;
+      mesh.position.set(worldX(item.x), item.alt, worldZ(item.y));
+      mesh.scale.setScalar(item.maxR * ease);
+    }
+    ringPool.end();
+  };
+
   let notes = [];
   let flash = null;
+  // Boss 入场的 WARNING 演出：红边脉冲加中央大字，1.7 秒后自己退干净。
+  let warning = null;
   let lastX = FIELD_W / 2;
   // 世界里锚着的那些字（道具型号、火箭装的型号、跳关门）：每帧由 sync 收集，
   // 由 2D 叠层按投影位置画成原生分辨率的字——贴图缩到二十像素一定糊。
@@ -265,6 +308,31 @@ export function createRenderer(host) {
     flash = { color, power, life: 0.26, age: 0 };
   };
 
+  /**
+   * 引擎尾焰：每帧从三喷口的位置往后（往近处）喷一两粒淡青蓝的余烬。
+   * 飞机钉在屏幕上，速度感全靠这些往后跑的粒子；下潜时喷三粒——「加速」看得见。
+   */
+  const exhaust = (state) => {
+    if (state.status !== 'playing') return;
+    const data = state.ship;
+    const count = data.dive > 0 ? 3 : 1;
+    for (let i = 0; i < count && sparks.length < MAX_SPARKS; i += 1) {
+      sparks.push({
+        x: worldX(data.x) + (Math.random() - 0.5) * 1.6,
+        y: ALT.ship - 0.4,
+        z: worldZ(data.y) + 2.6,
+        vx: (Math.random() - 0.5) * 4,
+        vy: 2 + Math.random() * 3,
+        vz: 14 + Math.random() * 10,
+        life: 0.22 + Math.random() * 0.15,
+        age: 0,
+        r: 0.42,
+        g: 0.66,
+        b: 1,
+      });
+    }
+  };
+
   // effects 是逻辑层唯一的出口：火花、飘字、震动、闪光都从这里长出来。
   const notify = (effects = []) => {
     for (const effect of effects) {
@@ -272,9 +340,12 @@ export function createRenderer(host) {
         spark(effect.x, effect.y, HAZARD.gold, 5, 24);
         if (effect.chain >= 3) note(FIELD_W / 2, 40, `连消 ${effect.chain}`, '#ffe066');
       } else if (effect.type === 'kill') {
-        spark(effect.x, effect.y, effect.kind === 'carrier' ? HAZARD.gold : '#ff8f5e', 10, 38);
+        const gold = effect.kind === 'carrier';
+        spark(effect.x, effect.y, gold ? HAZARD.gold : '#ff8f5e', 10, 38);
+        shockwave(effect.x, effect.y, gold ? HAZARD.gold : '#ff8f5e', gold ? 10 : 6, 0.4, ALT.enemy);
       } else if (effect.type === 'wingLost') {
         spark(effect.x, effect.y, HAZARD.warm, 14, 44);
+        shockwave(effect.x, effect.y, HAZARD.warm, 9, 0.42);
         note(FIELD_W / 2, 100, `${effect.code} 机翼被崩掉`, HAZARD.warm);
         stage.punch(3.2);
       } else if (effect.type === 'jettison') {
@@ -284,6 +355,7 @@ export function createRenderer(host) {
         note(FIELD_W / 2, 96, `${effect.code} ${WINGS[effect.code]?.name ?? ''}`, HAZARD.pierce);
       } else if (effect.type === 'evolve') {
         spark(effect.x, effect.y, TIER_COLOR[effect.tier - 1] ?? HAZARD.gold, 18, 40);
+        shockwave(effect.x, effect.y, TIER_COLOR[effect.tier - 1] ?? HAZARD.gold, 8, 0.45);
         note(FIELD_W / 2, 92, `${effect.code} → ${tierOf(effect.tier).name}`, TIER_COLOR[effect.tier - 1]);
         bang('#ffe9a8', 0.3);
         stage.punch(2);
@@ -291,6 +363,7 @@ export function createRenderer(host) {
         note(FIELD_W / 2, 92, `${effect.code} 已满阶`, HAZARD.pierce);
       } else if (effect.type === 'burst') {
         spark(effect.x, effect.y, HAZARD.lab, 16, 58);
+        shockwave(effect.x, effect.y, HAZARD.lab, 12, 0.5);
         bang(HAZARD.lab, 0.22);
       } else if (effect.type === 'arc') {
         arcs.push({ x1: effect.x1, y1: effect.y1, x2: effect.x2, y2: effect.y2, life: 0.14, age: 0 });
@@ -310,13 +383,33 @@ export function createRenderer(host) {
         note(FIELD_W / 2, 66, '跳关 · 省 4 关', HAZARD.cool);
         stage.punch(2.4);
       } else if (effect.type === 'bossIn') {
+        // 入场演出：红边脉冲加中央 WARNING 大字，比一句小飘字压得住场面。
+        warning = { age: 0, life: 1.7 };
+        stage.punch(2.2);
         note(FIELD_W / 2, 52, '弱点已标出', HAZARD.gold);
+      } else if (effect.type === 'bossDying') {
+        // 过载开始：全场一暗一震，弹幕已在 hush 里化为火花。
+        bang(HAZARD.warm, 0.18);
+        stage.punch(2.6);
+        note(effect.x, effect.y, '核心过载', HAZARD.warm);
+      } else if (effect.type === 'bossBlast') {
+        spark(effect.x, effect.y, HAZARD.gold, 16, 50, ALT.boss);
+        shockwave(effect.x, effect.y, HAZARD.gold, 8.5, 0.4, ALT.boss);
+        stage.punch(1.1);
+      } else if (effect.type === 'hush') {
+        // 弹幕湮灭：每一发原地炸成两粒青白火花，像整条弹幕同时被收回。
+        for (const [x, y] of effect.points ?? []) spark(x, y, '#bfe9ff', 2, 16);
       } else if (effect.type === 'bossKill') {
-        spark(effect.x ?? FIELD_W / 2, effect.y ?? 40, HAZARD.gold, 26, 70, ALT.boss);
-        bang('#fff3c4', 0.34);
-        stage.punch(5);
+        const bx = effect.x ?? FIELD_W / 2;
+        const by = effect.y ?? 40;
+        spark(bx, by, HAZARD.gold, 30, 70, ALT.boss);
+        shockwave(bx, by, HAZARD.gold, 26, 0.9, ALT.boss);
+        shockwave(bx, by, '#fff3c4', 16, 0.6, ALT.boss);
+        bang('#fff3c4', 0.4);
+        stage.punch(6);
       } else if (effect.type === 'die') {
         spark(effect.x ?? FIELD_W / 2, effect.y ?? 120, HAZARD.warm, 22, 60);
+        shockwave(effect.x ?? FIELD_W / 2, effect.y ?? 120, HAZARD.warm, 12, 0.5);
         stage.punch(4.4);
       }
     }
@@ -459,13 +552,24 @@ export function createRenderer(host) {
     ud.crown.position.set(0, tall * 0.7, -data.h * 0.1);
     // 半血换姿态：怒了之后整具壳往前倾，配色也换掉。
     boss.rotation.x = data.rage ? Math.sin(data.age * 8) * 0.03 : 0;
+    // 死亡过载：外壳烧白、整体发抖、缓缓下沉——它已经撑不住了，画面要说出这句话。
+    if (data.dying) {
+      const progress = 1 - Math.max(0, data.deathTimer) / BOSS_DEATH_TIME;
+      ud.shellMat.color.set('#e8d0c0');
+      ud.shellMat.emissive.set('#ff9a5e');
+      ud.shellMat.emissiveIntensity = 0.85 + Math.sin(data.age * 42) * 0.3;
+      boss.rotation.z = (Math.random() - 0.5) * 0.08;
+      boss.position.y = ALT.boss - progress * 2.6;
+    } else {
+      boss.rotation.z = 0;
+    }
 
     // 弱点环照 weakSpots() 摆，所以「该往哪打」永远和判定一致。
     const spots = weakSpots(data);
     const pulse = 0.78 + Math.sin(data.age * 6) * 0.22;
     for (const [i, spot] of ud.spots.entries()) {
       const src = spots[i];
-      spot.visible = Boolean(src);
+      spot.visible = Boolean(src) && !data.dying;
       if (!src) continue;
       // 壳内那个核贴在壳体中部，不该飘在 Boss 头顶——飘高了看着像另一个目标。
       // **弱点环是 boss 这一层的子物体**，所以位置要写成相对量。
@@ -670,29 +774,52 @@ export function createRenderer(host) {
     }
   };
 
+  /** 全屏四边渐暗带。裸机警示和 WARNING 演出都用它：先压黑再叠色，任何章节底色上都读得出。 */
+  const band = (alpha, color) => {
+    const vertical = ctx.createLinearGradient(0, 0, 0, size.h);
+    const horizontal = ctx.createLinearGradient(0, 0, size.w, 0);
+    for (const grad of [vertical, horizontal]) {
+      grad.addColorStop(0, `rgba(${color}, ${alpha})`);
+      grad.addColorStop(0.17, `rgba(${color}, 0)`);
+      grad.addColorStop(0.83, `rgba(${color}, 0)`);
+      grad.addColorStop(1, `rgba(${color}, ${alpha})`);
+    }
+    ctx.fillStyle = vertical;
+    ctx.fillRect(0, 0, size.w, size.h);
+    ctx.fillStyle = horizontal;
+    ctx.fillRect(0, 0, size.w, size.h);
+  };
+
+  // 关掉动效的人是真的不想看动效：速度线直接省掉，信息由下潜无敌环照常传达。
+  const calmMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
   const drawOverlay = (state, dt, pointers) => {
     ctx.clearRect(0, 0, size.w, size.h);
 
     // 裸机警示：画面四边泛起一层会呼吸的红。再挨一下就掉命，值得一个躲不开的提示。
-    // **先压一层黑再叠红**：第二章是紫、第四章是红橙，纯红叠在那种底色上根本读不出来
-    // （自审截图里第二章的裸机红边几乎看不见）。黑底上的红永远成立。
     if (!state.ship.wing && state.ship.dive <= 0 && state.status === 'playing') {
       const pulse = 0.34 + Math.sin(state.elapsed * 7) * 0.14;
-      const band = (make, alpha, color) => {
-        const grad = make();
-        grad.addColorStop(0, `rgba(${color}, ${alpha})`);
-        grad.addColorStop(0.17, `rgba(${color}, 0)`);
-        grad.addColorStop(0.83, `rgba(${color}, 0)`);
-        grad.addColorStop(1, `rgba(${color}, ${alpha})`);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, size.w, size.h);
-      };
-      const vertical = () => ctx.createLinearGradient(0, 0, 0, size.h);
-      const horizontal = () => ctx.createLinearGradient(0, 0, size.w, 0);
-      band(vertical, 0.5, '4, 2, 10');
-      band(horizontal, 0.42, '4, 2, 10');
-      band(vertical, pulse, '255, 47, 94');
-      band(horizontal, pulse * 0.8, '255, 47, 94');
+      band(0.5, '4, 2, 10');
+      band(pulse, '255, 47, 94');
+    }
+
+    // 下潜速度线：往屏幕外放射的短条。世界在后退，这一下「冲出去」的感觉全靠它。
+    if (state.status === 'playing' && state.ship.dive > 0 && !calmMotion) {
+      const cx = size.w / 2;
+      const cy = size.h * 0.46;
+      ctx.strokeStyle = '#b4e6ff';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 9; i += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const r1 = 60 + Math.random() * 90;
+        const len = 40 + Math.random() * 80;
+        ctx.globalAlpha = 0.1 + Math.random() * 0.16;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * r1, cy + Math.sin(angle) * r1);
+        ctx.lineTo(cx + Math.cos(angle) * (r1 + len), cy + Math.sin(angle) * (r1 + len));
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
 
     notes = notes.filter((item) => item.age < item.life);
@@ -732,6 +859,27 @@ export function createRenderer(host) {
       ctx.globalAlpha = 1;
     }
 
+    // Boss 入场 WARNING：红边脉冲 + 中央大字，闪三下。压住场面比一句飘字管用。
+    if (warning) {
+      warning.age += dt;
+      if (warning.age >= warning.life) warning = null;
+      else {
+        band(0.24, '255, 47, 94');
+        if (Math.floor(warning.age * 5) % 2 === 0) {
+          const big = Math.max(24, Math.round(36 * scale));
+          ctx.font = `900 ${big}px 'PingFang SC', system-ui, sans-serif`;
+          ctx.fillStyle = HAZARD.warm;
+          ctx.shadowColor = 'rgba(255, 47, 94, 0.8)';
+          ctx.shadowBlur = 18;
+          ctx.fillText('WARNING', size.w / 2, size.h * 0.3);
+          ctx.shadowBlur = 0;
+          ctx.font = `700 ${Math.max(13, Math.round(15 * scale))}px 'PingFang SC', system-ui, sans-serif`;
+          ctx.fillStyle = 'rgba(255, 190, 205, 0.9)';
+          ctx.fillText('巨型敌机接近', size.w / 2, size.h * 0.3 + big * 0.9);
+        }
+      }
+    }
+
     // 全屏闪一下，只给进化和反物质爆炸这种「场面变了」的事。
     if (flash) {
       flash.age += dt;
@@ -769,8 +917,10 @@ export function createRenderer(host) {
       syncGate(state);
       syncShots(state);
       syncFoes(state);
+      exhaust(state);
       updateSparks(delta);
       updateArcs(delta);
+      updateRings(delta);
       drawOverlay(state, delta, pointers);
       stage.draw(delta);
     },
@@ -781,6 +931,7 @@ export function createRenderer(host) {
       trailPool.dispose();
       orbPool.dispose();
       dropPool.dispose();
+      ringPool.dispose();
       for (const pool of enemyPools.values()) pool.dispose();
       for (const pool of shotPools.values()) pool.dispose();
       for (const pool of foePool.values()) pool.dispose();

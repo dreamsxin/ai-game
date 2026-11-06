@@ -50,6 +50,12 @@ export const SKIP_SCORE = 1200;
 // 进化一次给一笔分。攒阶级本来就要冒着「翅膀被打掉」的风险，值得记账。
 export const EVOLVE_SCORE = 600;
 
+// Boss 的死亡演出：血量归零不是当场结算，而是进入 1.3 秒的过载——
+// 间隔 BOSS_BLAST_EVERY 秒在壳体上炸一处，期间不再开火、不再撞人，
+// 场上它打出的弹幕在死亡瞬间化为火花（弹幕射击的礼节：通关奖励不是清屏刷分）。
+export const BOSS_DEATH_TIME = 1.3;
+export const BOSS_BLAST_EVERY = 0.18;
+
 // 引力井：把射程内的敌弹往井心拽，拽到 WELL_KILL 以内就湮灭。
 // 它是实验机翼那条路的核心——不是把弹幕躲掉，是把弹幕吃掉。
 export const WELL_PULL = 62;
