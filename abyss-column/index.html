@@ -1,0 +1,4140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<title>深渊纵列 · 海洋博物馆 / Abyss Column</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Nunito+Sans:wght@200;300;400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#d3e9f2;
+  --ink-2:#8fb0c2;
+  --ink-3:#5b7787;
+  --line:rgba(140,205,232,.20);
+  --line-2:rgba(140,205,232,.10);
+  --glass:rgba(9,22,34,.42);
+  --accent:#8beeff;
+  --warm:#ffc7e0;
+  --serif:"Fraunces",Georgia,"Songti SC",serif;
+  --sans:"Nunito Sans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#01050a;color:var(--ink);
+  font-family:var(--sans);font-weight:300;-webkit-font-smoothing:antialiased;user-select:none;overscroll-behavior:none}
+#gl{position:fixed;inset:0;display:block;z-index:0;touch-action:none}
+.scrim{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:
+    linear-gradient(to right,rgba(2,8,14,.55),transparent 16%,transparent 84%,rgba(2,8,14,.6)),
+    linear-gradient(to bottom,rgba(2,10,18,.35),transparent 22%,transparent 80%,rgba(0,2,5,.72)),
+    radial-gradient(120% 80% at 50% 0%,rgba(120,220,255,.07),transparent 60%);
+}
+.hud{position:fixed;inset:0;z-index:5;pointer-events:none;transition:opacity .5s ease}
+.hud.hidden{opacity:0}
+.hud.hidden .cards,.hud.hidden .controls,.hud.hidden .status,.hud.hidden .docent{pointer-events:none}
+.hud.hidden~.tags{opacity:0}
+
+/* ---------- 标题 ---------- */
+.brand{position:fixed;left:104px;top:22px;pointer-events:none;z-index:6}
+.brand:before{content:"";position:absolute;z-index:-1;left:-42px;right:-30px;top:-26px;bottom:-16px;
+  background:radial-gradient(120% 130% at 12% 0%,rgba(1,10,18,.62),rgba(1,10,18,.20) 55%,transparent 78%);
+  pointer-events:none}
+.brand .kicker{display:inline-flex;align-items:center;gap:6px;margin:0 0 7px;
+  font-size:9.5px;letter-spacing:.30em;color:rgba(176,225,244,.86);text-transform:none;
+  text-shadow:0 1px 12px rgba(0,14,24,.95)}
+.brand .kicker s{text-decoration:none;display:block;width:16px;height:1px;background:rgba(150,225,250,.6)}
+.brand h1{margin:0;font-family:var(--serif);font-weight:300;font-size:26px;letter-spacing:.10em;
+  color:#f0fbff;text-shadow:0 2px 16px rgba(0,14,24,.92),0 0 30px rgba(90,200,240,.32)}
+.brand .en{margin:6px 0 0;font-size:9px;letter-spacing:.34em;color:rgba(150,190,210,.86);text-transform:uppercase;
+  text-shadow:0 1px 10px rgba(0,14,24,.9)}
+.brand .rule{margin-top:9px;width:52px;height:1px;background:linear-gradient(to right,rgba(120,228,255,.7),transparent)}
+
+/* ---------- 左侧深度尺 ---------- */
+.ruler{position:fixed;left:0;top:0;bottom:0;width:96px;z-index:5;pointer-events:none;overflow:hidden;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 7%,#000 93%,transparent 100%);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 7%,#000 93%,transparent 100%)}
+.ruler-body{position:absolute;inset:0;will-change:transform}
+.ruler-spine{position:absolute;left:52px;top:-10%;width:1px;height:120%;
+  background:linear-gradient(to bottom,rgba(150,225,250,.40),rgba(150,225,250,.16) 45%,rgba(150,225,250,.03))}
+.mark{position:absolute;left:0;width:96px;height:1px;display:flex;align-items:center;justify-content:flex-end}
+.mark i{display:block;height:1px;background:rgba(160,225,245,.42);margin-right:24px}
+.mark.minor i{width:6px;background:rgba(160,225,245,.22)}
+.mark.sub i{width:11px;background:rgba(160,225,245,.30)}
+.mark.major i{width:20px;background:rgba(190,240,255,.62)}
+.mark b{position:absolute;right:52px;top:50%;transform:translateY(-50%);
+  font-family:var(--serif);font-weight:400;font-size:11px;letter-spacing:.06em;color:rgba(210,240,252,.92);
+  text-shadow:0 0 10px rgba(0,20,35,.9)}
+.mark.major b{font-size:12.5px;color:rgba(226,246,255,.95)}
+.mark em{position:absolute;right:52px;top:50%;transform:translateY(-50%);
+  font-style:normal;font-size:7.5px;letter-spacing:.22em;color:var(--ink-3);margin-right:34px}
+.zone{position:absolute;left:52px;width:1px;background:linear-gradient(to bottom,rgba(120,228,255,.34),rgba(120,228,255,.02))}
+.zone span{position:absolute;left:11px;top:8px;font-size:9.5px;letter-spacing:.38em;color:rgba(180,225,242,.72);
+  writing-mode:vertical-rl;text-orientation:upright;text-shadow:0 0 10px rgba(0,20,35,.9)}
+.zone b{position:absolute;left:6px;top:2px;width:9px;height:1px;background:rgba(150,225,250,.5)}
+
+/* ---------- 右侧生物卡片 ---------- */
+.cards{position:fixed;right:18px;top:50%;transform:translateY(-50%);z-index:6;
+  display:flex;flex-direction:column;gap:8px;width:252px;pointer-events:auto;
+  max-height:calc(100vh - 96px);overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:none;padding-right:5px}
+.cards::-webkit-scrollbar{display:none}
+.card{position:relative;display:flex;align-items:center;gap:11px;padding:7px 11px 7px 8px;border-radius:15px;
+  background:linear-gradient(150deg,rgba(20,44,62,.60),rgba(6,16,26,.48));
+  border:1px solid var(--line-2);
+  backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25);
+  box-shadow:0 8px 26px rgba(0,0,0,.40),inset 0 1px 0 rgba(190,235,255,.10);
+  cursor:grab;transition:transform .35s cubic-bezier(.2,.8,.25,1),border-color .3s,box-shadow .3s,background .3s}
+.card:hover{transform:translateX(-5px);border-color:rgba(121,228,255,.40);
+  box-shadow:0 10px 32px rgba(0,0,0,.5),0 0 0 1px rgba(121,228,255,.14),inset 0 1px 0 rgba(200,240,255,.18)}
+.card:active{cursor:grabbing}
+.card .thumb{position:relative;flex:0 0 74px;width:74px;height:54px;border-radius:11px;overflow:hidden;
+  background:radial-gradient(76% 76% at 50% 40%,rgba(46,116,152,.72),rgba(8,20,32,.90));
+  border:1px solid rgba(140,205,232,.12)}
+.card .thumb canvas{display:block;width:100%;height:100%;filter:brightness(1.16) saturate(1.12)}
+.card .thumb:after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(to top,rgba(3,9,15,.55),transparent 60%)}
+.card .meta{min-width:0;flex:1}
+.card .cn{font-family:var(--serif);font-size:16px;letter-spacing:.05em;color:#e9f8fd;line-height:1.15}
+.card .la{font-size:8.2px;letter-spacing:.10em;color:var(--ink-3);text-transform:uppercase;margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .dep{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:9.6px;
+  letter-spacing:.04em;color:rgba(158,205,225,.72);white-space:nowrap}
+.card .dep .siz{display:inline-block;padding:1px 6px;border-radius:8px;font-weight:600;font-size:10px;
+  letter-spacing:.02em;color:#0a2230;background:linear-gradient(180deg,#a9ecff,#63cdef)}
+.card .dep i{flex:1;height:1px;background:linear-gradient(to right,rgba(121,228,255,.35),rgba(121,228,255,.02))}
+.card .bar{position:absolute;left:0;top:12px;bottom:12px;width:1.5px;border-radius:2px;
+  background:linear-gradient(to bottom,rgba(121,228,255,.9),rgba(121,228,255,.15))}
+.card.flash{border-color:rgba(121,228,255,.75);box-shadow:0 0 0 1px rgba(121,228,255,.4),0 0 34px rgba(80,210,255,.35)}
+.card{transition:transform .35s cubic-bezier(.2,.8,.25,1),border-color .3s,box-shadow .3s,background .3s,opacity .45s ease}
+.card.off{opacity:.30;filter:saturate(.35)}
+.card.off:hover{transform:none}
+
+/* ---------- 讲解卡（走近展品） ---------- */
+.docent{position:fixed;left:104px;bottom:170px;z-index:8;width:326px;
+  max-height:calc(100vh - 300px);overflow-y:auto;scrollbar-width:none;
+  padding:16px 17px 14px;border-radius:20px;
+  background:linear-gradient(160deg,rgba(16,40,58,.86),rgba(4,13,21,.82));
+  border:1px solid rgba(140,205,232,.20);
+  backdrop-filter:blur(22px) saturate(1.2);-webkit-backdrop-filter:blur(22px) saturate(1.2);
+  box-shadow:0 18px 50px rgba(0,0,0,.55),inset 0 1px 0 rgba(200,240,255,.14);
+  opacity:0;transform:translateY(14px) scale(.985);pointer-events:none;
+  transition:opacity .38s ease,transform .42s cubic-bezier(.2,.8,.25,1)}
+.docent.on{opacity:1;transform:none;pointer-events:auto}
+.docent::-webkit-scrollbar{display:none}
+.d-top{display:flex;align-items:flex-start;gap:10px}
+.d-top h2{margin:0;font-family:var(--serif);font-weight:400;font-size:22px;letter-spacing:.06em;color:#eefaff;line-height:1.1}
+.d-la{margin:4px 0 0;font-size:8.5px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase}
+.d-x{margin-left:auto;flex:0 0 26px;width:26px;height:26px;border-radius:50%;cursor:pointer;
+  border:1px solid rgba(140,205,232,.20);background:rgba(255,255,255,.04);color:rgba(200,230,245,.7);
+  font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;
+  transition:all .25s ease;font-family:var(--sans)}
+.d-x:hover{background:rgba(121,228,255,.16);color:#eafaff;border-color:rgba(121,228,255,.45)}
+.d-stats{display:flex;gap:9px;margin:13px 0 12px}
+.d-stats>div{flex:1;padding:8px 10px;border-radius:12px;background:rgba(8,26,40,.55);
+  border:1px solid rgba(140,205,232,.10)}
+.d-stats span{display:block;font-size:9px;letter-spacing:.16em;color:rgba(140,180,200,.75)}
+.d-stats>div.wide{flex:1.22}
+.d-stats .wide b{font-size:13px;letter-spacing:0}
+.d-stats b{display:block;margin-top:3px;font-family:var(--serif);font-weight:400;font-size:16px;
+  letter-spacing:.03em;color:#dff4fd;white-space:nowrap}
+.d-stats b i{font-style:normal;font-size:10px;color:var(--ink-2);margin-left:3px}
+/* 深度是「900–4000」这种长数字，挤不下时宁可小一号也别折行 */
+.d-stats>div:nth-child(2) b{font-size:14px}
+.d-cmp{padding:11px 12px 12px;border-radius:13px;background:rgba(4,14,22,.5);
+  border:1px solid rgba(140,205,232,.10)}
+.d-cmp-t{font-size:9px;letter-spacing:.20em;color:rgba(140,180,200,.72);margin-bottom:9px}
+.d-bar{display:flex;align-items:center;gap:8px;margin-top:6px}
+.d-bar:first-of-type{margin-top:0}
+.d-bar>span{flex:0 0 62px;font-size:9.5px;letter-spacing:.03em;color:rgba(170,208,226,.85);text-align:right}
+.d-track{position:relative;flex:1;height:11px;border-radius:6px;background:rgba(255,255,255,.05);overflow:hidden}
+.d-track>div{position:absolute;left:0;top:0;bottom:0;border-radius:6px;
+  background:linear-gradient(90deg,rgba(121,228,255,.85),rgba(121,228,255,.35));
+  box-shadow:0 0 12px rgba(90,215,250,.35)}
+.d-bar.hum .d-track>div{background:linear-gradient(90deg,rgba(255,199,224,.85),rgba(255,199,224,.30));
+  box-shadow:0 0 12px rgba(255,199,224,.30)}
+.d-bar>em{flex:0 0 46px;font-style:normal;font-size:9.5px;color:rgba(150,195,215,.8)}
+.d-fact{margin:11px 0 0;font-size:11.5px;line-height:1.75;letter-spacing:.02em;color:rgba(198,228,240,.92)}
+.d-note{margin:9px 0 0;font-size:8.5px;line-height:1.6;letter-spacing:.04em;color:rgba(120,160,180,.62)}
+
+/* ---------- 体型对照图（展厅墙面） ---------- */
+.chart-bg{position:fixed;inset:0;z-index:11;background:rgba(1,6,11,.62);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;transition:opacity .35s}
+.chart-bg.on{opacity:1;pointer-events:auto}
+.chart{position:fixed;z-index:12;left:50%;top:50%;transform:translate(-50%,-46%) scale(.97);
+  width:min(680px,94vw);max-height:86vh;overflow-y:auto;padding:26px 28px 22px;border-radius:22px;
+  background:linear-gradient(160deg,rgba(15,38,56,.95),rgba(4,12,20,.94));
+  border:1px solid rgba(140,205,232,.20);
+  box-shadow:0 26px 80px rgba(0,0,0,.65),inset 0 1px 0 rgba(200,240,255,.14);
+  opacity:0;pointer-events:none;transition:opacity .38s ease,transform .42s cubic-bezier(.2,.8,.25,1);
+  scrollbar-width:none}
+.chart::-webkit-scrollbar{display:none}
+.chart.on{opacity:1;transform:translate(-50%,-50%);pointer-events:auto}
+.c-head{display:flex;align-items:center;gap:10px}
+.chart h3{margin:0;font-family:var(--serif);font-weight:400;font-size:24px;letter-spacing:.08em;color:#eefaff}
+.chart h3 em{font-style:normal;font-size:9.5px;letter-spacing:.22em;color:var(--ink-3);margin-left:9px}
+.chart .c-sub{margin:8px 0 15px;font-size:11.5px;line-height:1.7;letter-spacing:.02em;color:rgba(158,198,218,.82)}
+/* 17 行要在 900px 屏高龄里排完，行距得收紧一点，否则最后一行会被面板底边切掉 */
+.sc-row{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+.sc-row .sc-n{flex:0 0 96px;text-align:right;font-size:12.5px;letter-spacing:.02em;line-height:1.25;
+  color:rgba(206,234,245,.94)}
+.sc-row .sc-n s{display:block;text-decoration:none;font-size:8.5px;letter-spacing:.04em;
+  color:rgba(120,160,180,.62);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-row .sc-track{position:relative;flex:1;height:17px;border-radius:10px;background:rgba(255,255,255,.04);
+  overflow:hidden;background-image:repeating-linear-gradient(to right,
+    rgba(140,205,232,.12) 0 1px,transparent 1px 20%)}
+.sc-row .sc-track>div{position:absolute;left:0;top:2px;bottom:2px;border-radius:9px;min-width:3px;
+  transition:width .6s cubic-bezier(.2,.8,.25,1)}
+.sc-row .sc-v{flex:0 0 58px;font-family:var(--serif);font-size:13.5px;letter-spacing:.02em;color:rgba(220,246,255,.94)}
+.sc-row.hum .sc-n{color:#ffc7e0}
+.sc-row.hum .sc-track>div{background:linear-gradient(90deg,rgba(255,199,224,.9),rgba(255,199,224,.35))}
+.chart .c-foot{margin:16px 0 0;font-size:10.5px;line-height:1.7;letter-spacing:.02em;color:rgba(130,170,190,.7);
+  padding-top:13px;border-top:1px solid rgba(140,205,232,.10)}
+/* 内容比面板高时，底部留一道渐隐，暗示还能往下滚 */
+.chart::after{content:"";position:sticky;bottom:-22px;display:block;height:34px;
+  margin:0 -28px -22px;pointer-events:none;
+  background:linear-gradient(to top,rgba(6,17,27,.96),rgba(6,17,27,0))}
+
+/* ---------- 水下标牌 ---------- */
+.tags{position:fixed;inset:0;pointer-events:none;z-index:7;transition:opacity .4s ease}
+.tag{position:fixed;z-index:7;pointer-events:none;transform:translate(-50%,-100%) scale(.9);
+  padding:4px 10px;border-radius:10px;white-space:nowrap;
+  font-size:11px;letter-spacing:.06em;color:#e8f8ff;
+  background:rgba(6,22,34,.72);border:1px solid rgba(121,228,255,.34);
+  box-shadow:0 4px 18px rgba(0,0,0,.45);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  opacity:0;transition:opacity .5s ease,transform .5s cubic-bezier(.2,.8,.25,1)}
+.tag.on{opacity:1;transform:translate(-50%,-100%) scale(1)}
+.tag b{font-family:var(--serif);font-weight:400;font-size:12px;letter-spacing:.04em}
+.tag i{font-style:normal;font-size:10px;color:#8beeff;margin-left:6px}
+
+/* ---------- 控制栏 ---------- */
+.controls{position:fixed;left:104px;bottom:54px;z-index:6;display:flex;align-items:center;gap:6px;
+  flex-wrap:wrap;pointer-events:auto;max-width:calc(100% - 390px)}
+.btn{font-family:var(--sans);font-size:11px;letter-spacing:.09em;color:rgba(210,238,248,.86);
+  padding:9px 12px;min-height:36px;border-radius:20px;cursor:pointer;white-space:nowrap;
+  display:inline-flex;align-items:center;
+  background:rgba(8,20,32,.52);border:1px solid var(--line-2);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  transition:all .28s ease}
+.btn:hover{color:#eafaff;border-color:rgba(121,228,255,.40);background:rgba(14,34,50,.66)}
+.btn.on{color:#041219;background:linear-gradient(180deg,#9debff,#5fd0f0);border-color:rgba(180,245,255,.8);
+  box-shadow:0 0 22px rgba(90,215,250,.42);font-weight:600;
+  transition:background .28s ease,border-color .28s ease,box-shadow .28s ease}
+.btn.key{border-color:rgba(255,199,224,.30);color:rgba(255,222,236,.9)}
+.btn.key:hover{background:rgba(255,199,224,.14);border-color:rgba(255,199,224,.55)}
+.slid{display:flex;align-items:center;gap:9px;padding:7px 14px;min-height:36px;border-radius:20px;
+  background:rgba(8,20,32,.52);border:1px solid var(--line-2);backdrop-filter:blur(12px)}
+.slid label{font-size:10.5px;letter-spacing:.14em;color:var(--ink-2)}
+.slid input{-webkit-appearance:none;appearance:none;width:78px;height:3px;border-radius:2px;outline:none;
+  background:linear-gradient(to right,rgba(121,228,255,.85),rgba(121,228,255,.16))}
+.slid input::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:#d6f7ff;box-shadow:0 0 12px rgba(110,225,255,.9);cursor:pointer}
+.slid input::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;background:#d6f7ff;
+  box-shadow:0 0 12px rgba(110,225,255,.9);cursor:pointer}
+
+/* ---------- 深度导览 / 潜航 ---------- */
+.dive{position:fixed;left:104px;top:122px;z-index:7;width:350px;pointer-events:auto;
+  padding:13px 15px 12px;border-radius:18px;
+  background:linear-gradient(160deg,rgba(13,34,50,.74),rgba(4,12,20,.64));
+  border:1px solid rgba(140,205,232,.16);
+  backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
+  box-shadow:0 16px 44px rgba(0,0,0,.46),inset 0 1px 0 rgba(200,240,255,.10);
+  transition:border-color .4s ease,box-shadow .4s ease}
+.dive.on{border-color:rgba(121,228,255,.34);
+  box-shadow:0 16px 44px rgba(0,0,0,.5),0 0 0 1px rgba(121,228,255,.10),inset 0 1px 0 rgba(200,240,255,.16)}
+.dive-head{display:flex;align-items:center;gap:11px}
+.dive-tog{flex:0 0 auto;font-size:11px;padding:8px 13px;min-height:32px}
+.dive-read{display:flex;align-items:baseline;gap:3px;min-width:0;flex:1}
+.dive-read b{font-family:var(--serif);font-weight:400;font-size:22px;letter-spacing:.02em;color:#f0fbff;line-height:1;
+  font-variant-numeric:tabular-nums}
+.dive-read i{font-style:normal;font-size:9.5px;color:var(--ink-2)}
+.dive-read em{font-style:normal;margin-left:9px;font-size:9.5px;letter-spacing:.12em;
+  color:rgba(150,205,225,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dive-slide{position:relative;margin-top:12px}
+.dive-slide input{-webkit-appearance:none;appearance:none;display:block;width:100%;height:3px;border-radius:2px;
+  outline:none;background:linear-gradient(to right,rgba(150,240,255,.9),rgba(90,150,210,.55) 55%,rgba(40,70,110,.5))}
+.dive-slide input::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+  background:#e6fbff;box-shadow:0 0 14px rgba(110,225,255,.95);cursor:pointer;border:0}
+.dive-slide input::-moz-range-thumb{width:15px;height:15px;border:0;border-radius:50%;background:#e6fbff;
+  box-shadow:0 0 14px rgba(110,225,255,.95);cursor:pointer}
+.dive-ticks{position:relative;height:17px;margin-top:1px}
+.dive-ticks b{position:absolute;top:0;width:1px;height:5px;background:rgba(150,225,250,.38);cursor:pointer}
+.dive-ticks b:before{content:"";position:absolute;left:-5px;top:-4px;width:11px;height:14px}
+.dive-ticks b s{position:absolute;left:50%;transform:translateX(-50%);top:6px;text-decoration:none;
+  font-size:8px;letter-spacing:.01em;color:rgba(140,185,205,.72);white-space:nowrap;font-family:var(--serif)}
+/* 两端的刻度文字往里收，不然会被面板圆角切掉半个字 */
+.dive-ticks b:first-child s{left:0;transform:none}
+.dive-ticks b:last-child s{left:auto;right:0;transform:none}
+.dive-ticks b.hot s{color:rgba(200,240,255,.95)}
+.dive-tip{margin:8px 0 0;font-size:10.5px;line-height:1.6;letter-spacing:.02em;color:rgba(178,214,230,.84);
+  min-height:2.1em}
+
+/* 本层环境仪表 */
+.dive-env{display:flex;gap:11px;margin-top:10px;padding-top:9px;border-top:1px solid rgba(140,205,232,.13)}
+.dive-env>div{flex:1;min-width:0}
+.dive-env>div:nth-child(1){--c:#ffcfa2}
+.dive-env>div:nth-child(2){--c:#ffe7a3}
+.dive-env>div:nth-child(3){--c:#9fd2ff}
+.dive-env i{display:block;font-style:normal;font-size:8.5px;letter-spacing:.18em;margin-bottom:3px;
+  color:rgba(150,195,220,.55)}
+.dive-env .val{display:flex;align-items:baseline;gap:2px;white-space:nowrap}
+.dive-env .val b{font-family:var(--serif);font-weight:400;font-size:14.5px;line-height:1;color:#e2f6ff;
+  font-variant-numeric:tabular-nums}
+.dive-env .val em{font-style:normal;font-size:8.5px;color:rgba(150,195,220,.62)}
+/* 没在潜航时仪表只是占位，别让「— °C」看起来像读数 */
+.dive-env.off .val em{display:none}
+.dive-env .bar{height:2px;margin-top:5px;border-radius:1px;background:rgba(140,205,232,.13);overflow:hidden}
+.dive-env .bar u{display:block;height:100%;width:0;border-radius:1px;background:var(--c);opacity:.8;
+  transition:width .45s cubic-bezier(.4,0,.2,1)}
+
+/* ---------- 状态栏 ---------- */
+.status{position:fixed;left:0;right:0;bottom:0;z-index:6;height:44px;display:flex;align-items:center;
+  justify-content:center;gap:14px;font-size:10.5px;letter-spacing:.10em;color:var(--ink-3);
+  background:linear-gradient(to top,rgba(1,5,9,.72),transparent);pointer-events:none;padding:0 16px}
+.status b{font-family:var(--serif);font-weight:400;font-size:12.5px;letter-spacing:.06em;color:rgba(214,242,252,.92)}
+.status .dot{width:3px;height:3px;border-radius:50%;background:rgba(121,228,255,.55)}
+.status .hint{color:rgba(120,160,180,.55);letter-spacing:.10em}
+.status .hint b{font-size:10px;letter-spacing:.10em;color:rgba(160,205,225,.7)}
+#depthRead em{font-style:normal;font-size:9.5px;letter-spacing:.04em;color:rgba(120,170,195,.65);margin-left:5px}
+
+/* 加载失败的兜底提示 */
+.bootwarn{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+  padding:26px;text-align:center;
+  background:radial-gradient(circle at 50% 42%,rgba(10,26,38,.97),rgba(2,7,12,.99) 70%)}
+.bootwarn.on{display:flex}
+.bootwarn>div{max-width:430px}
+.bootwarn b{display:block;font-family:var(--serif);font-weight:400;font-size:21px;letter-spacing:.06em;
+  color:#dff4ff;margin-bottom:12px}
+.bootwarn p{margin:0;font-size:12px;line-height:1.95;letter-spacing:.04em;color:rgba(172,206,230,.7)}
+
+/* 拖动幽灵 */
+.ghost{position:fixed;z-index:20;pointer-events:none;transform:translate(-50%,-50%);
+  padding:5px 11px;border-radius:16px;font-size:10px;letter-spacing:.14em;
+  background:rgba(8,26,40,.72);border:1px solid rgba(121,228,255,.5);color:#d9f6ff;
+  box-shadow:0 0 26px rgba(90,215,250,.35);backdrop-filter:blur(10px);
+  opacity:0;transition:opacity .18s}
+.ghost.on{opacity:1}
+.dropline{position:fixed;left:0;right:0;height:1px;z-index:19;pointer-events:none;opacity:0;
+  background:linear-gradient(to right,transparent,rgba(121,228,255,.75),transparent);
+  box-shadow:0 0 16px rgba(90,215,250,.6);transition:opacity .18s}
+.dropline.on{opacity:1}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:760px){
+  .brand{left:auto;right:14px;top:14px;text-align:right}
+  .brand:before{left:-30px;right:-14px;top:-14px;bottom:-10px;
+    background:radial-gradient(130% 140% at 88% 0%,rgba(1,10,18,.72),rgba(1,10,18,.24) 58%,transparent 80%)}
+  .brand .kicker{font-size:8px;letter-spacing:.2em;margin-bottom:4px}
+  .brand h1{font-size:19px}
+  .brand .en{font-size:7.5px;letter-spacing:.24em}
+  .brand .rule{margin-left:auto;width:38px}
+  .ruler{width:58px}
+  .ruler-spine{left:20px}
+  .mark{width:58px;justify-content:flex-start}
+  .mark i{margin-left:16px;margin-right:0;width:4px!important}
+  .mark b{right:auto;left:26px;text-align:left;font-size:9.5px;letter-spacing:0}
+  .mark.major b{font-size:11px}
+  .mark em{display:none}
+  .zone{left:20px}
+  .zone span{left:7px;font-size:8px;letter-spacing:.26em;color:rgba(170,215,235,.6)}
+  .dive{left:auto;right:8px;top:98px;width:calc(100% - 78px);padding:10px 12px 10px}
+  .dive-read b{font-size:18px}
+  .dive-read em{font-size:8.5px;letter-spacing:.06em;margin-left:6px}
+  .dive-tog{font-size:10px;padding:7px 10px;min-height:30px}
+  .dive-env{gap:8px;margin-top:8px;padding-top:8px}
+  .dive-env .val b{font-size:13px}
+  .dive-env i{font-size:7.5px;letter-spacing:.14em}
+  .dive-tip{font-size:9.5px;line-height:1.5;margin-top:6px;display:none}
+  /* 竖屏手机上玻璃板几乎横跨整个屏幕，动物往下挪一点才看得到 */
+  .dive-ticks b s{font-size:7px}
+  .cards{top:auto;bottom:96px;left:8px;right:8px;width:auto;transform:none;
+    flex-direction:row;overflow-x:auto;overflow-y:hidden;gap:8px;padding:2px 4px 6px;
+    max-height:none;scrollbar-width:none;scroll-snap-type:x mandatory;
+    transition:opacity .3s ease}
+  .cards::-webkit-scrollbar{display:none}
+  .card{flex:0 0 176px;scroll-snap-align:start;padding:7px 9px 7px 7px;border-radius:14px}
+  .card .thumb{flex:0 0 52px;width:52px;height:42px}
+  .card .cn{font-size:14px}
+  .card .la{font-size:7px}
+  .card .dep{font-size:8.5px;margin-top:4px}
+  .card .dep .siz{font-size:9px;padding:1px 5px}
+  .controls{left:0;right:0;bottom:32px;gap:7px;max-width:none;flex-wrap:nowrap;
+    justify-content:flex-start;overflow-x:auto;padding:0 10px 8px;scrollbar-width:none}
+  .controls::-webkit-scrollbar{display:none}
+  .controls .btn,.controls .slid{flex:0 0 auto}
+  .btn{font-size:11px;padding:8px 12px;min-height:34px;letter-spacing:.06em}
+  .slid{padding:6px 10px;min-height:34px}
+  .slid label{font-size:9.5px}
+  .slid input{width:60px}
+  .status{height:32px;gap:8px;font-size:9px;letter-spacing:.06em}
+  .status .hint{display:none}
+  #depthRead em{font-size:8px}
+  /* 讲解卡在手机上变成底部抽屉 */
+  .docent{left:8px;right:8px;bottom:8px;width:auto;max-height:56vh;overflow-y:auto;
+    padding:14px 15px 13px;border-radius:18px;scrollbar-width:none}
+  .docent::-webkit-scrollbar{display:none}
+  .hud.docent-on .cards{opacity:0;pointer-events:none}
+  .d-top h2{font-size:19px}
+  .d-stats{margin:11px 0 10px}
+  .d-stats b{font-size:15px}
+  .d-fact{font-size:11px;line-height:1.7}
+  .chart{width:94vw;padding:20px 18px 18px;max-height:82vh}
+  .chart h3{font-size:18px}
+  .sc-row .sc-n{flex:0 0 72px;font-size:11px}
+  .sc-row .sc-v{flex:0 0 46px;font-size:11px}
+  .tag{font-size:10px;padding:3px 8px}
+}
+@media (max-width:760px) and (orientation:landscape){
+  .cards{bottom:56px}
+  .status{height:24px}
+  .docent{bottom:6px;max-height:74vh;width:min(360px,60vw);left:8px;right:auto}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="scrim"></div>
+
+<div class="hud" id="hud">
+  <div class="brand">
+    <p class="kicker"><s></s>海洋博物馆 · 常设展厅</p>
+    <h1>深渊纵列</h1>
+    <p class="en">Ocean Museum — Abyss Column</p>
+    <div class="rule"></div>
+  </div>
+
+  <div class="ruler" id="ruler">
+    <div class="ruler-body" id="rulerBody">
+      <div class="ruler-spine"></div>
+    </div>
+  </div>
+
+  <div class="dive" id="dive">
+    <div class="dive-head">
+      <button class="btn dive-tog" id="btnDive">开始潜航</button>
+      <div class="dive-read"><b id="diveD">0</b><i id="diveU">m</i><em id="diveZ">透光层</em></div>
+    </div>
+    <div class="dive-slide">
+      <input id="diveRange" type="range" min="0" max="1000" step="1" value="0" aria-label="潜航深度">
+      <div class="dive-ticks" id="diveTicks"></div>
+    </div>
+    <p class="dive-tip" id="diveTip">往下拖滑块，或者点一个刻度，就能潜到那一层去看。</p>
+    <div class="dive-env">
+      <div>
+        <i>水温</i>
+        <span class="val"><b id="envT">24.5</b><em>°C</em></span>
+        <div class="bar"><u id="envTB"></u></div>
+      </div>
+      <div>
+        <i>光照</i>
+        <span class="val"><b id="envL">100</b><em>%</em></span>
+        <div class="bar"><u id="envLB"></u></div>
+      </div>
+      <div>
+        <i>水压</i>
+        <span class="val"><b id="envP">1.0</b><em>atm</em></span>
+        <div class="bar"><u id="envPB"></u></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="docent" id="docent"></div>
+
+  <div class="controls" id="controls">
+    <div class="slid"><label>光柱</label><input id="shaftRange" type="range" min="0" max="2" step="0.01" value="1"></div>
+    <button class="btn key" id="btnSize">比大小</button>
+    <button class="btn" id="btnFly">大鱼掠过</button>
+    <button class="btn" id="btnVortex">旋涡</button>
+    <button class="btn" id="btnStill">静海</button>
+    <button class="btn" id="btnClear">清透</button>
+    <button class="btn" id="btnSound">声音</button>
+    <button class="btn" id="btnRoam">巡游</button>
+    <button class="btn" id="btnAuto" title="每隔一会儿自动下潜一站，循环六层（T）">导览</button>
+    <button class="btn" id="btnReset">复位</button>
+    <button class="btn" id="btnHide">隐藏 UI</button>
+  </div>
+
+  <div class="status">
+    <span id="counts">—</span>
+    <span class="dot"></span>
+    <span id="depthRead">深度 0 m</span>
+    <span class="dot"></span>
+    <span class="hint">拖滑块选深度潜航 · 点卡片请它入海 · 拖水面移动 · <b>D</b> 潜航 · <b>T</b> 导览 · <b>G</b> 大鱼掠过 · <b>0</b> 复位</span>
+  </div>
+</div>
+
+<div class="chart-bg" id="chartBg"></div>
+<div class="chart" id="chart"></div>
+<div class="tags" id="tags"></div>
+
+<div class="bootwarn" id="bootWarn"><div>
+  <b>三维展馆没能打开</b>
+  <p>这个页面需要从网络加载三维引擎。<br>请检查网络连接后刷新重试。</p>
+</div></div>
+
+<div class="ghost" id="ghost"></div>
+<div class="dropline" id="dropline"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>window.THREE || document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');</script>
+<script>window.THREE || document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>');</script>
+<script>
+(function(){
+'use strict';
+
+/* 三个 CDN 都没拿到 Three.js 时别留一片黑，直接告诉人该怎么办 */
+if (!window.THREE){
+  var bw = document.getElementById('bootWarn');
+  if (bw) bw.classList.add('on');
+  return;
+}
+
+/* ============================================================
+   0. 常量与深度映射
+   ============================================================ */
+var TAU = Math.PI * 2;
+var Y_TOP = 22, Y_BOT = -22, WORLD_H = 44, DEPTH_MAX = 4000;
+var MAX_CREATURES = 48;
+
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function rand(a,b){ return a+Math.random()*(b-a); }
+function smoothstep(e0,e1,x){ var t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); }
+function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+function easeInOut(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+
+// 非线性深度 -> 归一化屏幕纵坐标（0 顶部 / 1 底部）
+var ZONES_MAP = [
+  { d0:0,    d1:200,  n0:0.00, n1:0.19 },
+  { d0:200,  d1:1000, n0:0.19, n1:0.50 },
+  { d0:1000, d1:4000, n0:0.50, n1:1.00 }
+];
+function depthToNorm(d){
+  d = clamp(d, 0, DEPTH_MAX);
+  for (var i=0;i<ZONES_MAP.length;i++){
+    var z = ZONES_MAP[i];
+    if (d <= z.d1){ var t=(d-z.d0)/(z.d1-z.d0); return z.n0+(z.n1-z.n0)*t; }
+  }
+  return 1;
+}
+function normToDepth(n){
+  n = clamp(n, 0, 1);
+  for (var i=0;i<ZONES_MAP.length;i++){
+    var z = ZONES_MAP[i];
+    if (n <= z.n1){ var t=(n-z.n0)/(z.n1-z.n0); return z.d0+(z.d1-z.d0)*t; }
+  }
+  return DEPTH_MAX;
+}
+function depthToY(d){ return Y_TOP - depthToNorm(d)*WORLD_H; }
+function yToDepth(y){ return normToDepth((Y_TOP-y)/WORLD_H); }
+
+/* ============================================================
+   1. GLSL
+   ============================================================ */
+var GLSL_NOISE = [
+'float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }',
+'float noise2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);',
+'  return mix(mix(hash21(i),hash21(i+vec2(1.0,0.0)),f.x), mix(hash21(i+vec2(0.0,1.0)),hash21(i+vec2(1.0,1.0)),f.x), f.y); }',
+'float fbm2(vec2 p){ float v=0.0,a=0.5; for(int i=0;i<4;i++){ v+=a*noise2(p); p=p*2.02+vec2(1.7,9.2); a*=0.5; } return v; }'
+].join('\n');
+
+/* ---- 背景海水 ---- */
+var BG_VERT = [
+'varying vec2 vUv;',
+'void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }'
+].join('\n');
+
+var BG_FRAG = [
+'precision highp float;',
+'varying vec2 vUv;',
+'uniform float uTime, uBob, uStill, uClear, uAspect, uBgZoom;',
+GLSL_NOISE,
+'vec3 bandColor(float t){',
+'  vec3 c = vec3(0.52,0.79,0.74);',
+'  c = mix(c, vec3(0.17,0.60,0.70), smoothstep(0.02,0.13,t));',
+'  c = mix(c, vec3(0.05,0.31,0.53), smoothstep(0.11,0.30,t));',
+'  c = mix(c, vec3(0.018,0.145,0.315), smoothstep(0.28,0.55,t));',
+'  c = mix(c, vec3(0.007,0.048,0.105), smoothstep(0.52,0.80,t));',
+'  c = mix(c, vec3(0.0012,0.008,0.017), smoothstep(0.78,0.98,t));',
+'  return c;',
+'}',
+'void main(){',
+'  vec2 uv = vUv;',
+'  float asp = max(uAspect, 0.35);',
+'  float t = clamp(0.5 + (0.5 - uv.y)/max(0.35, uBgZoom) + uBob, 0.0, 1.6);',
+'  vec3 col = bandColor(t);',
+'  float mv = 1.0 - uStill*0.85;',
+'  float tm = uTime*mv;',
+'  float n1 = fbm2(vec2(uv.x*2.3*asp + tm*0.014, t*6.5 - tm*0.020));',
+'  float n2 = fbm2(vec2(uv.x*5.2*asp - tm*0.024, t*12.0 + tm*0.010));',
+'  float bands = (n1-0.5)*0.95 + (n2-0.5)*0.55;',
+'  col += bands * 0.058 * vec3(0.34,0.76,1.0) * (1.0 - t*0.72) * (1.0 + uClear*0.6);',
+'  float body = fbm2(vec2(uv.x*2.9*asp + tm*0.010, t*3.6));',
+'  col *= 1.0 - 0.26*smoothstep(0.52,1.0,t)*body;',
+'  float topMask = smoothstep(0.17, 0.0, t);',
+'  vec2 wc = vec2(0.5, 0.015 + sin(tm*0.22)*0.012);',
+'  vec2 wp = (uv - wc) * vec2(asp,1.0);',
+'  float wd = length(wp)/0.33;',
+'  float win = smoothstep(1.10,0.80,wd) * topMask;',
+'  float ca = fbm2(wp*8.5 + vec2(tm*0.05,-tm*0.09));',
+'  float ca2 = fbm2(wp*17.0 - vec2(tm*0.08,tm*0.05));',
+'  float cells = smoothstep(0.44,0.80,ca*0.65+ca2*0.45);',
+'  vec3 winCol = mix(vec3(0.42,0.80,0.90), vec3(1.0,0.98,0.86), cells);',
+'  col = mix(col, winCol, win*0.86);',
+'  col += vec3(1.0,0.95,0.80) * win * cells * 0.42;',
+'  col += vec3(0.70,0.95,1.0) * smoothstep(1.02,0.94,wd) * smoothstep(0.94,1.0,wd) * topMask * 0.25;',
+'  float spark = fbm2(vec2(uv.x*46.0*asp + tm*0.55, t*70.0));',
+'  col += vec3(1.0,0.96,0.84) * smoothstep(0.86,1.0,spark) * topMask * 0.5 * mv;',
+'  float gl2 = exp(-pow((t-0.0)*9.0,2.0)) * (0.6+0.4*sin(uv.x*3.1415*asp*2.0+tm*0.25));',
+'  col += vec3(0.55,0.86,0.92)*gl2*0.20*topMask;',
+'  vec2 vv = (uv-0.5)*vec2(mix(1.5,1.05,asp),1.0);',
+'  float vig = smoothstep(1.28,0.30,length(vv)*1.6);',
+'  col *= mix(0.55,1.0,vig);',
+'  col = pow(max(col,vec3(0.0)), vec3(0.94));',
+'  gl_FragColor = vec4(col,1.0);',
+'}'
+].join('\n');
+
+/* ---- 体积光柱 ---- */
+var SHAFT_VERT = [
+'varying vec2 vUv; varying float vWY;',
+'void main(){ vUv = uv; vec4 wp = modelMatrix*vec4(position,1.0); vWY = wp.y;',
+'  gl_Position = projectionMatrix*viewMatrix*wp; }'
+].join('\n');
+
+var SHAFT_FRAG = [
+'precision highp float;',
+'varying vec2 vUv; varying float vWY;',
+'uniform float uTime, uSeed, uOpacity, uStill;',
+GLSL_NOISE,
+'void main(){',
+'  float x = vUv.x, y = vUv.y;',
+'  float edge = smoothstep(0.0,0.50,x)*smoothstep(1.0,0.50,x);',
+'  edge = pow(edge,2.4);',
+'  float depthFade = smoothstep(-23.0, 19.0, vWY);',
+'  float wob = sin(y*5.0 + uTime*1.3 + uSeed*7.0)*0.5+0.5;',
+'  float wob2 = sin(x*9.0 - uTime*0.9 + uSeed*3.0)*0.5+0.5;',
+'  float flick = mix(0.55,1.0,wob*0.6+wob2*0.4);',
+'  float band = smoothstep(0.25,1.0, fbm2(vec2(x*4.0+uSeed*10.0, y*2.0 - uTime*0.12*(1.0-uStill*0.8))));',
+'  float a = edge * pow(y,1.25) * depthFade * flick * mix(0.55,1.0,band) * uOpacity * (1.0-smoothstep(0.92,1.0,y)*0.45);',
+'  vec3 col = mix(vec3(0.5,0.84,0.96), vec3(1.0,0.94,0.80), y*0.75);',
+'  gl_FragColor = vec4(col, a*0.62);',
+'}'
+].join('\n');
+
+/* ---- 温度跃层折射带 ---- */
+var TEMP_VERT = [
+'varying vec2 vUv;',
+'void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }'
+].join('\n');
+var TEMP_FRAG = [
+'precision highp float;',
+'varying vec2 vUv;',
+'uniform float uTime, uStill;',
+GLSL_NOISE,
+'void main(){',
+'  float y = vUv.y;',
+'  float n = fbm2(vec2(vUv.x*6.0 + uTime*0.05, y*10.0 - uTime*0.10*(1.0-uStill*0.8)));',
+'  float n2 = fbm2(vec2(vUv.x*14.0 - uTime*0.09, y*22.0));',
+'  float band = smoothstep(0.35,0.95,n*0.7+n2*0.5);',
+'  float vf = sin(y*3.14159);',
+'  float hf = smoothstep(0.0,0.22,vUv.x)*(1.0-smoothstep(0.78,1.0,vUv.x));',
+'  float lines = smoothstep(0.86,1.0,sin(y*46.0 + n*8.0 + uTime*0.4)*0.5+0.5);',
+'  float a = (band*vf*0.16 + lines*vf*0.10) * hf;',
+'  vec3 col = mix(vec3(0.35,0.78,1.0), vec3(0.85,0.95,1.0), band);',
+'  gl_FragColor = vec4(col, a*0.5);',
+'}'
+].join('\n');
+
+/* ---- 海雪 ---- */
+var SNOW_VERT = [
+'attribute vec4 aSeed;',
+'uniform float uTime, uStill, uDpr, uVortexR, uVortexOn, uClear;',
+'uniform vec2 uVortex;',
+'varying float vAlpha; varying float vBokeh; varying float vWarm;',
+'void main(){',
+'  float mv = 1.0 - uStill*0.9;',
+'  float sp = 0.28 + aSeed.w*0.85;',
+'  float y0 = aSeed.y*44.0;',
+'  float y = mod(y0 - uTime*sp*0.50*mv, 44.0);',
+'  float wy = 22.0 - y;',
+'  float x = (aSeed.x-0.5)*74.0 + sin(uTime*(0.20+aSeed.w*0.25)*mv + aSeed.w*6.283)*1.35;',
+'  float zt = aSeed.z*aSeed.z;',
+'  float z = -30.0 + zt*86.0;',
+'  if (uVortexOn > 0.5){',
+'    vec2 rel = vec2(x, wy) - uVortex;',
+'    float dist = length(rel);',
+'    float infl = smoothstep(uVortexR, 0.0, dist);',
+'    float ang = atan(rel.y, rel.x) + uTime*0.85*mv*infl;',
+'    float nd = mix(dist, dist*0.52, infl);',
+'    x = uVortex.x + cos(ang)*nd;',
+'    wy = uVortex.y + sin(ang)*nd;',
+'  }',
+'  vec4 world = vec4(x, wy, z, 1.0);',
+'  vec4 mvv = viewMatrix * world;',
+'  float dist2 = -mvv.z;',
+'  float size = (0.10 + aSeed.w*0.24) * uDpr * (620.0 / max(dist2, 6.0));',
+'  float depthN = clamp((22.0 - wy)/44.0, 0.0, 1.0);',
+'  float density = 1.0 - smoothstep(0.40, 1.0, depthN)*0.80;',
+'  vAlpha = density * (0.16 + aSeed.w*0.40) * (1.0 + uClear*0.45);',
+'  vBokeh = smoothstep(-4.0, 28.0, z);',
+'  vWarm = smoothstep(0.28, 0.0, depthN);',
+'  gl_PointSize = max(1.0, size * (1.0 + vBokeh*2.4));',
+'  gl_Position = projectionMatrix * mvv;',
+'}'
+].join('\n');
+
+var SNOW_FRAG = [
+'precision highp float;',
+'varying float vAlpha; varying float vBokeh; varying float vWarm;',
+'void main(){',
+'  vec2 d = gl_PointCoord - 0.5;',
+'  float r = length(d);',
+'  float core = smoothstep(0.5, 0.10, r);',
+'  float soft = smoothstep(0.5, 0.0, r);',
+'  float a = mix(core, soft*soft, vBokeh);',
+'  a *= vAlpha * mix(1.0, 0.34, vBokeh);',
+'  if (a < 0.004) discard;',
+'  vec3 col = mix(vec3(0.58,0.84,1.0), vec3(1.0,0.92,0.74), vWarm*0.7);',
+'  gl_FragColor = vec4(col, a);',
+'}'
+].join('\n');
+
+/* ---- 持续气泡 ---- */
+var BUB_VERT = [
+'attribute vec4 aSeed;',
+'uniform float uTime, uStill;',
+'varying float vA; varying float vT;',
+'void main(){',
+'  float mv = 1.0 - uStill*0.8;',
+'  float rise = 15.0 + aSeed.w*10.0;',
+'  float ph = fract(aSeed.z + uTime*(0.055+aSeed.w*0.05)*mv);',
+'  float y = -21.5 + ph*rise;',
+'  float spread = ph*rise*0.10;',
+'  float x = aSeed.x*7.0 + sin(uTime*(0.7+aSeed.w)+aSeed.y*6.283+ph*9.0)*0.55*(0.4+spread*0.5);',
+'  float z = -10.0 + aSeed.y*8.0;',
+'  vec4 mvv = viewMatrix*vec4(x,y,z,1.0);',
+'  float sz = (0.06+aSeed.w*0.11) * (1.0+ph*0.7);',
+'  gl_PointSize = sz * (760.0/max(-mvv.z,6.0));',
+'  vA = (1.0-smoothstep(0.55,1.0,ph)) * smoothstep(0.0,0.06,ph);',
+'  vT = ph;',
+'  gl_Position = projectionMatrix*mvv;',
+'}'
+].join('\n');
+var BUB_FRAG = [
+'precision highp float;',
+'varying float vA; varying float vT;',
+'void main(){',
+'  vec2 d = gl_PointCoord-0.5;',
+'  float r = length(d);',
+'  float ring = smoothstep(0.48,0.34,r) * smoothstep(0.10,0.30,r);',
+'  float hi = smoothstep(0.22,0.0,length(d-vec2(-0.12,0.12)))*0.7;',
+'  float a = (ring+hi)*vA*0.85;',
+'  a *= smoothstep(1.02,0.97,r);',
+'  if(a<0.004) discard;',
+'  gl_FragColor = vec4(vec3(0.72,0.93,1.0), a);',
+'}'
+].join('\n');
+
+/* ---- 爆发粒子（生物光 / 气泡簇） ---- */
+var BURST_VERT = [
+'attribute vec3 aDir; attribute float aRnd;',
+'uniform vec3 uOrigin;',
+'uniform float uAge, uDur, uSpread, uRise, uSize, uDpr;',
+'varying float vA; varying float vR;',
+'void main(){',
+'  float t = clamp(uAge/uDur, 0.0, 1.0);',
+'  float e = 1.0-pow(1.0-t, 2.4);',
+'  vec3 p = uOrigin + aDir*(uSpread*(0.25+aRnd*0.9)*e) + vec3(0.0, uRise*e*(-0.6+aRnd*1.4), 0.0);',
+'  p.x += sin(uAge*2.0 + aRnd*9.0)*0.10*e;',
+'  vec4 mvv = viewMatrix*vec4(p,1.0);',
+'  gl_PointSize = uSize*(0.4+aRnd*1.1)*(1.0-t*0.45)*uDpr*(760.0/max(-mvv.z,6.0));',
+'  vA = pow(1.0-t, 1.6);',
+'  vR = aRnd;',
+'  gl_Position = projectionMatrix*mvv;',
+'}'
+].join('\n');
+var BURST_FRAG = [
+'precision highp float;',
+'uniform vec3 uColor;',
+'varying float vA; varying float vR;',
+'void main(){',
+'  vec2 d = gl_PointCoord-0.5;',
+'  float r = length(d);',
+'  float core = smoothstep(0.5, 0.06, r);',
+'  float a = core*core*vA*(0.5+vR*0.7);',
+'  a *= smoothstep(1.02,0.97,r);',
+'  if(a<0.004) discard;',
+'  gl_FragColor = vec4(uColor*(0.7+vR*0.8), a);',
+'}'
+].join('\n');
+
+/* ---- 生物：鳐类身体 ---- */
+/* ---------- 几何工具 ---------- */
+function hash2(a, b){
+  var h = Math.sin(a*127.1 + b*311.7) * 43758.5453;
+  return h - Math.floor(h);
+}
+var GEO_CACHE = {};
+function cacheGeo(key, fn){
+  if (!GEO_CACHE[key]){
+    GEO_CACHE[key] = fn();
+    GEO_CACHE[key].userData.cached = true;
+  }
+  return GEO_CACHE[key];
+}
+
+/* 释放未被缓存复用的几何 / 材质（换模型时避免显存泄漏） */
+function disposeNode(o){
+  if (!o) return;
+  o.traverse(function(n){
+    if (n.geometry && !(n.geometry.userData && n.geometry.userData.cached)) n.geometry.dispose();
+    if (n.material) n.material.dispose();
+  });
+}
+
+/* ============================================================
+   生物曲面模型：网格 + 连续着色
+   ============================================================ */
+var SMOOTH_VERT = [
+'attribute float aU;',
+'attribute float aV;',
+'attribute float aTy;',
+'attribute float aSide;',
+'uniform float uTime, uFlapAmp, uFlapSpeed, uPhase, uRate, uPulse, uCurl, uSway, uKind;',
+/* 鱼类步态参数（见 SPECIES.swim）：波数 / 摆动起点 / 幅度包络 / 背腹摆动 / 划鳍 / 鳍波动 / 转向弯体 */
+'uniform float uWaveN, uAmp0, uAmpExp, uVert, uRow, uFinWave, uBend, uBeat, uRayWave;',
+'varying vec2 vUV;',
+'varying float vTy, vSide, vWY;',
+'varying vec3 vN, vView;',
+'void main(){',
+'  vec3 p = position;',
+'  float u = aU, v = aV, ty = aTy;',
+'  if (uKind < 0.5){',
+/* 鳐类：mobuliform 上下扇动 vs rajiform 沿体盘行进波 */
+'    float w = u;',
+'    float lift = uFlapAmp * w * w;',
+/* 翼弦方向给一点相位滞后：后缘比前缘慢半拍，翅膀才有「褶」而不是整块板在翻 */
+'    float fl = sin(uTime*uFlapSpeed + uPhase + w*2.6 + (v + 1.0)*0.42);',
+'    float rj = sin(uTime*uFlapSpeed*1.18 + uPhase - (v + 1.0)*3.1);',
+'    if (ty < 0.5){',
+'      p.z += (fl*(1.0 - uRayWave) + rj*uRayWave*1.15) * lift;',
+/* 每次下压身体被抬一下，整条鱼跟着起落 */
+'      p.y += fl * uFlapAmp * 0.10 - uCurl * w*w*1.2;',
+'    } else if (ty < 1.5){',
+'      p.z += fl * lift * 0.55;',
+'      p.x += sin(uTime*uFlapSpeed*0.85 + uPhase + v*3.2) * uSway * 0.28;',
+'    } else {',
+'      p.x += sin(uTime*uFlapSpeed*0.72 + uPhase + max(0.0, -v-1.0)*3.4) * max(0.0, -v-1.0) * 0.30;',
+'    }',
+'  } else if (uKind < 1.5){',
+'    float pu = sin(uTime*uRate + uPhase);',
+'    float rel = pu*0.5 + 0.5;',
+'    float k = 1.0 + (1.0 - rel) * uPulse;',
+'    if (ty < 0.5){',
+'      p.xz *= k;',
+'      p.y *= 1.0 - (1.0 - rel) * uPulse * 1.05;',
+'    } else if (ty < 1.5){',
+'      float d = v;',
+'      p.x += sin(uTime*uRate*0.82 + uPhase + u*6.283 + d*3.0) * d*d * uSway * 1.5;',
+'      p.z += cos(uTime*uRate*0.70 + uPhase + u*6.283 + d*2.6) * d*d * uSway * 1.5;',
+'      p.y -= (1.0 - rel) * uPulse * d * 1.1;',
+'    } else {',
+'      float d = v;',
+'      p.x += sin(uTime*uRate*0.58 + uPhase + u*6.283 + d*2.0) * d * uSway * 0.85;',
+'      p.z += cos(uTime*uRate*0.52 + uPhase + u*6.283 + d*1.7) * d * uSway * 0.85;',
+'      p.y -= (1.0 - rel) * uPulse * d * 0.9;',
+'    }',
+'  } else {',
+/* 鱼：沿体表的行进波。
+   uWaveN  体长之内可见的波数（鳗 ~1.4 全身扭 / 金枪鱼 ~0.5 只有尾柄在动）
+   uAmp0   开始摆动的位置（鲀 0.72：躯干完全不动，只有尾鳍像钟摆）
+   uAmpExp 幅度包络指数（越大越集中在尾部）
+   uVert   1 = 背腹方向摆动（鲸类，水平尾叶上下打水）
+   uBend   转弯时整条身体向弯内的静态弯曲，uRow 胸鳍划水，uFinWave 背鳍波动 */
+'    float tt = clamp(v, 0.0, 1.35);',
+'    float wA = pow(clamp((tt - uAmp0)/max(0.06, 1.15 - uAmp0), 0.0, 1.30), uAmpExp);',
+'    float phf = uTime*uFlapSpeed*5.0 + uPhase;',
+'    float wave = sin(phf - tt*uWaveN*6.2831853);',
+'    float wvf = (wave*uBeat + uBend*0.7) * uFlapAmp * wA;',
+'    if (ty < 1.5){',
+'      if (uVert > 0.5) p.y += wvf; else p.x += wvf;',
+'    } else if (ty < 2.5){',
+/* 背鳍 / 臀鳍：跟着身体走，另外整片鳍有沿体轴的波动（旗鱼的帆最明显） */
+'      float rip = sin(phf*0.55 + v*9.0 + u*2.0) * uFinWave * (0.20 + 0.80*u);',
+'      if (uVert > 0.5) { p.y += wvf*0.60; p.x += rip*0.45; }',
+'      else { p.x += wvf*0.60 + rip; p.y += sin(phf*1.02 + u*2.4) * uSway * 0.020; }',
+'    } else {',
+/* 胸鳍：左右相位相反地「划水」（labriform 悬停时主要靠它） */
+'      float rowPh = sin(phf*3.0 + aSide*3.14159);',
+'      if (uVert > 0.5) p.y += wvf*0.24; else p.x += wvf*0.24;',
+'      p.z += rowPh * uRow * u * 0.16;',
+'      p.y += rowPh * uRow * u * 0.07;',
+'    }',
+'  }',
+'  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+'  vec4 wp = modelMatrix * vec4(p, 1.0);',
+'  vWY = wp.y;',
+'  vUV = vec2(u, v);',
+'  vTy = ty;',
+'  vSide = aSide;',
+'  vec3 nrm = normalMatrix * normal;',
+'  float nl = length(nrm);',
+'  vN = nl > 0.0005 ? nrm / nl : vec3(0.0, 0.0, 1.0);',
+'  vView = normalize(-mv.xyz);',
+'  gl_Position = projectionMatrix * mv;',
+'}'
+].join('\n');
+
+var SMOOTH_FRAG = [
+'precision highp float;',
+'uniform float uPattern, uKind, uOpacity, uFogMul, uTime, uPhase, uLit;',
+'uniform vec3 uRim;',
+'varying vec2 vUV;',
+'varying float vTy, vSide, vWY;',
+'varying vec3 vN, vView;',
+GLSL_NOISE,
+'void main(){',
+'  float u = clamp(vUV.x, 0.0, 1.0);',
+'  float v = vUV.y;',
+'  bool belly = vSide > 0.5;',
+'  vec3 col = vec3(0.5);',
+'  float alpha = uOpacity;',
+'  if (uKind < 0.5){',
+/* ---------------- 鳐类 ---------------- */
+'    if (vTy > 1.5){',
+/* 尾 */
+'      col = mix(vec3(0.10,0.14,0.18), vec3(0.55,0.62,0.66), smoothstep(0.0,-1.9,v));',
+'      if (uPattern > 1.5) col = mix(vec3(0.62,0.46,0.28), vec3(0.20,0.62,0.72), step(0.55, fract(v*3.6)));',
+'      if (uPattern > 0.5 && uPattern < 1.5) col = mix(vec3(0.12,0.17,0.20), vec3(0.34,0.42,0.46), smoothstep(0.0,-2.4,v));',
+'    } else if (vTy > 0.5){',
+/* 头鳍 */
+'      col = vec3(0.16,0.21,0.26);',
+'      if (uPattern < 0.5) col = vec3(0.30,0.38,0.44);',
+'    } else if (belly){',
+/* 腹面 */
+'      col = vec3(0.545,0.615,0.670);',
+'      col *= 0.80 + 0.24*smoothstep(1.0, 0.12, u);',
+'      col *= 0.94 + 0.12*smoothstep(0.95,0.05,v);',
+'      col *= 1.0 - smoothstep(0.55,1.02,length(vec2(u*0.95,(v-0.20)*1.05)))*0.26;',
+'      float gill = abs(fract(v*7.0) - 0.5);',
+'      col *= 1.0 - smoothstep(0.09,0.0,gill)*smoothstep(0.62,0.30,u)*0.16;',
+'      if (uPattern < 0.5){',
+'        vec2 gb = vec2(u*9.0, v*7.0);',
+'        vec2 gbi = floor(gb);',
+'        float cb = hash21(gbi + vec2(4.3,1.7));',
+'        float db = smoothstep(0.24,0.09,length(fract(gb)-0.5));',
+'        col = mix(col, vec3(0.42,0.50,0.55), db*step(0.80,cb)*0.55);',
+'      }',
+'      col *= 0.90 + 0.14*smoothstep(1.0,0.3,u);',
+'      col += uRim * pow(clamp(1.0-abs(vN.y),0.0,1.0), 2.0) * 0.035;',
+'    } else {',
+/* 背面 */
+'      if (uPattern < 0.5){',
+'        col = vec3(0.200,0.245,0.290);',
+'        float dsh = length(vec2((u-0.54)*1.35, (v-0.36)*2.05));',
+'        col = mix(col, vec3(0.815,0.860,0.885), smoothstep(0.26,0.09,dsh)*0.94);',
+'        col *= 0.86 + 0.22*smoothstep(0.1,1.0,v);',
+'      } else if (uPattern < 1.5){',
+'        col = vec3(0.215,0.265,0.310);',
+'        float rr = sqrt(u*u*1.0 + v*v*0.34);',
+'        col = mix(col, vec3(0.60,0.80,0.88), smoothstep(0.085,0.02,abs(rr-0.60))*0.85);',
+'        col = mix(col, vec3(0.46,0.68,0.78), smoothstep(0.060,0.02,abs(rr-0.31))*0.70);',
+'        vec2 g = vec2(u*8.0, v*8.0);',
+'        vec2 gi = floor(g);',
+'        vec2 gj = vec2(hash21(gi+vec2(7.3,3.1)), hash21(gi+vec2(1.9,5.7)))-0.5;',
+'        float cell = hash21(gi+vec2(11.7,5.3));',
+'        float dt = smoothstep(0.24,0.06,length(fract(g)-0.5-gj*0.5));',
+'        col = mix(col, vec3(0.90,0.95,0.99), dt*step(0.50,cell)*0.92);',
+'      } else {',
+'        col = vec3(0.505,0.408,0.272);',
+'        col *= 0.88 + 0.20*smoothstep(0.0,1.0,u);',
+'        vec2 g2 = vec2(u*7.0, v*7.0);',
+'        vec2 gi2 = floor(g2);',
+'        vec2 gj2 = vec2(hash21(gi2+vec2(3.1,9.4)), hash21(gi2+vec2(1.7,4.2)))-0.5;',
+'        float c2 = hash21(gi2+vec2(21.3,13.7));',
+'        float sp = smoothstep(0.30,0.10,length(fract(g2)-0.5-gj2*0.55));',
+'        col = mix(col, vec3(0.16,0.80,1.0), sp*step(0.42,c2)*0.95);',
+'        float big = smoothstep(0.05,0.015,abs(length(vec2(u*1.5, v*1.05))-0.66));',
+'        col = mix(col, vec3(0.30,0.88,1.0), big*step(0.45,hash21(floor(vec2(u*3.0, v*3.0))))*0.8);',
+'      }',
+/* 眼睛（两侧对称） */
+'      float eye = length(vec2((u-0.50)*1.55, (v-0.63)*2.35));',
+'      col = mix(col, vec3(0.035,0.048,0.058), smoothstep(0.115,0.062,eye));',
+'      float spec2 = length(vec2((u-0.465)*1.55, (v-0.665)*2.35));',
+'      col = mix(col, vec3(1.0), smoothstep(0.040,0.012,spec2)*0.95);',
+/* 翼缘轮廓 */
+'      col = mix(col, vec3(0.09,0.12,0.15), smoothstep(0.93,0.999,u)*0.45);',
+'    }',
+'  } else if (uKind < 1.5){',
+/* ---------------- 水母 ---------------- */
+'    if (vTy < 0.5){',
+'      vec3 base = uPattern < 3.5 ? vec3(0.55,0.76,0.90) : vec3(0.86,0.58,0.24);',
+'      vec3 deep = uPattern < 3.5 ? vec3(0.24,0.44,0.63) : vec3(0.44,0.25,0.08);',
+'      col = mix(deep, base, smoothstep(0.0,0.85,u));',
+/* 放射管 */
+'      float sp8 = abs(fract(u*(uPattern < 3.5 ? 8.0 : 16.0) + 0.5)-0.5);',
+'      col = mix(col, uPattern < 3.5 ? vec3(0.88,0.96,1.0) : vec3(0.98,0.80,0.55),',
+'                smoothstep(0.10,0.02,sp8)*smoothstep(0.10,0.42,u)*0.85);',
+/* 海刺的锈色条纹 */
+'      if (uPattern > 3.5){',
+'        float st = abs(fract(u*12.0+0.5)-0.5);',
+'        col = mix(col, vec3(0.62,0.28,0.16), smoothstep(0.28,0.06,st)*smoothstep(0.25,0.75,u)*0.55);',
+'      }',
+/* 海月：四枚粉色马蹄生殖腺 */
+'      if (uPattern < 3.5){',
+'        float a4 = abs(fract(u*4.0+0.5)-0.5);',
+'        float dg = length(vec2(a4*2.2, (u-0.40)*1.5));',
+'        col = mix(col, vec3(1.0,0.52,0.72), smoothstep(0.14,0.02,abs(dg-0.17)));',
+'      }',
+/* 缘膜 */
+'      col = mix(col, uPattern < 3.5 ? vec3(0.55,0.80,0.93) : vec3(0.72,0.45,0.20), smoothstep(0.88,1.0,u)*0.7);',
+'      alpha *= 0.52 + 0.34*smoothstep(0.0,0.9,u);',
+/* 眼点 */
+'      float ea = abs(fract(u + 0.125)-0.5);',
+'      float ed = length(vec2(ea*3.4, (u-0.62)*3.0));',
+'      col = mix(col, vec3(0.06,0.08,0.10), smoothstep(0.10,0.04,ed)*0.9);',
+'    } else if (vTy < 1.5){',
+/* 触手 */
+'      float d = clamp(v, 0.0, 1.0);',
+'      col = uPattern < 3.5 ? vec3(0.80,0.94,1.0) : vec3(0.95,0.76,0.46);',
+'      alpha *= (1.0 - d*0.55) * 0.80 * uOpacity;',
+'    } else {',
+/* 口腕 */
+'      float d = clamp(v, 0.0, 1.0);',
+'      col = vec3(0.98,0.92,0.82);',
+'      float fold2 = sin(v*16.0 + u*6.283)*0.5+0.5;',
+'      col *= 0.86 + 0.22*fold2;',
+'      alpha *= (1.0 - d*0.35) * 0.72 * uOpacity;',
+'    }',
+'  } else {',
+/* ---------------- 鱼类 ---------------- */
+'    float dor = cos(u*6.2831853)*0.5 + 0.5;',
+'    vec3 backC = vec3(0.200,0.250,0.300), bellyC = vec3(0.520,0.570,0.610), finC = vec3(0.170,0.210,0.250);',
+'    if (uPattern > 5.5 && uPattern < 6.5){ backC = vec3(0.135,0.160,0.180); bellyC = vec3(0.600,0.640,0.660); finC = vec3(0.125,0.148,0.166); }',
+'    else if (uPattern > 6.5 && uPattern < 7.5){ backC = vec3(0.105,0.150,0.190); bellyC = vec3(0.550,0.600,0.630); finC = vec3(0.095,0.135,0.170); }',
+'    else if (uPattern > 7.5 && uPattern < 8.5){ backC = vec3(0.050,0.130,0.320); bellyC = vec3(0.520,0.600,0.660); finC = vec3(0.060,0.140,0.310); }',
+'    else if (uPattern > 8.5 && uPattern < 9.5){ backC = vec3(0.050,0.170,0.440); bellyC = vec3(0.250,0.380,0.580); finC = vec3(0.042,0.145,0.400); }',
+'    else if (uPattern > 9.5 && uPattern < 10.5){ backC = vec3(0.235,0.225,0.128); bellyC = vec3(0.760,0.740,0.650); finC = vec3(0.300,0.280,0.160); }',
+'    else if (uPattern > 10.5 && uPattern < 11.5){ backC = vec3(0.560,0.520,0.370); bellyC = vec3(0.870,0.845,0.700); finC = vec3(0.640,0.590,0.420); }',
+'    else if (uPattern > 11.5 && uPattern < 12.5){ backC = vec3(0.045,0.105,0.265); bellyC = vec3(0.710,0.750,0.770); finC = vec3(0.085,0.150,0.330); }',
+'    else if (uPattern > 12.5 && uPattern < 13.5){ backC = vec3(0.520,0.575,0.600); bellyC = vec3(0.780,0.820,0.840); finC = vec3(0.560,0.140,0.130); }',
+'    else if (uPattern > 13.5 && uPattern < 14.5){ backC = vec3(0.040,0.055,0.080); bellyC = vec3(0.190,0.230,0.255); finC = vec3(0.045,0.060,0.085); }',
+'    else if (uPattern > 14.5 && uPattern < 15.5){ backC = vec3(0.085,0.062,0.058); bellyC = vec3(0.150,0.105,0.095); finC = vec3(0.075,0.055,0.050); }',
+'    else if (uPattern > 15.5){ backC = vec3(0.038,0.033,0.036); bellyC = vec3(0.095,0.070,0.075); finC = vec3(0.045,0.038,0.040); }',
+'    float fs = clamp((v - 1.0)/0.17, 0.0, 1.0);',
+'    if (vTy < 0.5){',
+'      col = mix(bellyC, backC, smoothstep(0.40, 0.62, dor));',
+'      if (uPattern < 5.5){',
+/* 海豚：深色背脊 + 浅色体侧 */
+'        col = mix(col, backC*1.32, smoothstep(0.64, 0.96, dor)*0.55);',
+'        col = mix(col, bellyC*1.05, smoothstep(0.30, 0.62, dor)*smoothstep(0.70,0.92,dor)*0.25);',
+'        col = mix(col, bellyC*0.90, smoothstep(0.14, 0.02, v)*smoothstep(0.55,0.20,dor)*0.45);',
+'      } else if (uPattern < 6.5){',
+/* 鲨鱼：锐利分界 + 鳃裂 + 深色吻端 */
+'        col = mix(bellyC, backC, smoothstep(0.455, 0.535, dor));',
+'        float gs = abs(fract((v-0.175)*52.0) - 0.5);',
+'        col *= 1.0 - smoothstep(0.055, 0.0, gs)*smoothstep(0.155,0.185,v)*smoothstep(0.315,0.245,v)*smoothstep(0.30,0.10,dor)*0.55;',
+'        col = mix(col, backC*0.72, smoothstep(0.14,0.02,v)*0.5);',
+'      } else if (uPattern < 7.5){',
+/* 鲸鲨：白色斑点 + 纵向细纹 + 巨大口裂 */
+'        col = mix(bellyC, backC, smoothstep(0.38, 0.60, dor));',
+'        vec2 sp = vec2(v*24.0, u*10.0);',
+'        float spn = hash21(floor(sp) + vec2(3.7,1.3));',
+'        float spd = length(fract(sp) - 0.5);',
+'        col = mix(col, vec3(0.905,0.950,0.970), smoothstep(0.33,0.15,spd)*step(0.44,spn)*smoothstep(0.36,0.58,dor)*0.92);',
+'        col *= 1.0 - 0.16*smoothstep(0.55,0.75,dor)*step(0.55, fract(v*30.0));',
+'        col = mix(col, vec3(0.075,0.095,0.115), smoothstep(0.075,0.020,v)*smoothstep(0.62,0.30,dor));',
+'      } else if (uPattern < 8.5){',
+/* 旗鱼：深蓝背 + 银色纵带 */
+'        col = mix(bellyC, backC, smoothstep(0.34, 0.58, dor));',
+'        float bar = abs(fract(v*6.5 + 0.5) - 0.5);',
+'        col = mix(col, vec3(0.600,0.720,0.800), smoothstep(0.40,0.06,bar)*smoothstep(0.24,0.44,dor)*smoothstep(0.84,0.58,dor)*0.34);',
+'        col = mix(col, backC*0.80, smoothstep(0.62,0.92,dor)*0.55);',
+'      } else if (uPattern < 9.5){',
+/* 皇后神仙鱼：宝石蓝底 + 亮黄斜纹 + 黑色眼罩 */
+'        col = mix(bellyC, backC, smoothstep(0.34, 0.64, dor));',
+'        float ab = fract(v*4.2 + dor*0.62);',
+'        col = mix(col, vec3(0.930,0.795,0.300), smoothstep(0.30,0.15,ab)*smoothstep(0.12,0.34,dor)*0.88);',
+'        col = mix(col, vec3(0.020,0.032,0.070), smoothstep(0.26,0.13,v)*smoothstep(0.20,0.42,dor)*0.92);',
+'        col = mix(col, vec3(0.86,0.82,0.56), smoothstep(0.055,0.012,v)*smoothstep(0.24,0.46,dor)*0.70);',
+'      } else if (uPattern < 10.5){',
+/* 东方鲀：橄榄褐底 + 深色圆斑 + 白肚皮 */
+'        col = mix(bellyC, backC, smoothstep(0.14, 0.40, dor));',
+'        float mot = fbm2(vec2(v*7.0, u*11.0));',
+'        col = mix(col, vec3(0.120,0.112,0.070), smoothstep(0.50,0.66,mot)*smoothstep(0.08,0.30,dor)*0.85);',
+'        vec2 ps = vec2(v*13.0, u*7.0);',
+'        float pn = hash21(floor(ps) + vec2(5.1,2.7));',
+'        float pd = length(fract(ps) - 0.5);',
+'        col = mix(col, vec3(0.095,0.088,0.055), smoothstep(0.34,0.12,pd)*step(0.55,pn)*smoothstep(0.12,0.38,dor)*0.90);',
+'        col = mix(col, vec3(0.860,0.845,0.780), smoothstep(0.24,0.04,dor)*0.42);',
+'        col = mix(col, vec3(0.74,0.64,0.34), smoothstep(0.045,0.010,v)*smoothstep(0.18,0.40,dor)*0.55);',
+'      } else if (uPattern < 11.5){',
+/* 裸胸鳝：奶白底 + 深褐豹纹网斑 */
+'        col = mix(bellyC, backC, smoothstep(0.30, 0.64, dor));',
+'        float net = fbm2(vec2(v*8.0, u*3.6));',
+'        col = mix(col, vec3(0.072,0.064,0.048), smoothstep(0.44,0.56,net)*0.94);',
+'        col = mix(col, vec3(0.070,0.065,0.050), smoothstep(0.045,0.004,v)*0.85);',
+'        col *= 0.96 + 0.06*sin(u*18.0 + v*3.0);',
+'      } else if (uPattern < 12.5){',
+/* 黄鳍金枪鱼：深蓝背 + 银白腹 + 侧线黄带 */
+'        col = mix(bellyC, backC, smoothstep(0.42, 0.64, dor));',
+'        float yb = smoothstep(0.46,0.52,dor)*smoothstep(0.70,0.58,dor);',
+'        col = mix(col, vec3(0.930,0.790,0.250), yb*0.60);',
+'        col *= 0.95 + 0.09*sin(v*44.0);',
+'        col = mix(col, backC*0.82, smoothstep(0.72,0.96,dor)*0.55);',
+'      } else if (uPattern < 13.5){',
+/* 皇带鱼：银白缎带 + 背脊钢蓝 + 侧线一排暗色斑点 */
+'        col = mix(bellyC, backC, smoothstep(0.34, 0.78, dor));',
+'        col *= 0.94 + 0.10*sin(v*30.0 + u*1.4);',
+'        float dw = fbm2(vec2(v*22.0, u*2.6));',
+'        col = mix(col, vec3(0.250,0.310,0.380), smoothstep(0.56,0.74,dw)*smoothstep(0.44,0.18,dor)*0.42);',
+'        vec2 lp = vec2(v*46.0, u*3.0);',
+'        float ln = hash21(floor(lp) + vec2(2.3,7.1));',
+'        float ld = length(fract(lp)-0.5);',
+'        col = mix(col, vec3(0.120,0.170,0.230), smoothstep(0.28,0.09,ld)*step(0.55,ln)*smoothstep(0.16,0.34,dor)*smoothstep(0.60,0.40,dor)*0.70);',
+'        col = mix(col, vec3(0.070,0.085,0.100), smoothstep(0.050,0.006,v)*0.45);',
+'      } else if (uPattern < 14.5){',
+/* 蝰鱼：近黑的背 + 银亮的侧腹 + 腹缘发光器 + 一直张开的巨口 */
+'        col = mix(bellyC, backC, smoothstep(0.14, 0.46, dor));',
+'        col = mix(col, vec3(0.330,0.390,0.420), smoothstep(0.42,0.28,dor)*smoothstep(0.12,0.26,dor)*0.60);',
+'        float ph = smoothstep(0.22,0.06,dor);',
+'        vec2 pp = vec2(v*34.0, 0.5);',
+'        float pn2 = hash21(floor(pp)+vec2(4.1,2.9));',
+'        col += vec3(0.32,0.82,1.0) * smoothstep(0.20,0.05,length(fract(pp)-0.5)) * step(0.34,pn2) * ph * 0.60;',
+'        col = mix(col, vec3(0.010,0.012,0.016), smoothstep(0.11,0.012,v)*smoothstep(0.55,0.20,dor)*0.85);',
+'        col = mix(col, vec3(0.600,0.630,0.600), smoothstep(0.014,0.0,abs(v-0.085))*smoothstep(0.30,0.10,dor)*0.30);',
+'      } else if (uPattern < 15.5){',
+/* 深海鮟鱇：暗褐的裸皮 + 斑驳 + 巨大的嘴 */
+'        col = mix(bellyC, backC, smoothstep(0.20, 0.66, dor));',
+'        float am = fbm2(vec2(v*9.0, u*5.0));',
+'        col = mix(col, vec3(0.140,0.100,0.090), smoothstep(0.46,0.66,am)*0.65);',
+'        col = mix(col, vec3(0.030,0.024,0.024), smoothstep(0.17,0.02,v)*smoothstep(0.60,0.24,dor)*0.70);',
+'        col = mix(col, vec3(0.620,0.590,0.540), smoothstep(0.012,0.0,abs(v-0.175))*smoothstep(0.34,0.12,dor)*0.30);',
+'      } else {',
+/* 宽咽鱼：几乎全黑，只有一点点暗红 */
+'        col = mix(bellyC, backC, smoothstep(0.24, 0.70, dor));',
+'        col = mix(col, vec3(0.120,0.070,0.080), smoothstep(0.14,0.02,v)*smoothstep(0.62,0.28,dor)*0.55);',
+'        col *= 0.94 + 0.10*sin(v*18.0 + u*2.0);',
+'      }',
+/* 眼睛（两侧对称） */
+'      float ek = (uPattern > 14.5 && uPattern < 15.5) ? 1.85 : 1.0;',
+'      float ec = (uPattern > 14.5 && uPattern < 15.5) ? 0.180 : 0.118;',
+'      float dv = abs(v - ec);',
+'      float du = min(abs(u - 0.150), abs(u - 0.850));',
+'      float ed = length(vec2(du*2.4, dv*3.2))/ek;',
+'      col = mix(col, vec3(0.012,0.020,0.028), smoothstep(0.062, 0.030, ed));',
+'      col = mix(col, vec3(1.0), smoothstep(0.020, 0.004, length(vec2((du-0.014*ek)*3.6, (dv-0.017*ek)*3.6))/ek)*0.80);',
+'    } else if (vTy < 1.5){',
+/* 尾鳍 */
+'      col = finC * (1.05 + 0.16*fs);',
+'      if (uPattern > 5.5 && uPattern < 6.5) col = mix(col, vec3(0.045,0.055,0.062), smoothstep(0.45,0.95,fs)*0.70);',
+'      if (uPattern > 6.5 && uPattern < 7.5) col = mix(col, vec3(0.075,0.100,0.125), smoothstep(0.55,0.98,fs)*0.55);',
+'      if (uPattern > 8.5 && uPattern < 9.5) col = mix(col, vec3(0.930,0.800,0.330), smoothstep(0.35,0.90,fs)*0.85);',
+'      if (uPattern > 9.5 && uPattern < 10.5){ col = mix(col, vec3(0.560,0.520,0.300), smoothstep(0.30,0.85,fs)); alpha *= 0.90; }',
+'      if (uPattern > 10.5 && uPattern < 11.5){ col = mix(col, vec3(0.095,0.085,0.065), smoothstep(0.45,0.95,fs)*0.55); alpha *= 0.86; }',
+'      if (uPattern > 11.5 && uPattern < 12.5){ col = mix(col, vec3(0.930,0.800,0.270), smoothstep(0.25,0.80,fs)*0.75); col = mix(col, vec3(0.060,0.070,0.080), smoothstep(0.10,0.02,fs)*0.6); }',
+'      if (uPattern > 12.5 && uPattern < 13.5) col = mix(col, vec3(0.660,0.170,0.150), smoothstep(0.30,0.85,fs)*0.80);',
+'      if (uPattern > 13.5 && uPattern < 14.5) col = mix(col, vec3(0.070,0.090,0.110), 0.55);',
+'      if (uPattern > 15.5) alpha *= 0.90;',
+'      alpha *= 0.94;',
+'    } else if (vTy < 2.5){',
+/* 背鳍 / 臀鳍 */
+'      col = finC * 1.06;',
+'      if (uPattern > 7.5 && uPattern < 8.5) col = mix(col, vec3(0.090,0.240,0.520), 0.45);',
+'      if (uPattern > 8.5 && uPattern < 9.5) col = mix(col, vec3(0.870,0.760,0.300), smoothstep(0.55,0.98,fs)*0.80);',
+'      if (uPattern > 11.5 && uPattern < 12.5) col = mix(col, vec3(0.950,0.820,0.280), smoothstep(0.52,0.92,v));',
+'      if (uPattern > 12.5 && uPattern < 13.5){ col = mix(col, vec3(0.760,0.230,0.190), 0.85); alpha *= 0.94; }',
+
+'      if (uPattern > 15.5){ col = mix(col, vec3(0.420,0.130,0.150), 0.55); alpha *= 0.80; }',
+'      alpha *= 0.90;',
+'    } else {',
+/* 胸鳍 */
+'      col = finC * 0.98;',
+'      if (uPattern > 10.5 && uPattern < 11.5) alpha *= 0.40;',
+'      alpha *= 0.88;',
+'    }',
+'  }',
+/* 菲涅尔轮廓光 */
+'  float deepK = smoothstep(-1.0, -13.0, vWY);',
+/* 潜航时当作展柜打了光：压窄菲涅尔指数，轮廓更宽，黑鱼才不至于只是一团黑 */
+'  float fp = mix(3.4, 1.55, deepK * uLit);',
+'  float f = pow(clamp(1.0 - abs(dot(vN, normalize(vView))), 0.0, 1.0), fp);',
+'  col = mix(col, col*1.45 + uRim*0.070, deepK);',
+'  col += uRim * f * ((uKind < 0.5 ? 0.34 : 0.44) + deepK*0.95);',
+'  col += uRim * deepK * 0.050;',
+/* 一盏很弱的补光：只抬暗部，浅色的鱼不受影响 */
+'  float lum = dot(col, vec3(0.299,0.587,0.114));',
+'  col += vec3(0.30,0.52,0.72) * (0.24 * uLit * deepK * (1.0 - smoothstep(0.02, 0.22, lum)));',
+'  col *= 0.80 + 0.32 * max(0.0, vN.z);',
+/* 深度雾 */
+'  float dn = clamp((22.0 - vWY)/44.0, 0.0, 1.0);',
+'  col = mix(col, vec3(0.004,0.014,0.030), smoothstep(0.10,1.0,dn)*(0.80 - 0.46*uLit)*uFogMul);',
+'  if (alpha < 0.01) discard;',
+'  gl_FragColor = vec4(col, alpha);',
+'}'
+].join('\n');
+
+/* ---------- 鳐类平滑网格（封闭曲面） ---------- */
+function buildRaySmooth(spec){
+  var HW = spec.span*0.5, HL = spec.len*0.5;
+  var P = spec.prof;
+  function halfW(v){
+    if (v >= P[0][0]) return P[0][1];
+    for (var i=0;i<P.length-1;i++){
+      if (v <= P[i][0] && v >= P[i+1][0]){
+        var t = (v - P[i][0]) / (P[i+1][0] - P[i][0]);
+        return P[i][1] + (P[i+1][1] - P[i][1]) * t;
+      }
+    }
+    return P[P.length-1][1];
+  }
+
+  var pos=[], au=[], av=[], aty=[], asd=[], idx=[];
+  var nV = 0;
+
+  /* 主体：球体拓扑压扁成鳐盘（封闭曲面，背腹由法线自然区分） */
+  var sph = new THREE.SphereGeometry(1, 34, 22);
+  var sp = sph.attributes.position.array;
+  for (var i=0;i<sp.length;i+=3){
+    var px = sp[i], py = sp[i+1], pz = sp[i+2];
+    var v = pz;
+    var r = Math.sqrt(Math.max(1e-6, 1 - v*v));
+    var u = px / r;
+    var nz = py / r;
+    var uu = Math.min(1, Math.abs(u));
+    var vv = v*1.05;
+    var hw = Math.max(0.02, halfW(vv));
+    var thick = 0.150 * (1 - 0.68*uu*uu) * (1 - 0.28*Math.max(0, vv));
+    /* 翼尖轻微上反（海鳐真实形态），侧视时也不会变成一条薄片 */
+    var dihed = 0.18*uu*uu*HW;
+    var Z = nz * thick * Math.sqrt(Math.max(0, 1 - uu*uu*0.952)) + dihed;
+    pos.push(u * hw * HW, vv * HL, Z);
+    au.push(uu); av.push(vv); aty.push(0); asd.push(nz > 0 ? 0 : 1);
+  }
+  var si = sph.index.array;
+  for (i=0;i<si.length;i++) idx.push(si[i]);
+  nV = sp.length/3;
+  sph.dispose();
+
+  /* 附加片：头鳍 / 尾 */
+  function addSheet(wseg, hseg, mapper, ty){
+    var pg = new THREE.PlaneGeometry(1, 1, wseg, hseg);
+    var arr = pg.attributes.position.array;
+    var b0 = nV;
+    for (var k=0;k<arr.length;k+=3){
+      var m = mapper(arr[k] + 0.5, arr[k+1] + 0.5);
+      pos.push(m[0], m[1], m[2]);
+      au.push(m[3]); av.push(m[4]); aty.push(ty); asd.push(0);
+    }
+    var ia = pg.index.array;
+    for (var q=0;q<ia.length;q++) idx.push(b0 + ia[q]);
+    nV += arr.length/3;
+    pg.dispose();
+  }
+
+  if (spec.pattern === 0 || spec.pattern === 1){
+    var hw0 = halfW(1.0);
+    for (var sg=-1; sg<=1; sg+=2){
+      (function(sgn){
+        addSheet(4, 3, function(fx, fy){
+          return [
+            sgn*(hw0*HW*(0.26 + fx*0.50)),
+            (0.92 + fy*0.38)*HL,
+            0.06 - fx*0.04,
+            0.42 + fx*0.30,
+            1.0 + fy*0.22
+          ];
+        }, 1);
+      })(sg);
+    }
+  }
+
+  var tailLen = spec.pattern === 1 ? 4.6 : (spec.pattern === 2 ? 2.3 : 1.6);
+  var tailW = spec.pattern === 1 ? 1.0 : 0.85;
+  addSheet(2, 22, function(fx, fy){
+    var wdt = (0.125 - 0.098*fy) * tailW;
+    return [ (fx-0.5)*2*wdt, -HL - fy*tailLen, 0, fx, -1 - fy ];
+  }, 2);
+
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('aU', new THREE.Float32BufferAttribute(au,1));
+  g.setAttribute('aV', new THREE.Float32BufferAttribute(av,1));
+  g.setAttribute('aTy', new THREE.Float32BufferAttribute(aty,1));
+  g.setAttribute('aSide', new THREE.Float32BufferAttribute(asd,1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
+}
+
+/* ---------- 水母平滑网格 ---------- */
+function buildJellySmooth(spec){
+  var R = spec.bell, H = spec.bell*(spec.pattern === 3 ? 0.84 : 1.14);
+  var pos=[], au=[], av=[], aty=[], asd=[], idx=[];
+  var nV = 0;
+  var NA = 40, NV = 14;
+  var thetaMax = 1.96;
+  /* 伞体 */
+  for (var i=0;i<=NV;i++){
+    var tv = i/NV;
+    var th = tv*thetaMax;
+    var r = Math.sin(th)*R;
+    var y = Math.cos(th)*H;
+    if (tv > 0.86){
+      var k = (tv-0.86)/0.14;
+      r *= 1.0 - k*0.12;
+      y -= k*H*0.12;
+    }
+    for (var j=0;j<=NA;j++){
+      var a = (j/NA)*TAU;
+      pos.push(Math.cos(a)*r, y, Math.sin(a)*r);
+      au.push(j/NA); av.push(tv); aty.push(0); asd.push(0);
+    }
+  }
+  for (i=0;i<NV;i++){
+    for (j=0;j<NA;j++){
+      var a0 = i*(NA+1) + j;
+      idx.push(a0, a0+(NA+1), a0+1, a0+1, a0+(NA+1), a0+(NA+1)+1);
+    }
+  }
+  nV += (NV+1)*(NA+1);
+
+  /* 触手：每条两片交叉窄带 */
+  var tCount = spec.pattern === 3 ? 16 : 12;
+  var tLen = spec.pattern === 3 ? H*1.55 : H*2.05;
+  var ry = Math.cos(thetaMax)*H;
+  var rr = Math.sin(thetaMax)*R;
+  for (var t=0;t<tCount;t++){
+    var ta = (t/tCount)*TAU + hash2(t*1.7, 3.1)*0.20;
+    var cx = Math.cos(ta)*rr, cz = Math.sin(ta)*rr;
+    var wid = spec.pattern === 3 ? 0.050*R : 0.036*R;
+    for (var cr=0; cr<2; cr++){
+      var dx = cr===0 ? -Math.sin(ta) : Math.cos(ta);
+      var dz = cr===0 ?  Math.cos(ta) : Math.sin(ta);
+      var base2 = nV, SEGS = 12;
+      for (var q=0;q<=SEGS;q++){
+        var qq = q/SEGS;
+        var ww = wid*(1 - qq*0.62);
+        var yy = ry - qq*tLen;
+        pos.push(cx-dx*ww, yy, cz-dz*ww); au.push(t/tCount); av.push(qq); aty.push(1); asd.push(0);
+        pos.push(cx+dx*ww, yy, cz+dz*ww); au.push(t/tCount); av.push(qq); aty.push(1); asd.push(0);
+      }
+      for (q=0;q<SEGS;q++){
+        var a2 = base2 + q*2;
+        idx.push(a2, a2+1, a2+2, a2+1, a2+3, a2+2);
+      }
+      nV += (SEGS+1)*2;
+    }
+  }
+
+  /* 口腕（海刺） */
+  if (spec.pattern !== 3){
+    for (var ar=0; ar<5; ar++){
+      var aa = (ar/5)*TAU + 0.4;
+      var base3 = nV, SEG = 10;
+      for (var q2=0;q2<=SEG;q2++){
+        var qq2 = q2/SEG;
+        var rr2 = R*(0.20 + qq2*0.30);
+        var ww2 = R*0.115*(1 - qq2*0.30);
+        var yy2 = -H*0.06 - qq2*H*1.15;
+        var cxx = Math.cos(aa)*rr2, czz = Math.sin(aa)*rr2;
+        var dx2 = -Math.sin(aa), dz2 = Math.cos(aa);
+        pos.push(cxx-dx2*ww2, yy2, czz-dz2*ww2); au.push(ar/5); av.push(qq2); aty.push(2); asd.push(0);
+        pos.push(cxx+dx2*ww2, yy2, czz+dz2*ww2); au.push(ar/5); av.push(qq2); aty.push(2); asd.push(0);
+      }
+      for (var q3=0;q3<SEG;q3++){
+        var a3 = base3 + q3*2;
+        idx.push(a3, a3+1, a3+2, a3+1, a3+3, a3+2);
+      }
+      nV += (SEG+1)*2;
+    }
+  }
+
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('aU', new THREE.Float32BufferAttribute(au,1));
+  g.setAttribute('aV', new THREE.Float32BufferAttribute(av,1));
+  g.setAttribute('aTy', new THREE.Float32BufferAttribute(aty,1));
+  g.setAttribute('aSide', new THREE.Float32BufferAttribute(asd,1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
+}
+
+/* ---------- 鱼类平滑网格（躯干环带 + 鳍片） ---------- */
+function buildFishSmooth(spec){
+  var L = spec.len, P = spec.body, F = spec.fins || {};
+  var pos=[], au=[], av=[], aty=[], asd=[], idx=[];
+  var nV = 0, i, j;
+
+  function profAt(t){
+    t = clamp(t, 0, 1);
+    for (var q=0;q<P.length-1;q++){
+      if (t >= P[q][0] && t <= P[q+1][0]){
+        var k = (t - P[q][0]) / Math.max(1e-6, P[q+1][0]-P[q][0]);
+        return [ lerp(P[q][1],P[q+1][1],k), lerp(P[q][2],P[q+1][2],k), lerp(P[q][3],P[q+1][3],k) ];
+      }
+    }
+    var e = P[P.length-1];
+    return [e[1], e[2], e[3]];
+  }
+  function zAt(t){ return -L*0.5 + t*L*0.90; }
+
+  /* 躯干：沿体轴的环带（吻端略呈尖点，尾柄收细） */
+  var NS = 30, NR = 16;
+  for (i=0;i<=NS;i++){
+    var t = i/NS, pr = profAt(t);
+    var hh = pr[0]*L, hw = pr[1]*L, cy = pr[2]*L, z = zAt(t);
+    for (j=0;j<=NR;j++){
+      var a = (j/NR)*TAU;
+      pos.push(Math.sin(a)*hw, cy + Math.cos(a)*hh, z);
+      au.push(j/NR); av.push(t); aty.push(0); asd.push(0);
+    }
+  }
+  for (i=0;i<NS;i++){
+    for (j=0;j<NR;j++){
+      var b0 = i*(NR+1)+j, b1 = b0+(NR+1);
+      idx.push(b0, b1, b0+1, b0+1, b1, b1+1);
+    }
+  }
+  nV += (NS+1)*(NR+1);
+
+  function addPatch(nu, nv, fn, ty, sd){
+    var base = nV, ii, jj;
+    for (ii=0;ii<=nu;ii++){
+      for (jj=0;jj<=nv;jj++){
+        var m = fn(ii/nu, jj/nv);
+        pos.push(m[0], m[1], m[2]);
+        au.push(m[3]); av.push(m[4]); aty.push(ty); asd.push(sd || 0);
+      }
+    }
+    for (ii=0;ii<nu;ii++){
+      for (jj=0;jj<nv;jj++){
+        var a0 = base + ii*(nv+1) + jj, a1 = a0 + (nv+1);
+        idx.push(a0, a1, a0+1, a0+1, a1, a1+1);
+      }
+    }
+    nV += (nu+1)*(nv+1);
+  }
+
+  /* 尾鳍：鲨类为竖立的叉形尾，海豚为水平尾叶 */
+  var cd = F.caudal;
+  if (cd){
+    var zr = zAt(1.0) - L*0.004;
+    var dep = (cd.depth||0.13)*L, nt = cd.notch==null ? 0.55 : cd.notch;
+    if (cd.kind === 'h'){
+      var spd2 = (cd.spread||0.20)*L;
+      addPatch(7, 8, function(s, q){
+        var fx2 = q*2-1;
+        var lobe = Math.pow(Math.abs(fx2), 0.75);
+        var zTrail = zr + dep*(0.28 + 0.72*(1 - nt*(1-lobe)));
+        var zz = lerp(zr + dep*0.05, zTrail, s);
+        var yy = profAt(1)[2]*L + Math.abs(fx2)*L*0.012 + s*L*0.004;
+        return [ fx2*spd2, yy, zz, s, 1.0 + s*0.16 ];
+      }, 1);
+    } else {
+      var upE = (cd.up||0.20)*L, dnE = (cd.dn||0.14)*L;
+      addPatch(7, 8, function(s, q){
+        var lobe = Math.pow(Math.abs(q-0.5)/0.5, 0.72);
+        var zTrail = zr + dep*(0.22 + 0.78*(1 - nt*(1-lobe)));
+        var zz = lerp(zr + dep*0.04, zTrail, s);
+        var yy = -dnE*(0.30+0.70*s) + (upE*(0.30+0.70*s) + dnE*(0.30+0.70*s))*q;
+        return [ 0, yy, zz, s, 1.0 + s*0.17 ];
+      }, 1);
+    }
+  }
+
+  /* 背鳍 / 臀鳍：竖立薄片，tip 后掠 */
+  function addFinV(f, sign){
+    if (!f) return;
+    var hmax = (f.h||0.1)*L, pk = f.peak==null ? 0.35 : f.peak, sw = (f.sweep||0)*L;
+    addPatch(4, 8, function(s, q){
+      var t = lerp(f.t0, f.t1, q);
+      var pr = profAt(t);
+      var baseY = pr[2]*L + sign*pr[0]*L*0.90;
+      var hp = q < pk ? Math.pow(q/pk, 0.72) : Math.pow((1-q)/(1-pk), 1.30);
+      var hh = hmax * Math.max(0, hp);
+      return [ 0, baseY + sign*hh*s, zAt(t) + sw*s, s, t ];
+    }, 2);
+  }
+  addFinV(F.dorsal, 1);
+  addFinV(F.dorsal2, 1);
+  addFinV(F.anal, -1);
+
+  /* 胸鳍：两侧外展 */
+  var pc = F.pec;
+  if (pc){
+    for (var sg=-1; sg<=1; sg+=2){
+      (function(sgn){
+        addPatch(3, 4, function(s, q){
+          var t = pc.t + q*0.05;
+          var pr = profAt(t);
+          var xx = sgn*(pr[1]*L*0.78 + s*(pc.len||0.14)*L*(0.60 + 0.40*Math.sin(q*Math.PI)));
+          var yy = pr[2]*L - s*(pc.drop||0.04)*L - q*0.012*L;
+          var zz = zAt(t) + s*(pc.sweep||0.08)*L + q*L*0.055;
+          return [ xx, yy, zz, s, pc.t ];
+        }, 3, sgn);
+      })(sg);
+    }
+  }
+
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('aU', new THREE.Float32BufferAttribute(au,1));
+  g.setAttribute('aV', new THREE.Float32BufferAttribute(av,1));
+  g.setAttribute('aTy', new THREE.Float32BufferAttribute(aty,1));
+  g.setAttribute('aSide', new THREE.Float32BufferAttribute(asd,1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
+}
+
+/* ---------- 平滑地形 / 烟囱 / 鲸落 / 鱼 ---------- */
+/* 海底的几层山脊和鲸落骨架都是纯色顶点材质，没有雾可吃。
+   潜航到深处时把它们整体压暗，否则海底会比鱼还亮。 */
+var abyssMats = [];
+function makeSmoothRidge(opts){
+  var half = opts.half, base = opts.base, amp = opts.amp, seed = opts.seed;
+  var N = 150, bottom = base - 16;
+  var pos=[], col=[], idx=[];
+  var cTop = new THREE.Color(opts.topC).multiplyScalar(0.62);
+  var cMid = new THREE.Color(opts.c).multiplyScalar(0.80);
+  var cBot = new THREE.Color(opts.c2).multiplyScalar(0.80);
+  for (var i=0;i<=N;i++){
+    var x = -half + (i/N)*half*2;
+    var n = Math.sin(i*0.13+seed)*0.5 + Math.sin(i*0.41+seed*2.7)*0.28 + Math.sin(i*0.062+seed*1.3)*0.85;
+    var ny = Math.sin(i*1.27+seed*3.1)*0.06;
+    var top = base + n*amp + ny;
+    pos.push(x, top, 0);              col.push(cTop.r, cTop.g, cTop.b);
+    pos.push(x, (top+bottom)*0.55, 0); col.push(cMid.r, cMid.g, cMid.b);
+    pos.push(x, bottom, 0);            col.push(cBot.r, cBot.g, cBot.b);
+  }
+  for (i=0;i<N;i++){
+    var a = i*3, b = a+3;
+    idx.push(a, b, a+1,  a+1, b, b+1);
+    idx.push(a+1, b+1, a+2,  a+2, b+1, b+2);
+  }
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  var _rm = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  abyssMats.push(_rm);
+  var m = new THREE.Mesh(g, _rm);
+  m.frustumCulled = false;
+  var grp = new THREE.Group();
+  grp.add(m);
+  return grp;
+}
+
+function makeSmoothChimney(x, y, h, w, z){
+  var grp = new THREE.Group();
+  var geo = new THREE.CylinderGeometry(w*0.30, w*0.95, h, 10, 1, true);
+  var m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: 0x061420, side: THREE.DoubleSide, transparent: true, opacity: 0.96
+  }));
+  m.position.set(x, y + h*0.5, z);
+  grp.add(m);
+  var lip = new THREE.Mesh(new THREE.SphereGeometry(w*0.34, 12, 8), new THREE.MeshBasicMaterial({
+    color: 0x2e7f9e, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false
+  }));
+  lip.position.set(x, y + h + w*0.12, z);
+  lip.scale.y = 0.55;
+  grp.add(lip);
+  return grp;
+}
+
+function makeSmoothWhale(){
+  var grp = new THREE.Group();
+  var mat = new THREE.MeshBasicMaterial({ color: 0x1b4a60, transparent: true, opacity: 0.95 });
+  abyssMats.push(mat);
+  var pts = [];
+  for (var i=0;i<=12;i++){
+    var t = i/12;
+    pts.push(new THREE.Vector3(-4.0 + t*7.6, Math.sin(t*3.0)*0.30, 0));
+  }
+  var curve = new THREE.CatmullRomCurve3(pts);
+  var spine = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.13, 6, false), mat);
+  grp.add(spine);
+  var head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 10), mat);
+  head.position.set(-4.2, 0.05, 0);
+  head.scale.set(1.25, 0.72, 0.9);
+  grp.add(head);
+  for (var r=0;r<8;r++){
+    var rt = 0.16 + r*0.095;
+    var p = curve.getPoint(clamp(rt, 0, 1));
+    var rad = 0.80 + Math.sin(r*0.9)*0.24;
+    for (var sg=-1; sg<=1; sg+=2){
+      var rp = [];
+      for (var k=0;k<=7;k++){
+        var ang = (k/7)*Math.PI*0.58;
+        rp.push(new THREE.Vector3(p.x, p.y - Math.cos(ang)*rad*0.85 + rad*0.85, sg*Math.sin(ang)*rad*0.82));
+      }
+      var rc = new THREE.CatmullRomCurve3(rp);
+      var rib = new THREE.Mesh(new THREE.TubeGeometry(rc, 12, 0.055, 5, false), mat);
+      grp.add(rib);
+    }
+  }
+  grp.position.set(6.5, -20.4, -11);
+  grp.rotation.z = 0.18;
+  return grp;
+}
+
+function makeFishSmoothGeo(){
+  var s = new THREE.Shape();
+  s.moveTo(0, 0.52);
+  s.bezierCurveTo(0.13, 0.30, 0.15, -0.06, 0.055, -0.30);
+  s.lineTo(0.165, -0.66);
+  s.lineTo(0.0, -0.44);
+  s.lineTo(-0.165, -0.66);
+  s.lineTo(-0.055, -0.30);
+  s.bezierCurveTo(-0.15, -0.06, -0.13, 0.30, 0, 0.52);
+  var g = new THREE.ShapeGeometry(s, 8);
+  g.computeBoundingSphere();
+  return g;
+}
+
+var RING_VERT = [
+'varying vec2 vUv;',
+'void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }'
+].join('\n');
+var RING_FRAG = [
+'precision highp float;',
+'varying vec2 vUv;',
+'uniform float uAge, uDur;',
+'void main(){',
+'  vec2 d = vUv-0.5;',
+'  float r = length(d)*2.0;',
+'  float t = clamp(uAge/uDur,0.0,1.0);',
+'  float ringR = t*0.92;',
+'  float w = 0.055*(1.0-t*0.55);',
+'  float a = smoothstep(w, 0.0, abs(r-ringR)) * pow(1.0-t, 1.5);',
+'  a += smoothstep(1.0,0.5,r)*pow(1.0-t,3.0)*0.10;',
+'  a *= smoothstep(1.02,0.97,r);',
+'  if(a<0.004) discard;',
+'  gl_FragColor = vec4(vec3(0.55,0.92,1.0), a*0.85);',
+'}'
+].join('\n');
+
+/* ---- 旋涡 ---- */
+var VORTEX_VERT = [
+'varying vec2 vUv;',
+'void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }'
+].join('\n');
+var VORTEX_FRAG = [
+'precision highp float;',
+'varying vec2 vUv;',
+'uniform float uTime, uOn;',
+'void main(){',
+'  vec2 d = vUv-0.5;',
+'  float r = length(d)*2.0;',
+'  float ang = atan(d.y,d.x);',
+'  float spiral = sin(ang*3.0 - r*9.0 + uTime*1.6)*0.5+0.5;',
+'  float ring = smoothstep(1.0,0.86,r)*smoothstep(0.35,0.62,r);',
+'  float a = (ring*0.55 + spiral*ring*0.55) * uOn * 0.55;',
+'  a += exp(-pow((r-1.0)/0.045,2.0))*uOn*0.30;',
+'  a *= smoothstep(1.02,0.97,r);',
+'  if(a<0.004) discard;',
+'  gl_FragColor = vec4(vec3(0.62,0.94,1.0), a);',
+'}'
+].join('\n');
+
+/* ============================================================
+   2. 渲染器 / 相机 / 场景
+   ============================================================ */
+var canvas = document.getElementById('gl');
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+var baseDPR = Math.min(window.devicePixelRatio || 1, 2);
+renderer.setPixelRatio(baseDPR);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.autoClear = false;
+renderer.setClearColor(0x01050a, 1);
+
+var FOV = 38;
+var camera = new THREE.PerspectiveCamera(FOV, window.innerWidth/window.innerHeight, 0.5, 400);
+var CAM_DIST = (WORLD_H*0.5)/Math.tan(FOV*0.5*Math.PI/180);
+camera.position.set(0, 0, CAM_DIST);
+
+var scene = new THREE.Scene();
+var bgScene = new THREE.Scene();
+var bgCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+
+var U = {
+  uTime: { value: 0 },
+  uStill: { value: 0 },
+  uClear: { value: 0 },
+  uAspect: { value: 1 },
+  uBgBob: { value: 0 },
+  uBgZoom: { value: 1 },
+  uLit: { value: 0 },
+  uDpr: { value: baseDPR },
+  uShaft: { value: 1 },
+  uVortex: { value: new THREE.Vector2(0, 7) },
+  uVortexR: { value: 6.5 },
+  uVortexOn: { value: 0 }
+};
+
+var state = {
+  time: 0, bob: 0,
+  still: 0, stillT: 0,
+  clear: 0, clearT: 0,
+  shaft: 1,
+  vortexOn: false,
+  soundOn: false,
+  uiHidden: false,
+  q: 1,
+  fps: 60, frames: 0, lastT: 0
+};
+
+/* ---------- 自由视角（上下 / 左右 / 前后） ---------- */
+var CAM_X_LIM = 20, CAM_Y_LIM = 19, CAM_Z_NEAR = -42, CAM_Z_FAR = 34;
+var cam = {
+  tx: 0, ty: 0, tz: 0,          // 目标偏移
+  x: 0, y: 0, z: 0,             // 当前偏移（平滑）
+  roam: true,                   // 自动巡游漂移
+  held: false,                  // 用户是否正在接管
+  holdT: 0,
+  autoX: 0, autoY: 0, autoZ: 0
+};
+function camClamp(){
+  cam.tx = clamp(cam.tx, -CAM_X_LIM, CAM_X_LIM);
+  cam.ty = clamp(cam.ty, -CAM_Y_LIM, CAM_Y_LIM);
+  cam.tz = clamp(cam.tz, CAM_Z_NEAR, CAM_Z_FAR);
+}
+function camReset(){
+  cam.tx = 0; cam.ty = 0; cam.tz = 0;
+  cam.held = false; cam.holdT = 0;
+  stopAuto();
+}
+// 每像素对应的世界单位（随相机前后变化）
+function pxToWorld(){
+  return (WORLD_H * (camera.position.z / CAM_DIST)) / Math.max(1, window.innerHeight);
+}
+function camNudge(dx, dy){
+  cam.tx -= dx; cam.ty += dy; camClamp();
+  cam.held = true; cam.holdT = state.time;
+}
+function camDolly(d){
+  cam.tz = clamp(cam.tz + d, CAM_Z_NEAR, CAM_Z_FAR);
+  cam.held = true; cam.holdT = state.time;
+}
+
+/* ---------- 背景 ---------- */
+var bgMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: U.uTime, uBob: U.uBgBob, uStill: U.uStill,
+    uClear: U.uClear, uAspect: U.uAspect, uBgZoom: U.uBgZoom
+  },
+  vertexShader: BG_VERT,
+  fragmentShader: BG_FRAG,
+  depthTest: false, depthWrite: false
+});
+var bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2,2), bgMat);
+bgMesh.frustumCulled = false;
+bgScene.add(bgMesh);
+
+/* ---------- 体积光柱 ---------- */
+var shaftGroup = new THREE.Group();
+var shaftMats = [];
+(function buildShafts(){
+  var defs = [
+    { x:-13.0, w:7.5, h:46, rot: 0.10, op:0.85, seed:0.11 },
+    { x: -5.5, w:5.0, h:44, rot:-0.05, op:1.00, seed:0.37 },
+    { x:  1.2, w:9.0, h:48, rot: 0.07, op:0.72, seed:0.63 },
+    { x:  8.0, w:4.2, h:42, rot:-0.11, op:0.95, seed:0.88 },
+    { x: 14.5, w:6.6, h:45, rot: 0.14, op:0.66, seed:1.24 },
+    { x: -3.0, w:3.0, h:40, rot: 0.03, op:0.55, seed:1.61 },
+    { x:  5.4, w:2.4, h:38, rot:-0.02, op:0.48, seed:1.92 }
+  ];
+  for (var i=0;i<defs.length;i++){
+    var d = defs[i];
+    var m = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: U.uTime, uStill: U.uStill,
+        uSeed: { value: d.seed },
+        uOpacity: { value: d.op }
+      },
+      vertexShader: SHAFT_VERT,
+      fragmentShader: SHAFT_FRAG,
+      transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, depthTest: false, side: THREE.DoubleSide
+    });
+    shaftMats.push(m);
+    var mesh = new THREE.Mesh(new THREE.PlaneGeometry(d.w, d.h), m);
+    mesh.position.set(d.x, 22 - d.h*0.5 + 2, -14 + i*0.9);
+    mesh.rotation.z = d.rot*1.9;
+    mesh.renderOrder = 2;
+    mesh.userData.baseOp = d.op;
+    shaftGroup.add(mesh);
+  }
+})();
+scene.add(shaftGroup);
+
+/* ---------- 温度跃层 ---------- */
+var tempMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: U.uTime, uStill: U.uStill },
+  vertexShader: TEMP_VERT, fragmentShader: TEMP_FRAG,
+  transparent: true, blending: THREE.AdditiveBlending,
+  depthWrite: false, depthTest: false, side: THREE.DoubleSide
+});
+var tempMesh = new THREE.Mesh(new THREE.PlaneGeometry(88, 8.5), tempMat);
+tempMesh.position.set(0, depthToY(470), -12);
+tempMesh.renderOrder = 1;
+scene.add(tempMesh);
+
+/* ---------- 海雪 ---------- */
+var SNOW_N = 15000;
+var snowGeo = new THREE.BufferGeometry();
+(function(){
+  var pos = new Float32Array(SNOW_N*3);
+  var seed = new Float32Array(SNOW_N*4);
+  for (var i=0;i<SNOW_N;i++){
+    pos[i*3] = rand(-28,28); pos[i*3+1] = rand(-22,22); pos[i*3+2] = rand(-32,6);
+    seed[i*4] = Math.random(); seed[i*4+1] = Math.random();
+    seed[i*4+2] = Math.random(); seed[i*4+3] = Math.random();
+  }
+  snowGeo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  snowGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed,4));
+})();
+var snowMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: U.uTime, uStill: U.uStill, uDpr: U.uDpr, uClear: U.uClear,
+    uVortex: U.uVortex, uVortexR: U.uVortexR, uVortexOn: U.uVortexOn
+  },
+  vertexShader: SNOW_VERT, fragmentShader: SNOW_FRAG,
+  transparent: true, blending: THREE.AdditiveBlending,
+  depthWrite: false, depthTest: true
+});
+var snow = new THREE.Points(snowGeo, snowMat);
+snow.frustumCulled = false;
+snow.renderOrder = 3;
+scene.add(snow);
+
+/* ---------- 深渊气泡 ---------- */
+var BUB_N = 420;
+var bubGeo = new THREE.BufferGeometry();
+(function(){
+  var pos = new Float32Array(BUB_N*3);
+  var seed = new Float32Array(BUB_N*4);
+  for (var i=0;i<BUB_N;i++){
+    pos[i*3]=0; pos[i*3+1]=0; pos[i*3+2]=0;
+    seed[i*4] = rand(-1,1); seed[i*4+1] = Math.random();
+    seed[i*4+2] = Math.random(); seed[i*4+3] = Math.random();
+  }
+  bubGeo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  bubGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed,4));
+})();
+var bubMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: U.uTime, uStill: U.uStill },
+  vertexShader: BUB_VERT, fragmentShader: BUB_FRAG,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+});
+var bubbles = new THREE.Points(bubGeo, bubMat);
+bubbles.frustumCulled = false;
+bubbles.renderOrder = 4;
+scene.add(bubbles);
+
+/* ---------- 远景鱼群（实例化剪影） ---------- */
+var fishMesh = null;
+var FISH_N = 246;
+var fishData = [];
+var schools = [];
+function buildFishMesh(){
+  if (fishMesh){ scene.remove(fishMesh); disposeNode(fishMesh); }
+  var geo = makeFishSmoothGeo();
+  var mat = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.62,
+    depthWrite: false, side: THREE.DoubleSide
+  });
+  fishMesh = new THREE.InstancedMesh(geo, mat, FISH_N);
+  fishMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  fishMesh.frustumCulled = false;
+  fishMesh.renderOrder = 1;
+  var col = new THREE.Color();
+  for (var i=0;i<FISH_N;i++){
+    var dep = depthToNorm(fishData[i].d);
+    col.setRGB(0.012 + (1-dep)*0.045, 0.032 + (1-dep)*0.085, 0.048 + (1-dep)*0.11);
+    fishMesh.setColorAt(i, col);
+  }
+  if (fishMesh.instanceColor) fishMesh.instanceColor.needsUpdate = true;
+  scene.add(fishMesh);
+}
+
+(function initFish(){
+  var SN = 7;
+  for (var k=0;k<SN;k++){
+    var sd = rand(160, 2500);
+    schools.push({
+      x: rand(-44, 44),
+      y: depthToY(sd) + rand(-1.4, 1.4),
+      z: -25 + rand(-9, 7),
+      sp: (Math.random()<0.5?-1:1) * rand(0.45, 1.45),
+      ph: Math.random()*TAU,
+      d: sd
+    });
+    for (var i=Math.floor(FISH_N*k/SN); i<Math.floor(FISH_N*(k+1)/SN); i++){
+      fishData.push({
+        s: k, d: sd,
+        ox: rand(-5.4, 5.4),
+        oy: rand(-1.5, 1.5),
+        sc: rand(0.24, 0.52) * (1 + (2500-sd)/2500*0.45),
+        ph: Math.random()*TAU
+      });
+    }
+  }
+  buildFishMesh();
+})();
+
+
+var abyssGroup = new THREE.Group();
+function addSmoothChimneys(){
+  var chimDefs = [
+    [-9.5, -20.0, 5.2, 0.9, -13], [-6.8, -20.4, 3.4, 0.6, -12],
+    [7.2, -20.2, 4.4, 0.8, -12.5], [10.5, -20.8, 2.8, 0.55, -11],
+    [-1.6, -21.4, 6.0, 1.1, -8]
+  ];
+  for (var i=0;i<chimDefs.length;i++){
+    var c = chimDefs[i];
+    abyssGroup.add(makeSmoothChimney(c[0], c[1], c[2], c[3], c[4]));
+  }
+}
+
+function buildAbyss(){
+  while (abyssGroup.children.length){
+    var _old = abyssGroup.children[0];
+    abyssGroup.remove(_old);
+    disposeNode(_old);
+  }
+  abyssMats.length = 0;
+  var mk = makeSmoothRidge;
+
+  var back = mk({ base:-17.5, amp:1.5, half:46, seed:4.2, s:0.72,
+    c:0x050f19, c2:0x071522, topC:0x1a4f6c });
+  back.position.z = -24;
+  abyssGroup.add(back);
+
+  var mid = mk({ base:-19.2, amp:1.1, half:44, seed:11.7, s:0.66,
+    c:0x030a12, c2:0x05101b, topC:0x215d7c });
+  mid.position.z = -17;
+  abyssGroup.add(mid);
+
+  var front = mk({ base:-21.0, amp:0.75, half:42, seed:23.1, s:0.60,
+    c:0x02070d, c2:0x040c14, topC:0x2b749a });
+  front.position.z = -9;
+  abyssGroup.add(front);
+
+  addSmoothChimneys();
+  abyssGroup.add(makeSmoothWhale());
+}
+buildAbyss();
+scene.add(abyssGroup);
+
+
+/* ---------- 旋涡 ---------- */
+var vortexMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: U.uTime, uOn: U.uVortexOn },
+  vertexShader: VORTEX_VERT, fragmentShader: VORTEX_FRAG,
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
+});
+var vortexMesh = new THREE.Mesh(new THREE.PlaneGeometry(13,13), vortexMat);
+vortexMesh.position.set(U.uVortex.value.x, U.uVortex.value.y, -2);
+vortexMesh.renderOrder = 5;
+scene.add(vortexMesh);
+
+/* ---------- 爆发粒子池 ---------- */
+function makeBurst(color, count, size, spread, rise, dur){
+  var geo = new THREE.BufferGeometry();
+  var pos = new Float32Array(count*3);
+  var dir = new Float32Array(count*3);
+  var rnd = new Float32Array(count);
+  for (var i=0;i<count;i++){
+    var u = Math.random()*TAU, v = Math.acos(rand(-1,1));
+    var r = Math.pow(Math.random(),0.6);
+    dir[i*3] = Math.sin(v)*Math.cos(u)*r;
+    dir[i*3+1] = Math.cos(v)*r*0.7;
+    dir[i*3+2] = Math.sin(v)*Math.sin(u)*r*0.35;
+    rnd[i] = Math.random();
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('aDir', new THREE.BufferAttribute(dir,3));
+  geo.setAttribute('aRnd', new THREE.BufferAttribute(rnd,1));
+  var mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uOrigin: { value: new THREE.Vector3() },
+      uAge: { value: 99 }, uDur: { value: dur },
+      uSpread: { value: spread }, uRise: { value: rise },
+      uSize: { value: size }, uDpr: U.uDpr,
+      uColor: { value: new THREE.Color(color) }
+    },
+    vertexShader: BURST_VERT, fragmentShader: BURST_FRAG,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  var p = new THREE.Points(geo, mat);
+  p.frustumCulled = false;
+  p.renderOrder = 8;
+  p.userData = { age: 99, dur: dur };
+  scene.add(p);
+  return p;
+}
+var bioPool = [], bubblePool = [];
+for (var bi=0;bi<4;bi++) bioPool.push(makeBurst(0x59d8ff, 90, 0.9, 6.5, 2.2, 2.6));
+for (var bj=0;bj<4;bj++) bubblePool.push(makeBurst(0xa8e6ff, 34, 0.75, 1.9, 4.0, 3.2));
+var bioRef = { i:0 }, bubRef = { i:0 };
+
+/* ---------- 声呐光环池 ---------- */
+var ringPool = [];
+(function(){
+  var geo = new THREE.PlaneGeometry(1,1);
+  for (var i=0;i<10;i++){
+    var m = new THREE.ShaderMaterial({
+      uniforms: { uAge: { value: 99 }, uDur: { value: 1.4 } },
+      vertexShader: RING_VERT, fragmentShader: RING_FRAG,
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
+    });
+    var mesh = new THREE.Mesh(geo, m);
+    mesh.visible = false;
+    mesh.renderOrder = 9;
+    mesh.userData = { age: 99 };
+    scene.add(mesh);
+    ringPool.push(mesh);
+  }
+})();
+var ringRef = { i:0 };
+function spawnRing(pos, size){
+  var m = ringPool[ringRef.i % ringPool.length]; ringRef.i++;
+  m.position.copy(pos);
+  m.scale.setScalar(size);
+  m.visible = true;
+  m.userData.age = 0;
+  return m;
+}
+
+/* ============================================================
+   3. 生物
+   ============================================================ */
+var SPECIES = [
+  { id:'manta', cn:'蝠鲼', latin:'Mobula birostris', kind:'ray', pattern:0,
+    real:{ v:6.0, label:'翼展' }, fact:'像一张会飞的大毯子，翅膀张开比三个大人横着站还宽。它没有牙齿，只吃水里的浮游小虾。',
+    depth:95, band:[10,190], span:3.5, len:2.35, flapAmp:0.52, flapSpeed:1.88, sway:0.55, rayWave:0,
+    rim:0x7fe9ff, layer:'上层 · 透光层', tilt:-0.62, thumbScale:1.20,
+    prof:[[1,0.30],[0.78,0.56],[0.55,0.80],[0.30,0.97],[0.05,1.00],[-0.20,0.90],[-0.45,0.66],[-0.72,0.36],[-1,0.13]],
+    pal:{ back:0x3d5a7a, crest:0x4d6e90, edge:0x27394e, belly:0xd6e5ee, bspot:0x6d84a0,
+          eye:0x16232e, eyeLt:0xffffff, fin:0x2c4057, tail:0x2c4057 } },
+  { id:'eagle', cn:'鹰鳐', latin:'Aetobatus narinari', kind:'ray', pattern:1,
+    real:{ v:2.9, label:'翼展' }, fact:'背上有白色的小圆点，游起来像鸟在飞。它用像鸭子嘴一样的吻部在沙里翻找小螃蟹。',
+    depth:170, band:[50,195], span:2.95, len:2.55, flapAmp:0.60, flapSpeed:2.45, sway:0.45, rayWave:0.18,
+    rim:0x8aeaff, layer:'上层 · 透光层', tilt:-0.66, thumbScale:1.22,
+    prof:[[1,0.26],[0.75,0.48],[0.50,0.70],[0.25,0.92],[0.00,1.00],[-0.25,0.86],[-0.50,0.62],[-0.75,0.34],[-1,0.11]],
+    pal:{ back:0x3e5f70, crest:0x4a6e80, edge:0x2a414c, belly:0xd9e7ef, bspot:0x9cc4d4,
+          eye:0x16232e, eyeLt:0xffffff, fin:0x304b59, tail:0x35515a } },
+  { id:'bluespot', cn:'蓝斑魟', latin:'Taeniura lymma', kind:'ray', pattern:2,
+    real:{ v:0.42, label:'体盘宽' }, fact:'身体只有脸盆那么大，背上撒满蓝宝石一样的圆点。尾巴上有一根带毒的刺，别踩它。',
+    depth:400, band:[215,960], span:2.15, len:2.15, flapAmp:0.24, flapSpeed:2.60, sway:0.34, rayWave:1,
+    rim:0x6fd8ff, layer:'中层 · 微光层', tilt:-0.72, thumbScale:1.24,
+    prof:[[1,0.52],[0.75,0.82],[0.45,0.98],[0.15,1.00],[-0.20,0.90],[-0.50,0.66],[-0.75,0.40],[-1,0.12]],
+    pal:{ back:0xc4935f, crest:0xd3a670, edge:0x9c7249, belly:0xe8dcc9, bspot:0x7e8f92,
+          eye:0x1a2228, eyeLt:0xffffff, fin:0xc4935f, tail:0xb0844f, tail2:0x54d8ff } },
+  { id:'moon', cn:'海月水母', latin:'Aurelia aurita', kind:'jelly', pattern:3,
+    real:{ v:0.40, label:'伞径' }, fact:'身体 95% 以上都是水，透明得像一把小伞。伞里那四枚粉色的小圆圈是它的生殖腺。',
+    depth:660, band:[210,980], bell:1.55, pulse:0.26, rate:1.35, sway:0.40,
+    rim:0xbdf0ff, layer:'中层 · 微光层', thumbScale:0.96,
+    pal:{ bell:0xa9dcf0, canal:0xe4f8ff, rim:0x7cc4de, gonad:0xff9ec8, tent:0xd9f2fb,
+          eye:0x223742, eyeLt:0xffffff } },
+  { id:'nettle', cn:'海刺水母', latin:'Chrysaora quinquecirrha', kind:'jelly', pattern:4,
+    real:{ v:1.05, label:'伞径' }, fact:'橙红色的长触手会蜇人，小鱼碰到就会麻痹。它一收一放地喷水前进，像在跳舞。',
+    depth:1500, band:[1020,3700], bell:1.75, pulse:0.24, rate:0.95, sway:0.80,
+    rim:0xffc372, layer:'深层 · 无光层', thumbScale:0.86,
+    pal:{ bell:0xeaa855, canal:0xffd28a, rim:0xc07a35, stripe:0xb2532f, tent:0xf1c37c, arm:0xf9e8ca,
+          eye:0x3a2416, eyeLt:0xffffff } },
+  /* ---------- 鱼类（海豚 / 鲨鱼 / 鲸鲨 / 旗鱼） ---------- */
+  { id:'dolphin', cn:'宽吻海豚', latin:'Tursiops truncatus', kind:'fish', pattern:5,
+    real:{ v:3.6, label:'体长' }, fact:'它用头顶的鼻孔呼吸，是哺乳动物不是鱼。睡觉时只关闭一半大脑，另一半负责浮上水面换气。',
+    depth:72, band:[15,230], len:4.2, flapAmp:0.105, flapSpeed:1.55, sway:0.60,
+    swim:{ mode:'cetacean', amp:0.082, amp0:0.42, ampExp:2.0, waveN:0.55, vert:1, row:0.12, finWave:0.12 },
+    rim:0x8fd8ff, layer:'上层 · 透光层', thumbScale:1.0,
+    body:[[0,0.009,0.008,0.012],[0.05,0.019,0.017,0.014],[0.10,0.029,0.026,0.014],
+          [0.16,0.053,0.047,0.010],[0.24,0.079,0.075,0.004],[0.34,0.097,0.093,0.000],
+          [0.46,0.101,0.095,-0.002],[0.58,0.093,0.085,-0.002],[0.70,0.075,0.065,0.000],
+          [0.82,0.051,0.041,0.004],[0.92,0.031,0.023,0.008],[1,0.018,0.013,0.010]],
+    fins:{ caudal:{kind:'h', spread:0.205, up:0.040, depth:0.135, notch:0.52},
+           dorsal:{t0:0.38, t1:0.55, h:0.118, peak:0.36, sweep:0.15},
+           pec:{t:0.24, len:0.150, drop:0.052, sweep:0.085} },
+    pal:{ back:0x3b4e5c, belly:0x9fb0ba, fin:0x33454f, eye:0x0b1218, eyeLt:0xffffff } },
+  { id:'shark', cn:'灰礁鲨', latin:'Carcharhinus amblyrhynchos', kind:'fish', pattern:6,
+    real:{ v:2.4, label:'体长' }, fact:'一生要换掉上万颗牙，前面掉了后面马上补上。它其实很怕人，闻到动静多半先游走。',
+    depth:155, band:[40,320], len:3.4, flapAmp:0.082, flapSpeed:1.05, sway:0.44,
+    swim:{ mode:'subcarangiform', amp:0.108, amp0:0.30, ampExp:1.9, waveN:0.75, vert:0, row:0.10, finWave:0.14, glide:0.42 },
+    rim:0x9de4ff, layer:'上层 · 透光层', thumbScale:1.05,
+    body:[[0,0.011,0.010,0.018],[0.08,0.027,0.025,0.016],[0.18,0.051,0.047,0.008],
+          [0.30,0.073,0.065,0.002],[0.44,0.079,0.067,0.000],[0.58,0.071,0.057,0.000],
+          [0.70,0.057,0.043,0.002],[0.82,0.039,0.027,0.006],[0.92,0.023,0.015,0.010],
+          [1,0.013,0.009,0.014]],
+    fins:{ caudal:{kind:'v', up:0.255, dn:0.135, depth:0.155, notch:0.60},
+           dorsal:{t0:0.30, t1:0.50, h:0.148, peak:0.31, sweep:0.19},
+           dorsal2:{t0:0.78, t1:0.87, h:0.045, peak:0.40, sweep:0.035},
+           anal:{t0:0.80, t1:0.89, h:0.040, peak:0.40, sweep:0.030},
+           pec:{t:0.26, len:0.170, drop:0.042, sweep:0.095} },
+    pal:{ back:0x4a5560, belly:0xd9e2e6, fin:0x424c56, eye:0x080d11, eyeLt:0xffffff } },
+  { id:'whaleshark', cn:'鲸鲨', latin:'Rhincodon typus', kind:'fish', pattern:7,
+    real:{ v:9.0, label:'体长' }, fact:'海里最大的鱼，能长到一辆公交车那么长，却只吃小虾和小鱼。背上的白点像星空，每条的花纹都不一样。',
+    depth:320, band:[110,720], len:7.0, flapAmp:0.072, flapSpeed:0.52, sway:0.30,
+    swim:{ mode:'subcarangiform', amp:0.072, amp0:0.26, ampExp:1.75, waveN:0.70, vert:0, row:0.08, finWave:0.12, glide:0.30 },
+    rim:0x9fe8ff, layer:'中层 · 微光层', thumbScale:1.0,
+    body:[[0,0.021,0.031,0.010],[0.05,0.041,0.056,0.008],[0.12,0.063,0.077,0.004],
+          [0.22,0.079,0.089,0.000],[0.35,0.087,0.091,0.000],[0.50,0.083,0.085,0.000],
+          [0.64,0.071,0.067,0.000],[0.76,0.053,0.047,0.002],[0.87,0.033,0.027,0.006],
+          [0.95,0.019,0.015,0.010],[1,0.011,0.009,0.012]],
+    fins:{ caudal:{kind:'v', up:0.170, dn:0.115, depth:0.125, notch:0.55},
+           dorsal:{t0:0.62, t1:0.80, h:0.082, peak:0.34, sweep:0.09},
+           dorsal2:{t0:0.86, t1:0.93, h:0.030, peak:0.40, sweep:0.030},
+           anal:{t0:0.86, t1:0.93, h:0.028, peak:0.40, sweep:0.030},
+           pec:{t:0.26, len:0.115, drop:0.028, sweep:0.060} },
+    pal:{ back:0x374a58, belly:0xc8d4da, fin:0x2f4050, spot:0xeef7fb, eye:0x080d11, eyeLt:0xffffff } },
+  { id:'sailfish', cn:'旗鱼', latin:'Istiophorus platypterus', kind:'fish', pattern:8,
+    real:{ v:3.0, label:'体长' }, fact:'海里游得最快的鱼之一，短距离能追上汽车。背鳍张开像一面帆，长嘴用来把小鱼群打散。',
+    depth:48, band:[10,170], len:3.2, flapAmp:0.088, flapSpeed:2.05, sway:0.52,
+    swim:{ mode:'carangiform', amp:0.098, amp0:0.30, ampExp:1.7, waveN:0.85, vert:0, row:0.14, finWave:0.95, glide:0.12 },
+    rim:0x7fd4ff, layer:'上层 · 透光层', thumbScale:1.02,
+    body:[[0,0.003,0.0025,0.006],[0.13,0.005,0.004,0.004],[0.20,0.011,0.008,0.003],
+          [0.26,0.036,0.023,0.001],[0.33,0.071,0.033,0.000],[0.42,0.091,0.037,0.000],
+          [0.54,0.087,0.034,0.000],[0.66,0.069,0.027,0.001],[0.78,0.047,0.019,0.003],
+          [0.88,0.027,0.011,0.006],[1,0.011,0.006,0.010]],
+    fins:{ caudal:{kind:'v', up:0.195, dn:0.195, depth:0.120, notch:0.45},
+           dorsal:{t0:0.22, t1:0.70, h:0.180, peak:0.36, sweep:0.030},
+           anal:{t0:0.60, t1:0.78, h:0.052, peak:0.40, sweep:0.020},
+           pec:{t:0.30, len:0.120, drop:0.026, sweep:0.065} },
+    pal:{ back:0x123c63, belly:0xb9c9d4, fin:0x0f3358, bar:0x9fc4dd, eye:0x080d11, eyeLt:0xffffff } },
+  /* ---------- 水族馆区（四种不同的游泳方式） ---------- */
+  { id:'angelfish', cn:'皇后神仙鱼', latin:'Pomacanthus imperator', kind:'fish', pattern:9,
+    real:{ v:0.40, label:'体长' }, fact:'宝石蓝的身体上斜着几条亮黄色的带子，眼睛前面还蒙着一块黑面罩。它主要靠两片胸鳍像小扇子一样划水，能稳稳地停在珊瑚旁边不动。',
+    depth:44, band:[4,120], len:1.02, flapSpeed:1.45, sway:0.30,
+    swim:{ mode:'labriform', amp:0.058, amp0:0.55, ampExp:1.6, waveN:0.42, vert:0, row:1.00, finWave:0.35, hover:1 },
+    rim:0x86d8ff, layer:'上层 · 透光层', thumbScale:0.82,
+    body:[[0,0.030,0.018,0.055],[0.06,0.075,0.032,0.048],[0.14,0.160,0.060,0.030],
+          [0.24,0.270,0.086,0.012],[0.36,0.355,0.104,0.000],[0.48,0.400,0.110,0.000],
+          [0.60,0.392,0.104,-0.008],[0.72,0.330,0.088,-0.016],[0.82,0.235,0.062,-0.018],
+          [0.91,0.145,0.038,-0.010],[1,0.088,0.024,0.000]],
+    fins:{ caudal:{kind:'v', up:0.105, dn:0.105, depth:0.100, notch:0.90},
+           dorsal:{t0:0.16, t1:0.74, h:0.150, peak:0.42, sweep:0.035},
+           anal:{t0:0.50, t1:0.80, h:0.135, peak:0.38, sweep:0.030},
+           pec:{t:0.30, len:0.130, drop:0.030, sweep:0.070} },
+    pal:{ back:0x0d2c6e, belly:0x40618f, fin:0x0a2470, eye:0x080d11, eyeLt:0xffffff } },
+  { id:'puffer', cn:'暗纹东方鲀', latin:'Takifugu obscurus', kind:'fish', pattern:10,
+    real:{ v:0.35, label:'体长' }, fact:'身体像个圆气球，受惊时会吸水鼓成一个刺球。它几乎不弯身体，只靠尾巴像钟摆一样左右摆着慢慢走，两只眼睛还能各看各的方向。',
+    depth:78, band:[8,160], len:0.93, flapSpeed:1.10, sway:0.26,
+    swim:{ mode:'ostraciiform', amp:0.088, amp0:0.72, ampExp:1.6, waveN:0.30, vert:0, row:0.55, finWave:0.15 },
+    rim:0x9fe0ff, layer:'上层 · 透光层', thumbScale:1.06,
+    body:[[0,0.058,0.050,0.040],[0.03,0.132,0.110,0.034],[0.08,0.192,0.162,0.026],
+          [0.16,0.230,0.192,0.016],[0.28,0.254,0.208,0.005],[0.44,0.260,0.212,0.000],
+          [0.58,0.247,0.197,-0.005],[0.70,0.213,0.165,-0.011],[0.82,0.156,0.113,-0.015],
+          [0.92,0.089,0.059,-0.010],[1,0.043,0.027,0.000]],
+    fins:{ caudal:{kind:'v', up:0.115, dn:0.115, depth:0.100, notch:0.92},
+           dorsal:{t0:0.72, t1:0.85, h:0.070, peak:0.40, sweep:0.020},
+           anal:{t0:0.74, t1:0.87, h:0.065, peak:0.40, sweep:0.018},
+           pec:{t:0.34, len:0.135, drop:0.030, sweep:0.055} },
+    pal:{ back:0x4d4a2c, belly:0xc7bfa6, fin:0x5a5433, eye:0x0b0f12, eyeLt:0xffffff } },
+  { id:'moray', cn:'网纹裸胸鳝', latin:'Gymnothorax favagineus', kind:'fish', pattern:11,
+    real:{ v:1.20, label:'体长' }, fact:'身体像一条长蛇，游动时全身像波浪一样扭过去，所以能钻进很窄的岩缝。它没有胸鳍，嘴巴一张一合是在呼吸，不是在吓唬人。',
+    depth:118, band:[10,220], len:1.99, flapSpeed:1.15, sway:0.30,
+    swim:{ mode:'anguilliform', amp:0.095, amp0:0.02, ampExp:1.10, waveN:1.45, vert:0, row:0, finWave:0.55 },
+    rim:0x8fdcff, layer:'上层 · 透光层', thumbScale:0.98,
+    body:[[0,0.014,0.010,0.012],[0.06,0.030,0.022,0.008],[0.15,0.042,0.032,0.004],
+          [0.30,0.050,0.038,0.000],[0.48,0.052,0.040,0.000],[0.66,0.048,0.036,0.000],
+          [0.80,0.040,0.029,0.000],[0.90,0.030,0.021,0.000],[1,0.018,0.013,0.000]],
+    fins:{ caudal:{kind:'v', up:0.048, dn:0.048, depth:0.050, notch:0.95},
+           dorsal:{t0:0.20, t1:0.96, h:0.042, peak:0.45, sweep:0.010},
+           anal:{t0:0.34, t1:0.96, h:0.038, peak:0.45, sweep:0.010} },
+    pal:{ back:0x8f8a5e, belly:0xded9b8, fin:0xa39c6c, eye:0x0b0f12, eyeLt:0xffffff } },
+  { id:'tuna', cn:'黄鳍金枪鱼', latin:'Thunnus albacares', kind:'fish', pattern:12,
+    real:{ v:2.00, label:'体长' }, fact:'身体像一枚鱼雷，游泳时几乎只有尾巴在高速摆动，身体不怎么弯，所以又快又省力。背鳍和臀鳍是亮黄色的，像两面小旗。',
+    depth:22, band:[4,200], len:2.74, flapSpeed:2.35, sway:0.34,
+    swim:{ mode:'thunniform', amp:0.118, amp0:0.46, ampExp:2.3, waveN:0.50, vert:0, row:0.18, finWave:0.20, glide:0.20 },
+    rim:0x9de4ff, layer:'上层 · 透光层', thumbScale:1.02,
+    body:[[0,0.010,0.011,0.010],[0.08,0.032,0.032,0.008],[0.18,0.066,0.060,0.004],
+          [0.30,0.095,0.080,0.000],[0.42,0.108,0.086,0.000],[0.55,0.103,0.078,0.000],
+          [0.68,0.086,0.060,0.002],[0.80,0.060,0.038,0.004],[0.90,0.036,0.020,0.008],
+          [1,0.018,0.009,0.010]],
+    fins:{ caudal:{kind:'v', up:0.215, dn:0.215, depth:0.150, notch:0.28},
+           dorsal:{t0:0.28, t1:0.42, h:0.105, peak:0.32, sweep:0.070},
+           dorsal2:{t0:0.70, t1:0.80, h:0.048, peak:0.40, sweep:0.020},
+           anal:{t0:0.68, t1:0.79, h:0.046, peak:0.40, sweep:0.018},
+           pec:{t:0.28, len:0.155, drop:0.024, sweep:0.050} },
+    pal:{ back:0x0b1a45, belly:0xb6c2c8, fin:0x14264f, eye:0x080d11, eyeLt:0xffffff } },
+  /* ---------- 深海区（微光层深处 / 无光层） ---------- */
+  { id:'oarfish', cn:'皇带鱼', latin:'Regalecus glesne', kind:'fish', pattern:13,
+    real:{ v:6.0, label:'体长' }, fact:'身体像一条银色的长缎带，最长能到 8 米，是世界上最长的硬骨鱼。背鳍从头顶一直连到尾巴，最前面几根高高竖起，像戴了一顶红冠。它住在阳光照不到的深水里，人们很少见到活的。',
+    depth:520, band:[220,900], len:5.4, flapAmp:0.075, flapSpeed:1.05, sway:0.55,
+    swim:{ mode:'amiiform', amp:0.082, amp0:0.04, ampExp:1.25, waveN:1.00, vert:0, row:0.10, finWave:1.25 },
+    rim:0xa8ecff, layer:'中层 · 微光层', thumbScale:0.92,
+    body:[[0,0.030,0.020,0.030],[0.05,0.046,0.026,0.022],[0.12,0.056,0.028,0.014],
+          [0.25,0.058,0.026,0.006],[0.40,0.055,0.023,0.000],[0.55,0.050,0.020,0.000],
+          [0.70,0.043,0.017,0.000],[0.84,0.034,0.013,0.000],[0.94,0.022,0.008,0.000],
+          [1,0.012,0.005,0.000]],
+    fins:{ dorsal:{t0:0.10, t1:0.94, h:0.034, peak:0.50, sweep:0.010},
+           dorsal2:{t0:0.015, t1:0.10, h:0.150, peak:0.55, sweep:-0.030},
+           pec:{t:0.14, len:0.045, drop:0.020, sweep:0.030} },
+    pal:{ back:0x93a2aa, belly:0xd8e4e8, fin:0xb03a34, eye:0x1a2228, eyeLt:0xffffff } },
+  { id:'viperfish', cn:'蝰鱼', latin:'Chauliodus sloani', kind:'fish', pattern:14,
+    real:{ v:0.30, label:'体长' }, fact:'它的牙齿太长，嘴巴根本合不上，只能一直张着。背鳍最前面那根鳍条像一根钓鱼竿，末端会发光，把小鱼骗到嘴边。白天它躲在几百米深的水里，晚上才游上来找吃的。',
+    depth:900, band:[500,2500], len:0.86, flapAmp:0.080, flapSpeed:1.50, sway:0.34,
+    swim:{ mode:'anguilliform', amp:0.090, amp0:0.10, ampExp:1.45, waveN:1.15, vert:0, row:0.14, finWave:0.30 },
+    rim:0x7fd8ff, layer:'深层 · 无光层', thumbScale:1.02,
+    body:[[0,0.032,0.022,0.024],[0.06,0.076,0.040,0.014],[0.14,0.104,0.048,0.006],
+          [0.24,0.094,0.040,0.002],[0.36,0.070,0.028,0.000],[0.50,0.050,0.020,0.000],
+          [0.66,0.036,0.014,0.000],[0.80,0.026,0.010,0.000],[0.92,0.017,0.007,0.000],
+          [1,0.010,0.005,0.000]],
+    fins:{ caudal:{kind:'v', up:0.070, dn:0.070, depth:0.055, notch:0.62},
+           dorsal:{t0:0.06, t1:0.30, h:0.390, peak:0.12, sweep:0.100},
+           anal:{t0:0.52, t1:0.92, h:0.030, peak:0.50, sweep:0.010},
+           pec:{t:0.20, len:0.070, drop:0.030, sweep:0.040} },
+    pal:{ back:0x0a1420, belly:0x30404a, fin:0x0c1622, eye:0x000000, eyeLt:0xffffff } },
+  { id:'angler', cn:'深海鮟鱇', latin:'Melanocetus johnsonii', kind:'fish', pattern:15,
+    real:{ v:0.18, label:'体长' }, fact:'雌鱼头顶长着一根会发光的「钓竿」，在漆黑的水里晃来晃去，小鱼以为是食物就游过来。雄鱼只有它的十分之一大，找到雌鱼后会一辈子挂在它身上。',
+    depth:2200, band:[900,4000], len:0.63, flapAmp:0.070, flapSpeed:0.85, sway:0.30,
+    swim:{ mode:'ostraciiform', amp:0.082, amp0:0.62, ampExp:1.60, waveN:0.32, vert:0, row:0.45, finWave:0.12 },
+    rim:0x9fdcff, layer:'深层 · 无光层', thumbScale:1.08,
+    body:[[0,0.020,0.018,0.050],[0.05,0.100,0.075,0.045],[0.12,0.200,0.150,0.030],
+          [0.22,0.270,0.205,0.012],[0.34,0.300,0.225,0.000],[0.46,0.285,0.205,-0.010],
+          [0.58,0.235,0.155,-0.018],[0.70,0.170,0.100,-0.020],[0.82,0.100,0.055,-0.016],
+          [0.92,0.050,0.028,-0.008],[1,0.024,0.014,0.000]],
+    fins:{ caudal:{kind:'v', up:0.090, dn:0.090, depth:0.070, notch:0.92},
+           pec:{t:0.22, len:0.085, drop:0.030, sweep:0.045} },
+    lure:{ y:0.255, z:-0.300, len:0.460, lean:-1.15, r:0.050 },
+    pal:{ back:0x1a1512, belly:0x271c19, fin:0x171311, eye:0x050606, eyeLt:0xffffff } },
+  { id:'pelican', cn:'宽咽鱼', latin:'Eurypharynx pelecanoides', kind:'fish', pattern:16,
+    real:{ v:0.75, label:'体长' }, fact:'嘴巴能张得比自己身体还大，像鹈鹕的喉囊，可以把比它大的猎物整个吞下去。身体后半段细成一根鞭子，末端会发出淡淡的红光。',
+    depth:1400, band:[1000,3000], len:1.49, flapAmp:0.085, flapSpeed:1.10, sway:0.34,
+    swim:{ mode:'anguilliform', amp:0.095, amp0:0.16, ampExp:1.20, waveN:1.30, vert:0, row:0.00, finWave:0.50 },
+    rim:0x8fd2ff, layer:'深层 · 无光层', thumbScale:1.0,
+    body:[[0,0.100,0.075,0.060],[0.05,0.190,0.125,0.050],[0.12,0.220,0.140,0.030],
+          [0.22,0.185,0.110,0.010],[0.34,0.130,0.070,0.000],[0.48,0.085,0.045,0.000],
+          [0.62,0.055,0.028,0.000],[0.76,0.034,0.017,0.000],[0.88,0.020,0.010,0.000],
+          [1,0.010,0.005,0.000]],
+    fins:{ dorsal:{t0:0.46, t1:0.97, h:0.030, peak:0.50, sweep:0.008},
+           anal:{t0:0.50, t1:0.97, h:0.026, peak:0.50, sweep:0.008},
+           pec:{t:0.16, len:0.040, drop:0.016, sweep:0.022} },
+    pal:{ back:0x0a0808, belly:0x161010, fin:0x0b0909, eye:0x040404, eyeLt:0xffffff } }
+];
+/* 每种动物的游动方式（讲解卡里显示，对应真实鱼类运动学分类） */
+var SWIM_CN = {
+  manta:'扇动双翼', eagle:'扇翼滑翔', bluespot:'体盘波动',
+  moon:'伞体脉动', nettle:'伞体脉动',
+  dolphin:'上下摆尾', shark:'摆尾滑行', whaleshark:'缓慢摆尾', sailfish:'疾摆尾鳍',
+  angelfish:'胸鳍划水', puffer:'钟摆摆尾', moray:'全身波浪', tuna:'尾柄急摆',
+  oarfish:'背鳍波动', viperfish:'弓身波浪', angler:'摆尾伏击', pelican:'鞭状波浪'
+};
+var SPEC_BY_ID = {};
+for (var si=0; si<SPECIES.length; si++) SPEC_BY_ID[SPECIES[si].id] = SPECIES[si];
+
+/* ------------------------------------------------------------
+   体型统一换算（展厅比例）
+   真实尺寸（米）→ 场景尺寸（世界单位）
+   d = K · m^0.62 —— 等比压缩：大动物之间比例基本保持，
+   极小的水母 / 小魟不会被压成一两个像素，孩子仍看得清。
+   注意：这是「展厅缩放」，真实比例见讲解卡与体型对照表。
+   ------------------------------------------------------------ */
+var SIZE_K = 1.78, SIZE_EXP = 0.62;
+var HUMAN_H = 1.75;                       // 成人身高参考（米）
+/* 小于这个尺寸的动物按真实比例画出来只有几个像素（蝰鱼 0.3 m、鮟鱇 0.18 m），
+   展厅里会把它们放大到至少 MIN_DISP，并在讲解卡里注明放大倍数 */
+var MIN_DISP = 1.55;
+function exhibitSize(m){
+  return SIZE_K * Math.pow(Math.max(0.05, m), SIZE_EXP);
+}
+(function applySizes(){
+  for (var i=0;i<SPECIES.length;i++){
+    var sp = SPECIES[i];
+    var d = exhibitSize(sp.real.v), k;
+    sp.gain = d < MIN_DISP ? MIN_DISP/d : 1;
+    d = Math.max(d, MIN_DISP);
+    if (sp.kind === 'ray'){
+      k = d/sp.span;  sp.span = d;  sp.len *= k;
+      sp.flapAmp *= k;                 /* 扇动幅度按展幅缩放，否则大鱼翅膀只会颤一下 */
+    } else if (sp.kind === 'fish'){
+      k = d/sp.len;   sp.len = d;
+    } else {
+      k = (d*0.5)/sp.bell;  sp.bell = d*0.5;
+    }
+    sp.k = k;
+    sp.disp = d;
+  }
+  /* 卡片列按栖息深度由浅到深排列，和左侧深度轴一一对应 */
+  SPECIES.sort(function(a,b){ return a.depth - b.depth; });
+})();
+/* 用「几个大人」描述尺寸，给孩子一个直观参照 */
+function humanCompare(m){
+  var n = m/HUMAN_H;
+  if (n < 0.45) return '还没一把伞大';
+  if (n < 0.95) return '大约到大人肚子';
+  if (n < 1.35) return '和大人差不多高';
+  if (n < 2.2)  return '约 ' + n.toFixed(1) + ' 个大人首尾相接';
+  return '约 ' + Math.round(n) + ' 个大人首尾相接';
+}
+
+
+/* 一点柔光贴图：鮟鱇的诱饵灯、深海的发光点都用它 */
+var _glowTex = null;
+function glowTexture(){
+  if (_glowTex) return _glowTex;
+  var cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  var g = cv.getContext('2d');
+  var rg = g.createRadialGradient(32,32,0, 32,32,32);
+  rg.addColorStop(0.00, 'rgba(214,250,255,1)');
+  rg.addColorStop(0.18, 'rgba(150,232,255,0.62)');
+  rg.addColorStop(0.46, 'rgba(80,190,255,0.20)');
+  rg.addColorStop(1.00, 'rgba(40,130,220,0)');
+  g.fillStyle = rg;
+  g.fillRect(0,0,64,64);
+  _glowTex = new THREE.CanvasTexture(cv);
+  return _glowTex;
+}
+
+function buildCreatureModel(spec, fogMul, forThumb){
+  var group = new THREE.Group();
+  var isRay = spec.kind === 'ray';
+  var isJelly = spec.kind === 'jelly';
+  var isFish = spec.kind === 'fish';
+  var geo = cacheGeo(spec.id+'_smooth', function(){
+    return isRay ? buildRaySmooth(spec) : (isJelly ? buildJellySmooth(spec) : buildFishSmooth(spec));
+  });
+  var sw = spec.swim || {};
+  var mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: U.uTime,
+      uPhase: { value: rand(0,TAU) },
+      uFlapAmp: { value: isFish ? (sw.amp != null ? sw.amp : 0.07) * (spec.len || 1) : (spec.flapAmp || 0) },
+      uFlapSpeed: { value: spec.flapSpeed || 1 },
+      uRate: { value: spec.rate || 1 },
+      uPulse: { value: spec.pulse || 0 },
+      uCurl: { value: 0 },
+      uSway: { value: spec.sway || 0.4 },
+      uKind: { value: isRay ? 0 : (isJelly ? 1 : 2) },
+      uPattern: { value: spec.pattern },
+      uRim: { value: new THREE.Color(spec.rim) },
+      uOpacity: { value: 1 },
+      uFogMul: { value: fogMul },
+      uLit: U.uLit,
+      /* 鱼类步态 */
+      uWaveN: { value: sw.waveN != null ? sw.waveN : 0.70 },
+      uAmp0: { value: sw.amp0 != null ? sw.amp0 : 0.30 },
+      uAmpExp: { value: sw.ampExp != null ? sw.ampExp : 1.90 },
+      uVert: { value: sw.vert ? 1 : 0 },
+      uRow: { value: sw.row != null ? sw.row : 0.15 },
+      uFinWave: { value: (sw.finWave != null ? sw.finWave : 0.20) * (spec.len || 1) * 0.06 },
+      uBend: { value: 0 },
+      uBeat: { value: 1 },
+      uRayWave: { value: spec.rayWave || 0 }
+    },
+    vertexShader: SMOOTH_VERT,
+    fragmentShader: SMOOTH_FRAG,
+    transparent: true,
+    depthWrite: (isRay || isFish),
+    side: THREE.DoubleSide
+  });
+  var mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 3;
+  group.add(mesh);
+  group.userData.mats = [mat];
+  group.userData.mesh = mesh;
+  /* 会发光的钓竿（深海鮟鱇）：单独的不受光材质，杆 + 灯球 + 光晕 */
+  if (spec.lure){
+    var lu = spec.lure, LL = spec.len;
+    var rodG = new THREE.Group();
+    rodG.position.set(0, lu.y*LL, lu.z*LL);
+    rodG.rotation.x = lu.lean;
+    var rodGeo = cacheGeo(spec.id+'_lure_rod', function(){
+      return new THREE.CylinderGeometry(0.010*LL, 0.017*LL, lu.len*LL, 5, 1, true);
+    });
+    var rodMat = new THREE.MeshBasicMaterial({ color:0x86dff4, transparent:true, opacity:0.50 });
+    var rod = new THREE.Mesh(rodGeo, rodMat);
+    rod.position.y = lu.len*LL*0.5;
+    rodG.add(rod);
+    var escaGeo = cacheGeo(spec.id+'_lure_esca', function(){
+      return new THREE.SphereGeometry(lu.r*LL, 10, 8);
+    });
+    var escaMat = new THREE.MeshBasicMaterial({ color:0xd6f9ff, transparent:true, opacity:0.92 });
+    var esca = new THREE.Mesh(escaGeo, escaMat);
+    esca.position.y = lu.len*LL;
+    rodG.add(esca);
+    /* 光晕用面向镜头的 Sprite：不论鱼游到多远，灯都是一颗看得见的小灯 */
+    var haloMat = new THREE.SpriteMaterial({
+      map: glowTexture(), color: 0xbfefff, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false
+    });
+    var halo = new THREE.Sprite(haloMat);
+    halo.position.y = lu.len*LL;
+    halo.scale.setScalar(Math.max(LL*1.55, 1.30));
+    rodG.add(halo);
+    group.add(rodG);
+    group.userData.lure = halo;
+    group.userData.lureBase = halo.scale.x;
+    group.userData.mats.push(rodMat, escaMat, haloMat);
+  }
+  if (isRay) group.rotation.x = -Math.PI*0.5 + 0.72;
+  return group;
+}
+
+/* ---------- 生物运行时 ---------- */
+/* 各物种的巡游节奏（倍率）：1 ≈ 每秒半个身位左右 */
+var TEMPO = {
+  manta:1.0, eagle:1.05, bluespot:0.95,
+  dolphin:1.10, shark:1.15, whaleshark:0.72,
+  sailfish:1.85, angelfish:0.95, puffer:0.55, moray:1.15, tuna:1.85,
+  oarfish:0.62, viperfish:0.95, angler:0.45, pelican:0.70
+};
+var creatures = [];
+
+function spawnCreature(spec, depth, opts){
+  opts = opts || {};
+  if (creatures.length >= MAX_CREATURES) return null;
+  var model = buildCreatureModel(spec, 1, false);
+  var d = clamp(depth, spec.band[0], spec.band[1]);
+  var startX = opts.x != null ? opts.x : rand(-8,8);
+  var startZ = opts.z != null ? opts.z : rand(-7, 5);
+  var startY = depthToY(d);
+  var isRay = spec.kind === 'ray';
+  var isFish = spec.kind === 'fish';
+  /* 游速按体长的 0.45 次方走（体型越大绝对值越快、但每秒身位越少），
+     再乘一个物种节奏系数：金枪鱼 / 旗鱼快，河鲀 / 鲸鲨慢。 */
+  var spd = (isRay || isFish)
+    ? 1.12 * Math.pow(Math.max(0.5, isRay ? spec.span : spec.len), 0.45) * (TEMPO[spec.id] || 1)
+    : rand(0.50, 0.80);
+  spd *= rand(0.94, 1.06);
+  var c = {
+    spec: spec,
+    group: model,
+    mats: model.userData.mats,
+    depth: d,
+    depthT: d,
+    x: startX, y: startY, z: startZ,
+    pos: new THREE.Vector3(startX, startY, startZ),
+    vel: new THREE.Vector3(rand(-1,1), rand(-0.2,0.2), rand(-1,1)).normalize().multiplyScalar(spd*0.5),
+    speed: spd,
+    /* 航道状态：方向（±1 表示主要往左还是往右游）、航向角、俯仰趋势 */
+    dirX: Math.random() < 0.5 ? -1 : 1,
+    head: 0, headV: 0, wrapCool: 0,
+    hideT: 0, hideSide: 1, hideSwap: true,
+    /* 半个体长：判断「整条鱼都出画了」时要把尾巴算进去 */
+    halfL: spec.kind === 'ray' ? spec.span*0.5
+         : (spec.kind === 'fish' ? spec.len*0.5 : spec.bell*1.3),
+    wander: rand(0, 1.4),
+    dash: 0, dashT: rand(5, 13),
+    yaw: rand(-Math.PI, Math.PI),
+    pitch: isRay ? (-Math.PI*0.5 + 0.72) : 0,
+    roll: 0, yawR: 0,
+    phase: rand(0,TAU),
+    hovering: false, hoverT: rand(0.5, 3.0),
+    /* 步态：滑翔程度 / 滑翔计时 / 当前摆尾频率与摆尾增益 */
+    glide: 0, gliding: false, glideT: rand(0.6, 3.0),
+    flapSpd: spec.flapSpeed || 1, beatNow: 1,
+    t: 0,
+    st: 0,
+    enter: 0,
+    enterDur: opts.instant ? 0 : rand(1.9, 2.8),
+    fromX: opts.fromX != null ? opts.fromX
+         : (startX < 0 ? -1 : 1) * (viewHalfW(startZ) + 12),
+    fromY: startY + rand(-7, 7),
+    flare: 0,
+    scare: 0
+  };
+  if (c.mats[0]) c.mats[0].uniforms.uPhase.value = c.phase;
+  model.rotation.order = 'YXZ';
+  model.position.set(c.fromX, c.fromY, startZ);
+  var sc = opts.scale || 1;
+  model.scale.setScalar(sc);
+  if (isRay) model.rotation.x = -Math.PI*0.5 + 0.72;
+  else model.rotation.z = rand(-0.08,0.08);
+  scene.add(model);
+  creatures.push(c);
+  if (!opts.silent){
+    var p = new THREE.Vector3(c.x, c.y, 0);
+    spawnRing(p, spec.kind === 'ray' ? spec.span*3.4 : (isFish ? spec.len*2.6 : spec.bell*5.2));
+    var bb = bubblePool[bubRef.i % bubblePool.length]; bubRef.i++;
+    bb.userData.age = 0;
+    bb.material.uniforms.uOrigin.value.copy(p);
+    bb.material.uniforms.uSpread.value = 1.9;
+    bb.visible = true;
+  }
+  updateStatus();
+  return c;
+}
+
+function removeCreature(c){
+  var i = creatures.indexOf(c);
+  if (i >= 0) creatures.splice(i,1);
+  scene.remove(c.group);
+  /* 几何是缓存的（多只共用），材质是每只新建的，只释放材质 */
+  var ms = c.group.userData.mats;
+  if (ms) for (var m=0;m<ms.length;m++) ms[m].dispose();
+  updateStatus();
+}
+
+function creatureCounts(){
+  var r = 0, j = 0, f = 0;
+  for (var i=0;i<creatures.length;i++){
+    var k = creatures[i].spec.kind;
+    if (k === 'ray') r++; else if (k === 'fish') f++; else j++;
+  }
+  return { rays: r, jellies: j, fish: f, total: creatures.length };
+}
+
+/* ============================================================
+   3.5 近景掠过：大鱼从远处游来，掠过头顶 / 穿过脚下
+   ------------------------------------------------------------
+   与普通巡游不同，这条鱼不走 AI，而是沿一条穿过观众身边的
+   直线航道匀速通过：远处只是个小黑点 → 越来越近 → 从画面顶上
+   或底部扫出画外。全程按真实体长 1:1 呈现，不做任何放大。
+   ============================================================ */
+var FLY_TEAM = ['whaleshark', 'whaleshark', 'shark', 'dolphin'];
+var flyCool = 14;                  // 自动掠影倒计时（秒）
+
+function flyActive(){
+  for (var i=0;i<creatures.length;i++) if (creatures[i].fly) return creatures[i];
+  return null;
+}
+
+/* id 省略则从 FLY_TEAM 里随机挑；opts.side: 1 头顶 / -1 脚下 */
+function startFlyby(id, opts){
+  opts = opts || {};
+  if (flyActive()) return null;
+  var sp = SPEC_BY_ID[id] || SPEC_BY_ID[FLY_TEAM[(Math.random()*FLY_TEAM.length)|0]];
+  if (!sp || sp.kind !== 'fish') return null;
+
+  /* 观众自己贴着水面时让鱼从脚下过，贴着深渊时从头顶过 */
+  var cy = camera.position.y;
+  var side = opts.side != null ? opts.side
+           : (cy > 9 ? -1 : (cy < -9 ? 1 : (Math.random() < 0.58 ? 1 : -1)));
+
+  var pod  = sp.id === 'dolphin' ? 3 : 1;
+  var dur  = 9.2 + sp.len*1.15;          // 越大的鱼越从容
+  var cp   = camera.position;
+  var lead = null;
+
+  for (var k=0;k<pod;k++){
+    var c = spawnCreature(sp, sp.band[0], { instant:true, silent:true, x: cp.x, z: cp.z-120 });
+    if (!c) break;
+    c.enter = 1;
+    c.speed = 150/dur;
+    c.yaw = Math.PI;                      // 迎面而来（鱼头朝 +Z）
+    c.pitch = 0;
+    c.fly = {
+      u: (opts.u != null ? opts.u : 0) - k*0.05,
+      dur: dur, side: side,
+      z0: -126, z1: 24,
+      x0: -13 + k*4.6, x1: 2.6 + k*2.4,
+      yBase: 1.5 + (pod > 1 ? (k-1)*1.0 : 0),
+      yRise: 5.2, ph: k*2.1, crab: 0.62,
+      oz0: cp.z,
+      isLead: k === 0, tag: false, whale: false,
+      prev: new THREE.Vector3(c.pos.x, c.pos.y, c.pos.z)
+    };
+    if (k === 0) lead = c;
+  }
+  flyCool = lead ? rand(42, 72) : 20;
+  return lead;
+}
+
+function updateFlyMotion(c, dt){
+  var f = c.fly;
+  f.prev.copy(c.pos);
+  f.u += dt/f.dur;
+  var k  = clamp(f.u, 0, 1);
+  var dz = lerp(f.z0, f.z1, k);
+  var ox = lerp(f.x0, f.x1, k) + Math.sin(k*Math.PI*1.6 + f.ph)*0.85;
+  /* 前段贴着视线游（整条鱼看得清），最后才抬升掠过头顶 / 下潜穿过脚下 */
+  var rise = Math.pow(clamp((k-0.60)/0.40, 0, 1), 2.4);
+  var oy = f.side * (f.yBase + f.yRise*rise + Math.sin(k*Math.PI*1.25 + f.ph)*0.35);
+  f.rise = rise;
+  /* 横竖都以「观众眼睛」为基准，相机缓慢漂移时构图不会跑掉；
+     纵深仍以入镜那一刻为准，观众自己前后移动时鱼不会被拖着走 */
+  c.pos.set(camera.position.x + ox, clamp(camera.position.y + oy, -20.4, 20.4), f.oz0 + dz);
+  c.vel.set(c.pos.x - f.prev.x, c.pos.y - f.prev.y, c.pos.z - f.prev.z);
+  if (dt > 0.00001) c.vel.multiplyScalar(1/dt);
+
+  /* 远处溶进水里，靠近时渐渐清晰 */
+  var dd = c.pos.distanceTo(camera.position);
+  var op = 1 - 0.55*clamp((dd-62)/95, 0, 1);
+  if (f.u > 0.90) op *= clamp((1-f.u)/0.10, 0, 1);
+  if (c.mats[0]) c.mats[0].uniforms.uOpacity.value = op;
+
+  if (f.isLead && !f.tag && f.u > 0.62){ f.tag = true; addTag(c, c.spec); }
+  if (!f.whale && f.u > 0.74){ f.whale = true; if (state.soundOn) Sound.whale(); }
+}
+
+/* 隔一段时间自己来一次；用户手动点按钮会重置倒计时 */
+function updateFlybyTimer(dt){
+  if (flyCool > 0) flyCool -= dt;
+  /* 潜航时不再自动放大鱼：那一层住的是深海的鱼，鲸鲨不该出现 */
+  if (dive && dive.on){ flyCool = Math.max(flyCool, 9); return; }
+  if (flyCool <= 0 && state.time > 12 && !flyActive() && !document.hidden) startFlyby();
+}
+
+/* ============================================================
+   4. 界面
+   ============================================================ */
+var rulerBody = document.getElementById('rulerBody');
+var cardsWrap = document.getElementById('cards');
+var ghostEl = document.getElementById('ghost');
+var droplineEl = document.getElementById('dropline');
+var countsEl = document.getElementById('counts');
+var depthEl = document.getElementById('depthRead');
+var hudEl = document.getElementById('hud');
+
+var rulerLabels = [], rulerKz = 1;
+var abyssK = 1;
+(function buildRuler(){
+  var ZONES_UI = [
+    { d0:0, d1:200, name:'透光层', en:'EPIPELAGIC' },
+    { d0:200, d1:1000, name:'微光层', en:'MESOPELAGIC' },
+    { d0:1000, d1:4000, name:'无光层', en:'BATHYPELAGIC' }
+  ];
+  for (var z=0;z<ZONES_UI.length;z++){
+    var zn = ZONES_UI[z];
+    var top = depthToNorm(zn.d0)*100, bot = depthToNorm(zn.d1)*100;
+    var div = document.createElement('div');
+    div.className = 'zone';
+    div.style.top = top+'%';
+    div.style.height = (bot-top)+'%';
+    div.innerHTML = '<b></b><span>'+zn.name+'</span>';
+    rulerBody.appendChild(div);
+    rulerLabels.push([div.querySelector('span'), 1]);
+  }
+  var MARKS = [
+    { d:0,    cls:'major', label:'0' },
+    { d:50,   cls:'minor' },
+    { d:100,  cls:'sub',   label:'100' },
+    { d:200,  cls:'major', label:'200' },
+    { d:400,  cls:'sub',   label:'400' },
+    { d:600,  cls:'minor' },
+    { d:800,  cls:'minor' },
+    { d:1000, cls:'major', label:'1000' },
+    { d:1600, cls:'minor' },
+    { d:2500, cls:'sub',   label:'2500' },
+    { d:3200, cls:'minor' },
+    { d:4000, cls:'major', label:'4000' }
+  ];
+  for (var i=0;i<MARKS.length;i++){
+    var mk = MARKS[i];
+    var el = document.createElement('div');
+    el.className = 'mark '+mk.cls;
+    el.style.top = (depthToNorm(mk.d)*100)+'%';
+    el.innerHTML = '<i></i>' + (mk.label!=null ? '<b>'+mk.label+'</b><em>m</em>' : '');
+    rulerBody.appendChild(el);
+    var mb = el.querySelector('b'), me = el.querySelector('em');
+    if (mb) rulerLabels.push([mb, 2]);
+    if (me) rulerLabels.push([me, 2]);
+  }
+})();
+
+function updateStatus(){
+  var c = creatureCounts();
+  if (dive && dive.on){
+    countsEl.innerHTML = '<b>' + c.total + '</b> 只 · 本层 <b>' + zoneInfo(dive.depth).n + '</b>';
+  } else {
+    countsEl.innerHTML = '<b>' + c.total + '</b> 只在展 · 共 <b>' + SPECIES.length + '</b> 种';
+  }
+}
+
+/* ---------- 卡片 ---------- */
+var cardEls = [], cardCanvases = [];
+(function buildCards(){
+  for (var i=0;i<SPECIES.length;i++){
+    (function(sp, idx){
+      var el = document.createElement('div');
+      el.className = 'card';
+      el.innerHTML =
+        '<div class="thumb"><canvas width="150" height="114"></canvas></div>' +
+        '<div class="meta">' +
+          '<div class="cn">'+sp.cn+'</div>' +
+          '<div class="la">'+sp.latin+'</div>' +
+          '<div class="dep"><span class="siz">'+fmtSize(sp)+'</span><i></i>' +
+            '<span>'+sp.layer.split(' · ')[1]+'</span></div>' +
+        '</div>' +
+        '<div class="bar"></div>';
+      cardsWrap.appendChild(el);
+      var cv = el.querySelector('canvas');
+      cardEls.push(el);
+      cardCanvases.push(cv);
+      el.addEventListener('pointerdown', function(e){ onCardDown(e, sp, el); });
+      el.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+    })(SPECIES[i], i);
+  }
+})();
+
+/* ---------- 缩略图渲染器 ---------- */
+var thumbCanvas = document.createElement('canvas');
+thumbCanvas.width = 300; thumbCanvas.height = 228;
+var tRenderer = new THREE.WebGLRenderer({ canvas: thumbCanvas, antialias: true, alpha: true });
+tRenderer.setPixelRatio(1);
+tRenderer.setSize(300, 228, false);
+tRenderer.setClearColor(0x000000, 0);
+var tScene = new THREE.Scene();
+var tCam = new THREE.PerspectiveCamera(34, 300/228, 0.1, 200);
+tCam.position.set(0, 0, 13);
+var thumbModels = {};
+function buildThumbs(){
+  for (var k in thumbModels) if (thumbModels[k]) disposeNode(thumbModels[k]);
+  thumbModels = {};
+  for (var i=0;i<SPECIES.length;i++){
+    var sp = SPECIES[i];
+    var g = buildCreatureModel(sp, 0, true);
+    var sc;
+    if (sp.kind === 'ray'){
+      sc = 10.0/(sp.span*2.0);
+      g.position.y = -0.15;
+    } else if (sp.kind === 'fish'){
+      sc = 8.6/sp.len * (sp.lure ? 0.72 : 1);
+      g.position.y = sp.lure ? -0.45 : 0;
+    } else {
+      sc = 5.4/(sp.bell*2.35);
+      g.position.y = sp.bell*sc*0.85;
+    }
+    g.scale.setScalar(sc*(sp.thumbScale||1));
+    g.userData.baseRot = sp.kind === 'ray' ? sp.tilt*0.55 : 0;
+    g.rotation.x = sp.kind === 'ray' ? -0.35 : 0;
+    thumbModels[sp.id] = g;
+  }
+}
+buildThumbs();
+
+var thumbIdx = 0, thumbFrame = 0;
+function renderThumb(i){
+  var sp = SPECIES[i];
+  var g = thumbModels[sp.id];
+  while (tScene.children.length) tScene.remove(tScene.children[0]);
+  tScene.add(g);
+  var t = state.time;
+  if (sp.kind === 'fish'){
+    /* 鱼体前方为局部 -Z：转成左前方 3/4 侧脸，能同时看到背鳍与尾叉 */
+    g.rotation.y = Math.PI*0.60 + Math.sin(t*0.42 + i)*0.10;
+    g.rotation.x = -0.16 + Math.sin(t*0.6 + i)*0.05;
+    g.rotation.z = Math.sin(t*0.33 + i)*0.05;
+    tRenderer.clear();
+    tRenderer.render(tScene, tCam);
+    var ctx2 = cardCanvases[i].getContext('2d');
+    ctx2.clearRect(0,0,150,114);
+    ctx2.drawImage(thumbCanvas, 0, 0, 150, 114);
+    return;
+  }
+  g.rotation.y = Math.sin(t*0.5 + i)*(sp.kind === 'ray' ? 0.28 : 0.55);
+  if (sp.kind === 'ray'){
+    var baseX = -0.16;
+    g.rotation.x = baseX + Math.sin(t*0.7+i)*0.08;
+    g.rotation.z = Math.sin(t*0.4+i*1.7)*0.10;
+  } else {
+    g.rotation.z = Math.sin(t*0.35+i)*0.08;
+  }
+  tRenderer.clear();
+  tRenderer.render(tScene, tCam);
+  var ctx = cardCanvases[i].getContext('2d');
+  ctx.clearRect(0,0,150,114);
+  ctx.drawImage(thumbCanvas, 0, 0, 150, 114);
+}
+function renderThumbStep(){
+  thumbFrame++;
+  if (thumbFrame % 9) return;   // 帧计数节流（不依赖时钟）
+  renderThumb(thumbIdx % SPECIES.length);
+  thumbIdx++;
+}
+// 初始化时立即渲染全部缩略图（不等待节流）
+for (var _ti=0;_ti<SPECIES.length;_ti++) renderThumb(_ti);
+
+/* ---------- 拖动卡片 ---------- */
+var drag = null;
+function onCardDown(e, sp, el){
+  e.preventDefault();
+  drag = { spec: sp, el: el, x0: e.clientX, y0: e.clientY, moved: false, depth: sp.depth };
+  if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch(err){} }
+}
+window.addEventListener('pointermove', function(e){
+  if (!drag) return;
+  var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+  if (!drag.moved && (dx*dx+dy*dy) > 49) drag.moved = true;
+  if (drag.moved){
+    var wp = worldFromPointer(e.clientX, e.clientY);
+    var d = yToDepth(wp.y);
+    drag.depth = clamp(d, drag.spec.band[0], drag.spec.band[1]);
+    ghostEl.textContent = drag.spec.cn + ' · ' + Math.round(drag.depth) + ' m';
+    ghostEl.style.left = e.clientX+'px';
+    ghostEl.style.top = (e.clientY - 28)+'px';
+    ghostEl.classList.add('on');
+    droplineEl.style.top = e.clientY+'px';
+    droplineEl.classList.add('on');
+  }
+});
+window.addEventListener('pointerup', function(e){
+  if (!drag) return;
+  var st = drag; drag = null;
+  ghostEl.classList.remove('on');
+  droplineEl.classList.remove('on');
+  var made;
+  if (st.moved){
+    made = spawnCreature(st.spec, st.depth, { x: rand(-7,7) });
+    playBubble();
+  } else if (dive.on && (dive.depth < st.spec.band[0] || dive.depth > st.spec.band[1])){
+    /* 它不住在这一层：点一下就直接潜到它住的那一层去看 */
+    diveTo(clamp(st.spec.depth, st.spec.band[0], st.spec.band[1]), { force:true });
+    playBubble();
+    showDocent(st.spec);
+    st.el.classList.add('flash');
+    setTimeout(function(){ st.el.classList.remove('flash'); }, 460);
+    return;
+  } else {
+    made = spawnCreature(st.spec,
+      dive.on ? dive.depth : st.spec.depth + rand(-20,20),
+      { x: rand(-8,8) });
+    playBubble();
+  }
+  if (made) addTag(made, st.spec);
+  showDocent(st.spec);
+  st.el.classList.add('flash');
+  setTimeout(function(){ st.el.classList.remove('flash'); }, 460);
+});
+
+/* ============================================================
+   5. 展厅解说：尺寸标注 / 讲解卡 / 体型对照表
+   ============================================================ */
+var docentEl = document.getElementById('docent');
+var chartEl  = document.getElementById('chart');
+var chartBg  = document.getElementById('chartBg');
+var tagsEl   = document.getElementById('tags');
+
+function hex6(n){ return '#' + ('000000' + n.toString(16)).slice(-6); }
+function numSize(v){ return v < 1 ? v.toFixed(2) : v.toFixed(1); }
+function fmtSize(sp){ return numSize(sp.real.v) + ' m'; }
+
+/* ---------- 讲解卡 ---------- */
+function showDocent(sp){
+  var v = sp.real.v, mx = Math.max(v, HUMAN_H)*1.02;
+  var pw = Math.max(3, v/mx*100), hw = Math.max(3, HUMAN_H/mx*100);
+  docentEl.innerHTML =
+    '<div class="d-top"><div>' +
+      '<h2>' + sp.cn + '</h2>' +
+      '<p class="d-la">' + sp.latin + '</p>' +
+    '</div><button class="d-x" id="docentX" aria-label="关闭">×</button></div>' +
+    '<div class="d-stats">' +
+      '<div><span>' + sp.real.label + '</span><b>' + numSize(v) + '<i>m</i></b></div>' +
+      '<div><span>栖息深度</span><b>' + sp.band[0] + '–' + sp.band[1] + '<i>m</i></b></div>' +
+      '<div class="wide"><span>游动方式</span><b>' + (SWIM_CN[sp.id] || '—') + '</b></div>' +
+    '</div>' +
+    '<div class="d-cmp">' +
+      '<div class="d-cmp-t">和成人比一比 · ' + humanCompare(v) + '</div>' +
+      '<div class="d-bar"><span>' + sp.cn + '</span>' +
+        '<div class="d-track"><div style="width:' + pw.toFixed(1) + '%"></div></div>' +
+        '<em>' + fmtSize(sp) + '</em></div>' +
+      '<div class="d-bar hum"><span>成年人类</span>' +
+        '<div class="d-track"><div style="width:' + hw.toFixed(1) + '%"></div></div>' +
+        '<em>1.75 m</em></div>' +
+    '</div>' +
+    '<p class="d-fact">' + sp.fact + '</p>' +
+    '<p class="d-note">展厅中的大小按真实体型等比缩放' +
+      (sp.gain > 1.05 ? '；这一只实在太小，展柜里放大了 <b>×' + sp.gain.toFixed(1) + '</b> 才看得清'
+                      : '') + '。</p>';
+  docentEl.classList.add('on');
+  hudEl.classList.add('docent-on');
+  var x = document.getElementById('docentX');
+  if (x) x.addEventListener('click', hideDocent);
+}
+function hideDocent(){
+  docentEl.classList.remove('on');
+  hudEl.classList.remove('docent-on');
+}
+
+/* ---------- 体型对照表（展厅墙面图） ---------- */
+function buildChart(){
+  var rows = [], i, sp;
+  for (i=0;i<SPECIES.length;i++){
+    sp = SPECIES[i];
+    rows.push({ n: sp.cn, s: sp.latin, v: sp.real.v, c: hex6(sp.rim), hum: false });
+  }
+  rows.push({ n: '成年人', s: 'Homo sapiens', v: HUMAN_H, c: '#ffc7e0', hum: true, dsp: '1.75' });
+  rows.sort(function(a,b){ return b.v - a.v; });
+  var mx = rows[0].v, html =
+    '<div class="c-head"><h3>体型对照<em>TRUE SCALE</em></h3>' +
+      '<button class="d-x" id="chartX" aria-label="关闭" style="margin-left:auto">×</button></div>' +
+    '<p class="c-sub">深海是竖着的，体型是横着的。下面每一根条子都用同一把尺子画，可以直接比长短 —— 找到最长的那个了吗？</p>';
+  for (i=0;i<rows.length;i++){
+    var r = rows[i], w = Math.max(1.6, r.v/mx*100);
+    html += '<div class="sc-row' + (r.hum ? ' hum' : '') + '">' +
+      '<span class="sc-n">' + r.n + '<s>' + r.s + '</s></span>' +
+      '<div class="sc-track"><div style="width:' + w.toFixed(1) + '%;background:linear-gradient(90deg,' +
+        r.c + 'f0,' + r.c + '55)"></div></div>' +
+      '<b class="sc-v">' + (r.dsp || numSize(r.v)) + ' m</b></div>';
+  }
+  html += '<p class="c-foot">标注尺寸为该物种成年个体的常见值。鲸鲨是现存最大的鱼类，最长记录接近 12 米；' +
+          '蓝斑魟的体盘只有 30–40 厘米，比一只书包还小。' +
+          '左侧深度轴为了在一屏里放下 4000 米做了压缩，这里的横向条形才是真实比例。</p>';
+  chartEl.innerHTML = html;
+  var cx = document.getElementById('chartX');
+  if (cx) cx.addEventListener('click', hideChart);
+}
+function showChart(){
+  if (!chartEl.innerHTML) buildChart();
+  chartEl.classList.add('on');
+  chartBg.classList.add('on');
+  hideDocent();
+}
+function hideChart(){
+  chartEl.classList.remove('on');
+  chartBg.classList.remove('on');
+}
+
+/* ---------- 水下标牌：刚投放的生物挂一块名牌 ---------- */
+var tags = [];
+function addTag(c, sp){
+  var el = document.createElement('div');
+  el.className = 'tag';
+  el.innerHTML = '<b>' + sp.cn + '</b><i>' + fmtSize(sp) + '</i>';
+  tagsEl.appendChild(el);
+  tags.push({ c: c, el: el, life: 10 });
+  while (tags.length > 4){
+    var old = tags.shift();
+    if (old.el.parentNode) old.el.parentNode.removeChild(old.el);
+  }
+}
+var _tagV = new THREE.Vector3();
+function updateTags(dt){
+  for (var i=tags.length-1;i>=0;i--){
+    var t = tags[i];
+    t.life -= dt;
+    if (t.life <= 0 || creatures.indexOf(t.c) < 0){
+      if (t.el.parentNode) t.el.parentNode.removeChild(t.el);
+      tags.splice(i,1);
+      continue;
+    }
+    var sp = t.c.spec;
+    var off = sp.kind === 'ray' ? sp.span*0.30 : (sp.kind === 'fish' ? sp.len*0.26 : sp.bell*2.3);
+    _tagV.copy(t.c.pos); _tagV.y += off;
+    _tagV.project(camera);
+    if (_tagV.z > 1){ t.el.style.opacity = '0'; continue; }
+    t.el.style.left = ((_tagV.x*0.5+0.5)*window.innerWidth).toFixed(1) + 'px';
+    t.el.style.top  = ((-_tagV.y*0.5+0.5)*window.innerHeight).toFixed(1) + 'px';
+    t.el.style.opacity = t.life < 1.4 ? Math.max(0, t.life/1.4).toFixed(2) : '';
+    t.el.classList.add('on');
+  }
+}
+
+/* ---------- 画布交互 ---------- */
+var raycasterPlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+var tmpVec = new THREE.Vector3();
+function worldFromPointer(cx, cy){
+  var ndcX = (cx/window.innerWidth)*2-1;
+  var ndcY = -(cy/window.innerHeight)*2+1;
+  tmpVec.set(ndcX, ndcY, 0.5).unproject(camera);
+  var dir = tmpVec.sub(camera.position).normalize();
+  var t = -camera.position.z / dir.z;
+  return camera.position.clone().add(dir.multiplyScalar(t));
+}
+
+var vortexDrag = false;
+var camDrag = null;
+var pointers = {}, pinch = null;
+
+function twoFinger(){
+  var ids = [], i, p;
+  for (var k in pointers) if (pointers.hasOwnProperty(k)) ids.push(pointers[k]);
+  if (ids.length < 2) return null;
+  p = ids[0]; var q = ids[1];
+  return {
+    dist: Math.sqrt((p.x-q.x)*(p.x-q.x) + (p.y-q.y)*(p.y-q.y)),
+    cx: (p.x+q.x)*0.5, cy: (p.y+q.y)*0.5
+  };
+}
+
+canvas.addEventListener('pointerdown', function(e){
+  pointers[e.pointerId] = { x:e.clientX, y:e.clientY };
+  var count = 0; for (var k in pointers) if (pointers.hasOwnProperty(k)) count++;
+  try { canvas.setPointerCapture(e.pointerId); } catch(err){}
+
+  if (count >= 2){ camDrag = null; pinch = twoFinger(); return; }
+
+  // 旋涡开启 / Shift / 右键：拖动旋涡；否则拖动视角
+  if (state.vortexOn || e.shiftKey || e.button === 2){
+    vortexDrag = true;
+    var p = worldFromPointer(e.clientX, e.clientY);
+    moveVortex(p.x, p.y);
+    return;
+  }
+  camDrag = { id:e.pointerId, x0:e.clientX, y0:e.clientY, cx:cam.tx, cy:cam.ty, moved:false };
+});
+
+canvas.addEventListener('pointermove', function(e){
+  var rec = pointers[e.pointerId];
+  if (rec){ rec.x = e.clientX; rec.y = e.clientY; }
+
+  if (vortexDrag){
+    var p = worldFromPointer(e.clientX, e.clientY);
+    moveVortex(p.x, p.y);
+  } else if (pinch){
+    var st = twoFinger();
+    if (st){
+      var w = pxToWorld();
+      camDolly(-(st.dist - pinch.dist) * 0.16);
+      camNudge((st.cx - pinch.cx) * w, (st.cy - pinch.cy) * w);
+      pinch = st;
+    }
+  } else if (camDrag && e.pointerId === camDrag.id){
+    var dx = e.clientX - camDrag.x0, dy = e.clientY - camDrag.y0;
+    if (!camDrag.moved && dx*dx + dy*dy > 28) camDrag.moved = true;
+    if (camDrag.moved){
+      var w2 = pxToWorld();
+      cam.tx = camDrag.cx - dx*w2;
+      cam.ty = camDrag.cy + dy*w2;
+      camClamp();
+      cam.held = true; cam.holdT = state.time;
+    }
+  }
+  var dp = worldFromPointer(e.clientX, e.clientY);
+  var d = yToDepth(dp.y);
+  var ds = d < 10 ? d.toFixed(0) : Math.round(d/10)*10;
+  /* 3 米一层楼，给孩子一个生活参照 */
+  depthEl.innerHTML = '深度 ' + ds + ' m' +
+    (d >= 9 ? '<em>约 ' + Math.round(d/3) + ' 层楼</em>' : '');
+});
+
+function endPointer(e){
+  delete pointers[e.pointerId];
+  var count = 0; for (var k in pointers) if (pointers.hasOwnProperty(k)) count++;
+  if (count < 2) pinch = null;
+  if (camDrag && e.pointerId === camDrag.id){
+    if (!camDrag.moved){
+      var p = worldFromPointer(e.clientX, e.clientY);
+      spawnBiolum(p.x, p.y);
+      if (docentEl.classList.contains('on')) hideDocent();
+    }
+    camDrag = null;
+  }
+  vortexDrag = false;
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', function(){ vortexDrag = false; pinch = null; });
+
+canvas.addEventListener('wheel', function(e){
+  e.preventDefault();
+  camDolly(clamp(e.deltaY, -120, 120) * 0.085);
+}, { passive: false });
+
+canvas.addEventListener('dblclick', function(){ camReset(); });
+canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+function moveVortex(x, y){
+  U.uVortex.value.set(clamp(x,-20,20), clamp(y,-20,20));
+  vortexMesh.position.set(U.uVortex.value.x, U.uVortex.value.y, -2);
+}
+
+function spawnBiolum(x, y){
+  var p = new THREE.Vector3(x, y, 0);
+  var b = bioPool[bioRef.i % bioPool.length]; bioRef.i++;
+  b.userData.age = 0;
+  b.material.uniforms.uOrigin.value.copy(p);
+  b.visible = true;
+  spawnRing(p, 4.2);
+  scareCreatures(x, y, 9);
+  playBubble(0.5);
+}
+
+/* ============================================================
+   5. 声音
+   ============================================================ */
+var Sound = {
+  ctx: null, master: null, on: false, ready: false, whaleTimer: 8, noiseBuf: null,
+  init: function(){
+    if (this.ctx) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    var ctx = new AC();
+    this.ctx = ctx;
+    var master = ctx.createGain();
+    master.gain.value = 0;
+    master.connect(ctx.destination);
+    this.master = master;
+
+    var len = Math.floor(ctx.sampleRate*3);
+    var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i=0;i<len;i++) data[i] = (Math.random()*2-1)*0.7;
+    this.noiseBuf = buf;
+
+    var src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 200; lp.Q.value = 0.8;
+    var g1 = ctx.createGain(); g1.gain.value = 0.36;
+    src.connect(lp); lp.connect(g1); g1.connect(master);
+    var lfo = ctx.createOscillator(); lfo.frequency.value = 0.065;
+    var lfoG = ctx.createGain(); lfoG.gain.value = 95;
+    lfo.connect(lfoG); lfoG.connect(lp.frequency);
+    lfo.start(); src.start();
+
+    var freqs = [43.5, 65.2, 87.1];
+    for (var k=0;k<freqs.length;k++){
+      var o = ctx.createOscillator();
+      o.type = k===2 ? 'triangle' : 'sine';
+      o.frequency.value = freqs[k];
+      var og = ctx.createGain(); og.gain.value = 0.085/(k+1);
+      var olp = ctx.createBiquadFilter(); olp.type='lowpass'; olp.frequency.value = 300;
+      o.connect(olp); olp.connect(og); og.connect(master);
+      o.start();
+    }
+    this.ready = true;
+  },
+  setOn: function(v){
+    this.init();
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    this.on = v;
+    var t = this.ctx.currentTime;
+    this.master.gain.cancelScheduledValues(t);
+    this.master.gain.linearRampToValueAtTime(v ? 0.85 : 0.0, t + (v?0.9:0.5));
+  },
+  whale: function(){
+    if (!this.ready || !this.on) return;
+    var ctx = this.ctx, t = ctx.currentTime;
+    var o = ctx.createOscillator(); o.type = 'sine';
+    var base = rand(120, 165);
+    o.frequency.setValueAtTime(base, t);
+    o.frequency.exponentialRampToValueAtTime(base*0.44, t+2.4);
+    var vib = ctx.createOscillator(); vib.frequency.value = 4.2;
+    var vibG = ctx.createGain(); vibG.gain.value = 7;
+    vib.connect(vibG); vibG.connect(o.frequency);
+    var o2 = ctx.createOscillator(); o2.type='sine';
+    o2.frequency.setValueAtTime(base*1.5, t);
+    o2.frequency.exponentialRampToValueAtTime(base*0.66, t+2.2);
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.10, t+0.55);
+    g.gain.exponentialRampToValueAtTime(0.0008, t+3.4);
+    var lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 520; lp.Q.value = 1.2;
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this.master);
+    o.start(t); o2.start(t); vib.start(t);
+    o.stop(t+3.6); o2.stop(t+3.6); vib.stop(t+3.6);
+  }
+};
+
+function playBubble(vol){
+  if (!Sound.ready || !Sound.on) return;
+  var ctx = Sound.ctx, t = ctx.currentTime;
+  var v = vol==null ? 1 : vol;
+  var o = ctx.createOscillator(); o.type='sine';
+  var f0 = rand(240, 520);
+  o.frequency.setValueAtTime(f0, t);
+  o.frequency.exponentialRampToValueAtTime(f0*3.1, t+0.055);
+  o.frequency.exponentialRampToValueAtTime(f0*1.2, t+0.16);
+  var g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.09*v, t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.20);
+  var bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=760; bp.Q.value=1.6;
+  o.connect(bp); bp.connect(g); g.connect(Sound.master);
+  o.start(t); o.stop(t+0.24);
+}
+
+/* ============================================================
+   6. 控制
+   ============================================================ */
+var btnVortex = document.getElementById('btnVortex');
+var btnStill = document.getElementById('btnStill');
+var btnClear = document.getElementById('btnClear');
+var btnSound = document.getElementById('btnSound');
+var btnHide = document.getElementById('btnHide');
+var btnRoam = document.getElementById('btnRoam');
+var btnAuto = document.getElementById('btnAuto');
+var btnReset = document.getElementById('btnReset');
+var btnSize = document.getElementById('btnSize');
+var btnFly = document.getElementById('btnFly');
+var shaftRange = document.getElementById('shaftRange');
+
+btnSize.addEventListener('click', function(){
+  if (chartEl.classList.contains('on')) hideChart(); else showChart();
+});
+chartBg.addEventListener('click', hideChart);
+
+function setRoam(v){
+  cam.roam = v;
+  btnRoam.classList.toggle('on', v);
+}
+
+function setVortex(v){
+  state.vortexOn = v;
+  U.uVortexOn.value = v ? 1 : 0;
+  btnVortex.classList.toggle('on', v);
+}
+function setStill(v){
+  state.stillT = v ? 1 : 0;
+  btnStill.classList.toggle('on', v);
+}
+function setClear(v){
+  state.clearT = v ? 1 : 0;
+  btnClear.classList.toggle('on', v);
+}
+function setSound(v){
+  Sound.setOn(v);
+  state.soundOn = v;
+  btnSound.classList.toggle('on', v);
+}
+function setShaft(v){
+  state.shaft = v;
+  U.uShaft.value = v;
+  shaftRange.value = v;
+  for (var i=0;i<shaftMats.length;i++){
+    shaftMats[i].uniforms.uOpacity.value = v * (shaftGroup.children[i].userData.baseOp || 0.8);
+  }
+  shaftGroup.visible = v > 0.02;
+}
+function hideUI(){
+  state.uiHidden = !state.uiHidden;
+  hudEl.classList.toggle('hidden', state.uiHidden);
+  btnHide.classList.toggle('on', state.uiHidden);
+}
+
+btnVortex.addEventListener('click', function(){ setVortex(!state.vortexOn); });
+btnStill.addEventListener('click', function(){ setStill(state.stillT < 0.5); });
+btnClear.addEventListener('click', function(){ setClear(state.clearT < 0.5); });
+btnSound.addEventListener('click', function(){ setSound(!state.soundOn); });
+btnHide.addEventListener('click', function(){ hideUI(); });
+btnRoam.addEventListener('click', function(){ setRoam(!cam.roam); });
+btnReset.addEventListener('click', function(){ camReset(); });
+btnFly.addEventListener('click', function(){ startFlyby('whaleshark'); });
+shaftRange.addEventListener('input', function(){ setShaft(parseFloat(shaftRange.value)); });
+
+/* ---------- 键盘：方向键 / QE 移动视角 ---------- */
+var keys = {};
+window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
+
+window.addEventListener('keydown', function(e){
+  var k = e.key.toLowerCase();
+  keys[k] = true;
+  if (k === 'arrowup' || k === 'arrowdown' || k === 'arrowleft' || k === 'arrowright') e.preventDefault();
+  if (k === '0' || k === ' '){ camReset(); e.preventDefault(); }
+  else if (k === 'f'){ setRoam(!cam.roam); }
+  else if (k === 'r'){ setStill(state.stillT < 0.5); }
+  else if (k === 'w'){
+    var seq = [0, 1, 1.8];
+    var idx = 0;
+    for (var i=0;i<seq.length;i++) if (Math.abs(seq[i]-state.shaft) < 0.05) idx = i;
+    setShaft(seq[(idx+1)%seq.length]);
+  }
+  else if (k === 'c'){ setClear(state.clearT < 0.5); }
+  else if (k === 'm'){ setSound(!state.soundOn); }
+  else if (k === 'b'){ btnSize.click(); }
+  else if (k === 'g'){ startFlyby('whaleshark'); }
+  else if (k === 'd'){ setDive(!dive.on); }
+  else if (k === 't'){ setAuto(!auto.on); }
+  else if (k === '['){ stepStop(-1); }
+  else if (k === ']'){ stepStop(1); }
+  else if (k === 'escape'){ hideChart(); hideDocent(); }
+  else if (k === 'h'){ hideUI(); }
+});
+
+/* ============================================================
+   7. 质量自适应
+   ============================================================ */
+function applyQuality(){
+  renderer.setPixelRatio(baseDPR*state.q);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  U.uDpr.value = baseDPR*state.q;
+  snowGeo.setDrawRange(0, Math.max(1200, Math.floor(SNOW_N*(0.30+0.70*state.q))));
+  bubGeo.setDrawRange(0, Math.max(80, Math.floor(BUB_N*(0.35+0.65*state.q))));
+}
+
+function onResize(){
+  var w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  camera.position.z = CAM_DIST + cam.z;
+  renderer.setSize(w,h);
+  U.uAspect.value = w/h;
+}
+window.addEventListener('resize', onResize);
+U.uAspect.value = window.innerWidth/window.innerHeight;
+
+/* ============================================================
+   8. 主循环
+   ============================================================ */
+var clock = new THREE.Clock();
+var dummy = new THREE.Object3D();
+
+/* ---------- 生物游动（自主巡游 / 水族馆） ---------- */
+var CR_Z_LO = -19, CR_Z_HI = 7;
+var _tv = new THREE.Vector3(), _sep = new THREE.Vector3(), _dir = new THREE.Vector3();
+
+/* 同一个 x 坐标，在近处 z 上是画内、在远处 z 上早就出画了；
+   所以「出画」必须按每条鱼自己的深度算，不能用一个固定的墙。 */
+function viewHalfW(z){
+  var d = Math.max(6, camera.position.z - z);
+  return Math.tan(FOV*0.5*Math.PI/180) * camera.aspect * d;
+}
+/* 整条鱼（含尾巴）是否已经完全游出画面 */
+function outOfView(c){
+  return Math.abs(c.pos.x - camera.position.x) > viewHalfW(c.pos.z) + 1.6 + c.halfL*1.1;
+}
+function angleLerp(a, b, t){
+  var d = b - a;
+  while (d >  Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  return a + d*t;
+}
+
+/* 瞬时推进系数（长期均值≈1）。
+   动物的推力不是均匀的：翅膀下压、伞体收缩、尾鳍甩到底的那一瞬间才有推力，
+   其余时间靠惯性滑行。位置若按匀速平移，看起来就像被海流冲着走。 */
+function gaitThrust(c, sp, dtc){
+  if (sp.kind === 'ray'){
+    if ((sp.rayWave || 0) > 0.5){
+      /* 魟式：体盘波动连续推进，只有小幅起伏 */
+      var pr = state.time*sp.flapSpeed + c.phase;
+      return 0.78 + 0.48*(0.5 + 0.5*Math.sin(pr));
+    }
+    /* 蝠鲼式 / 鹰鳐：扇几下 → 平翅滑翔一段（滑翔别太长，否则看着像被水冲走） */
+    c.glideT -= dtc;
+    if (c.glideT <= 0){
+      c.gliding = !c.gliding;
+      c.glideT = c.gliding ? rand(1.1, 2.0) : rand(3.4, 6.5);
+    }
+    c.glide = lerp(c.glide, c.gliding ? 1 : 0, Math.min(1, dtc*1.9));
+    var pg = state.time*sp.flapSpeed + c.phase;
+    var dn = -Math.cos(pg);                    /* 下压行程 */
+    var t2 = dn > 0 ? Math.pow(dn, 1.7) : 0;
+    return (1 - c.glide)*(0.58 + 1.70*t2) + c.glide*0.94;
+  }
+  if (sp.kind === 'jelly'){
+    /* 伞体收缩喷水，舒张时几乎不前进 */
+    var pj = state.time*sp.rate + c.phase;
+    var sj = Math.sin(pj);
+    var th = sj < 0 ? (-sj)*(-sj)*(-sj) : 0;
+    return 0.46 + 2.55*th;
+  }
+  /* 鱼：尾鳍每摆一下给一次推力，冲—滑节律 */
+  var pf = state.time*(c.flapSpd || sp.flapSpeed || 1)*5.0 + c.phase;
+  var surge = 0.5 + 0.5*Math.sin(pf - 1.1);
+  var bt = c.beatNow != null ? c.beatNow : 1;
+  return 0.70 + 0.56*bt*(0.24 + 0.76*surge);
+}
+
+function updateCreatures(dt){
+  var st = 1 - 0.74*state.still;
+  var dtc = Math.max(0.0001, dt*st);
+  var n = creatures.length;
+  var i, j, c, sp, isRay;
+  var dead = null;
+
+  for (i=n-1;i>=0;i--){
+    c = creatures[i]; sp = c.spec; isRay = sp.kind === 'ray';
+    var isFish2 = sp.kind === 'fish';
+    var swm = sp.swim || null;
+    c.t += dtc;
+    /* 潜航时水层边界放宽一点：屏幕上才铺得开，不然每层只有半屏有人 */
+    var bandPad = dive.on ? 2.6 : 0;
+    var yLo = depthToY(sp.band[1]) + 1.0 - bandPad;
+    var yHi = Math.min(depthToY(sp.band[0]) - 1.0 + bandPad, 20.4);
+
+    if (c.fly){
+      /* 近景掠过：走固定航道，不受巡游 / 边界 / 静海影响 */
+      updateFlyMotion(c, dt);
+    } else if (c.enter < 1){
+      /* 入场：从水柱外弧线游入所属水层 */
+      c.enter = Math.min(1, c.enter + dt/Math.max(0.001, c.enterDur));
+      var e = easeOutCubic(c.enter);
+      c.pos.set(
+        lerp(c.fromX, c.x, e),
+        lerp(c.fromY, c.y, e) - Math.sin(e*Math.PI)*2.6,
+        lerp(c.pos.z, c.z, e)
+      );
+      if (c.enter >= 1){
+        c.dirX = c.pos.x <= camera.position.x ? 1 : -1;
+        c.head = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.35, 0.35);
+        c.headV = rand(-0.12, 0.12);
+        c.vel.set(Math.cos(c.head), c.headV, Math.sin(c.head)).normalize().multiplyScalar(c.speed);
+        c.wander = rand(1.2, 3.0);
+      }
+    } else {
+      /* 1. 航道：一条长直线，几秒到十几秒才换一次航向。
+             换向时如果还在画面里，只做小角度修正（继续往前游）；
+             只有整条鱼已经游到画面外，才允许掉头往回游。
+             所以看到的是：鱼从一侧游进来 → 穿过整个画面 → 从另一侧出去。 */
+      c.wander -= dtc;
+      if (c.wander <= 0){
+        c.wander = isRay ? rand(7.0, 13.0) : (isFish2 ? rand(5.5, 10.5) : rand(10, 17));
+        if (outOfView(c) && Math.random() < 0.62) c.dirX = -c.dirX;
+        c.head  = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.50, 0.50);
+        c.headV = rand(-0.16, 0.16) * (isRay ? 1.5 : 1);
+      }
+
+      /* 2. 冲刺 / 受惊 */
+      if (isRay || isFish2){
+        c.dashT -= dtc;
+        if (c.dashT <= 0){ c.dashT = rand(6, 15); c.dash = rand(0.7, 1.7); }
+      }
+      var mul = c.speed;
+      if (c.dash > 0){ c.dash -= dtc; mul *= 2.1; }
+      if (c.scare > 0){ c.scare -= dtc; mul *= 2.3; }
+
+      /* 2.5 悬停型（神仙鱼这类主要靠胸鳍划水的鱼）：停停走走，
+             停住的时候只扇胸鳍，尾巴几乎不动 */
+      if (swm && swm.hover && c.dash <= 0 && c.scare <= 0){
+        c.hoverT -= dtc;
+        if (c.hoverT <= 0){
+          c.hovering = !c.hovering;
+          c.hoverT = c.hovering ? rand(1.8, 3.8) : rand(2.0, 4.4);
+        }
+        if (c.hovering){
+          mul *= 0.15;
+          c.wander = Math.max(c.wander, 0.8);
+        }
+      } else if (c.hovering && (c.dash > 0 || c.scare > 0)){
+        c.hovering = false;
+        c.hoverT = rand(1.0, 2.0);
+      }
+
+      /* 3. 期望速度：沿航道笔直往前，叠一点缓慢起伏和蛇行，不至于像轨道车 */
+      var hv = c.headV + Math.sin(c.t*0.42 + c.phase)*0.085;
+      var mean = Math.sin(c.t*(0.34 + 0.10*Math.cos(c.phase)) + c.phase)*0.26;
+      _tv.set(
+        Math.cos(c.head) - Math.sin(c.head)*mean,
+        hv,
+        Math.sin(c.head) + Math.cos(c.head)*mean
+      ).normalize().multiplyScalar(mul);
+
+      /* 4. 同伴分离（避免叠在一起） */
+      _sep.set(0,0,0);
+      for (j=0;j<n;j++){
+        if (j === i) continue;
+        var o = creatures[j];
+        if (o.enter < 1) continue;
+        var dxx = c.pos.x-o.pos.x, dyy = c.pos.y-o.pos.y, dzz = c.pos.z-o.pos.z;
+        var d2 = dxx*dxx + dyy*dyy + dzz*dzz;
+        var R = isRay ? Math.max(3.6, sp.span*0.62)
+              : (isFish2 ? Math.max(2.4, sp.len*0.85) : Math.max(2.2, sp.bell*2.6));
+        if (d2 < R*R && d2 > 0.0004){
+          var dd = Math.sqrt(d2);
+          var w = (1 - dd/R) * mul;
+          _sep.x += dxx/dd*w; _sep.y += dyy/dd*w; _sep.z += dzz/dd*w;
+        }
+      }
+      _tv.add(_sep.multiplyScalar(0.9));
+
+      /* 5. 水层与纵深回避（水平方向不设墙，鱼可以游出画面） */
+      if (c.pos.z >  CR_Z_HI-3.0) _tv.z -= ((c.pos.z-(CR_Z_HI-3.0))/3.0)*mul*1.5;
+      if (c.pos.z <  CR_Z_LO+3.0) _tv.z += (((CR_Z_LO+3.0)-c.pos.z)/3.0)*mul*1.5;
+      if (c.pos.y >  yHi-1.6) _tv.y -= ((c.pos.y-(yHi-1.6))/1.6)*mul*1.3;
+      if (c.pos.y <  yLo+1.6) _tv.y += (((yLo+1.6)-c.pos.y)/1.6)*mul*1.3;
+
+      /* 6. 旋涡牵引（切向绕流 + 轻微向心） */
+      if (state.vortexOn){
+        var vx = U.uVortex.value.x, vy = U.uVortex.value.y;
+        var rx = c.pos.x-vx, ry = c.pos.y-vy;
+        var dv = Math.sqrt(rx*rx+ry*ry) + 0.001;
+        var infl = 1 - clamp(dv/(U.uVortexR.value*2.0), 0, 1);
+        infl = infl*infl;
+        _tv.x += (-ry/dv*1.05 - rx/dv*0.5) * mul * 1.7 * infl;
+        _tv.y += ( rx/dv*1.05 - ry/dv*0.5) * mul * 1.7 * infl;
+      }
+
+      /* 7. 方向单独平滑（转弯有惯性），速度大小交给推进节奏 */
+      var turn = isRay ? 2.0 : (isFish2 ? 1.6 : 0.9);
+      var kf = Math.min(1, dtc*turn);
+      var vcur = c.vel.length();
+      if (vcur > 0.001) _dir.copy(c.vel).multiplyScalar(1/vcur);
+      else _dir.copy(_tv);
+      _tv.normalize();
+      /* 鳐类随翅膀的下压上浮一点，像真的在水里「飞」 */
+      if (isRay){
+        var pb = state.time*sp.flapSpeed + c.phase;
+        _tv.y += Math.sin(pb - 1.2)*0.16;
+        _tv.normalize();
+      }
+      _dir.lerp(_tv, kf);
+      if (_dir.lengthSq() < 1e-6) _dir.copy(_tv);
+      if (_dir.lengthSq() < 1e-6) _dir.set(1, 0, 0);
+      _dir.normalize();
+
+      /* 8. 推进节奏：扇翼 / 喷水 / 摆尾的那一下才加速，其余时间滑行 */
+      var gm = gaitThrust(c, sp, dtc);
+      var vDes = mul*gm;
+
+      if (!isRay && !isFish2){
+        /* 水母：收缩喷水（竖向为主），横向同样只在收缩时被推出去 */
+        var ph = state.time*sp.rate + c.phase;
+        var sn = Math.sin(ph);
+        var thrust = sn < 0 ? (-sn)*(-sn)*(-sn) : 0;
+        var vyT = thrust*sp.rate*2.9 - 0.62 + Math.sin(c.t*0.21+c.phase)*0.14;
+        c.vel.y = lerp(c.vel.y, vyT, Math.min(1, dtc*3.4));
+        var kh = Math.min(1, dtc*3.2);
+        c.vel.x = lerp(c.vel.x, _dir.x*vDes*0.86, kh);
+        c.vel.z = lerp(c.vel.z, _dir.z*vDes*0.86, kh);
+      } else {
+        var kv2 = Math.min(1, dtc*(isRay ? 4.2 : 6.0));
+        c.vel.x = lerp(c.vel.x, _dir.x*vDes, kv2);
+        c.vel.y = lerp(c.vel.y, _dir.y*vDes, kv2);
+        c.vel.z = lerp(c.vel.z, _dir.z*vDes, kv2);
+      }
+
+      var vmax = mul*1.6*Math.max(1, gm);
+      var vm = c.vel.length();
+      if (vm > vmax) c.vel.multiplyScalar(vmax/vm);
+
+      /* 9. 积分：横向不设墙。整条鱼游出画面后，先在画外待一两秒
+             （这段时间谁都看不见它），再从另一侧或原路游回来。
+             所以鱼是真的会「游出视线之外」，而不是贴着看不见的边框打转。 */
+      if (c.hideT > 0){
+        c.hideT -= dtc;
+        if (c.hideT <= 0){
+          var h2 = viewHalfW(c.pos.z) + 1.6 + c.halfL*1.1;
+          if (c.hideSwap){
+            /* 从对面重新进场，方向不变 */
+            c.pos.x = camera.position.x - c.hideSide*h2;
+            c.pos.y = clamp(c.pos.y + rand(-2.4, 2.4), yLo, yHi);
+            c.dirX = c.hideSide;
+          } else {
+            /* 掉头，顺着原路游回来 */
+            c.dirX = -c.hideSide;
+          }
+          c.head  = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.35, 0.35);
+          c.headV = rand(-0.12, 0.12);
+          c.vel.set(Math.cos(c.head), c.headV, Math.sin(c.head)).normalize().multiplyScalar(c.speed);
+          c.wrapCool = 0.8;
+        }
+      } else {
+        c.pos.addScaledVector(c.vel, dtc);
+        if (c.wrapCool > 0) c.wrapCool -= dtc;
+        var hwz = viewHalfW(c.pos.z) + 1.6 + c.halfL*1.1;
+        var ndx = c.pos.x - camera.position.x;
+        if (c.wrapCool <= 0 && (ndx > hwz || ndx < -hwz)){
+          c.hideSide = ndx > 0 ? 1 : -1;
+          c.hideSwap = Math.random() < 0.62;
+          c.hideT    = rand(1.6, 4.2);
+          /* 再往外挪一点：相机慢慢漂移时，不至于把「藏着」的鱼露出来 */
+          c.pos.x += c.hideSide*2.5;
+        }
+        if (c.pos.z <  CR_Z_LO){ c.pos.z =  CR_Z_LO; c.vel.z = Math.abs(c.vel.z)*0.5; }
+        if (c.pos.z >  CR_Z_HI){ c.pos.z =  CR_Z_HI; c.vel.z = -Math.abs(c.vel.z)*0.5; }
+        if (c.pos.y <  yLo){ c.pos.y = yLo; c.vel.y = Math.abs(c.vel.y)*0.4; }
+        if (c.pos.y >  yHi){ c.pos.y = yHi; c.vel.y = -Math.abs(c.vel.y)*0.4; }
+      }
+    }
+
+    /* ---- 姿态：朝向速度方向 ---- */
+    var yawT;
+    if (isRay){
+      var vl = Math.sqrt(c.vel.x*c.vel.x + c.vel.z*c.vel.z);
+      var prev = c.yaw;
+      var pitchT, rollT;
+      /* 鳐类：前方为局部 +Y、背为局部 +Z
+         用 YXZ 欧拉（Ry·Rx·Rz）令「背恒朝上、前方水平朝游动方向」：
+         Rz(-PI/2) 把前方转到 +X，Rx(-PI/2) 把背转到 +Y，Ry 定水平朝向 */
+      yawT = vl > 0.06 ? Math.atan2(-c.vel.z, c.vel.x) : c.yaw;
+      c.yaw = angleLerp(c.yaw, yawT, Math.min(1, dtc*2.8));
+      c.yawR = lerp(c.yawR, clamp((c.yaw-prev)/dtc, -1.7, 1.7), Math.min(1, dtc*3));
+      pitchT = -Math.PI*0.5 + 0.72
+             + clamp(-c.vel.y*0.18, -0.24, 0.34)
+             + Math.sin(c.t*0.52+c.phase)*0.05;
+      rollT  = clamp(-c.yawR*0.55, -0.62, 0.62) + Math.sin(c.t*0.36+c.phase*1.7)*0.08;
+      c.pitch = lerp(c.pitch, pitchT, Math.min(1, dtc*3.0));
+      c.roll  = lerp(c.roll, rollT, Math.min(1, dtc*2.4));
+      if (c.mats[0]){
+        var ur = c.mats[0].uniforms;
+        var gld = c.fly ? 0 : c.glide;
+        /* 滑翔：翅膀放平到 48% 幅度，翼尖略微上扬（真实的蝠鲼滑翔时仍在轻轻扇） */
+        ur.uFlapAmp.value = sp.flapAmp * (1 - 0.52*gld);
+        ur.uCurl.value =
+          Math.sin(c.t*0.6+c.phase)*0.10*(1 - 0.6*gld)
+          + clamp(c.vel.length()*0.05, 0, 0.14)
+          - 0.09*gld;
+      }
+    } else if (isFish2){
+      /* 鱼：前方为局部 -Z；俯仰跟随垂直速度，转弯侧倾，摆尾频率随游速 */
+      var vl3 = Math.sqrt(c.vel.x*c.vel.x + c.vel.z*c.vel.z);
+      var prev3 = c.yaw;
+      yawT = vl3 > 0.05 ? Math.atan2(-c.vel.x, -c.vel.z) : c.yaw;
+      if (c.fly) yawT += c.fly.crab*clamp((c.fly.u-0.30)/0.35, 0, 1);
+      c.yaw = angleLerp(c.yaw, yawT, Math.min(1, dtc*2.2));
+      c.yawR = lerp(c.yawR, clamp((c.yaw-prev3)/dtc, -1.6, 1.6), Math.min(1, dtc*2.6));
+      var pT3 = clamp(Math.atan2(c.vel.y, Math.max(0.4, vl3)) * 0.85, -0.55, 0.55)
+              + Math.sin(c.t*0.70 + c.phase)*0.045;
+      var rT3 = clamp(-c.yawR*0.55, -0.55, 0.55) + Math.sin(c.t*0.50 + c.phase)*0.05;
+      if (c.fly) rT3 += c.fly.side * 0.28 * clamp((c.fly.u-0.44)/0.34, 0, 1);  /* 掠过时侧倾，露出斑纹背脊 */
+      c.pitch = lerp(c.pitch, pT3, Math.min(1, dtc*2.6));
+      c.roll  = lerp(c.roll,  rT3, Math.min(1, dtc*2.2));
+      if (c.mats[0]){
+        var uni = c.mats[0].uniforms;
+        var spdN = c.vel.length()/Math.max(0.5, c.speed);
+        uni.uFlapSpeed.value = sp.flapSpeed*(0.72 + 0.50*Math.min(1.6, spdN));
+        c.flapSpd = uni.uFlapSpeed.value;
+        /* 摆尾节律：鲨鱼 / 鲸鲨 / 金枪鱼都是「摆几下→滑一段」，
+           巡航时尾巴一直在动，冲刺或受惊时几乎连续摆尾 */
+        var beatT = 1.0;
+        if (swm && swm.glide){
+          var bp = Math.sin(c.t*(0.62 + 0.55*swm.glide) + c.phase*1.7);
+          beatT = lerp(1.0, 0.16 + 1.05*smoothstep(-0.35, 0.55, bp), swm.glide);
+          if (c.dash > 0 || c.scare > 0) beatT = 1.25;
+        }
+        if (c.hovering) beatT *= 0.16;
+        uni.uBeat.value = lerp(uni.uBeat.value, beatT, Math.min(1, dtc*4.5));
+        c.beatNow = uni.uBeat.value;
+        var rowT = (c.hovering ? 1.0 : (swm && swm.row != null ? swm.row : 0.12)) * (sp.len || 1);
+        uni.uRow.value = lerp(uni.uRow.value, rowT, Math.min(1, dtc*3.0));
+        /* 转弯时整条身体向弯内弯过去（而不是像块木板一样平移） */
+        uni.uBend.value = lerp(uni.uBend.value, clamp(-c.yawR, -2.2, 2.2)*0.070*(sp.len||1), Math.min(1, dtc*2.6));
+      }
+    } else {
+      var vl2 = Math.sqrt(c.vel.x*c.vel.x + c.vel.z*c.vel.z);
+      yawT = vl2 > 0.05 ? Math.atan2(c.vel.x, c.vel.z) : c.yaw + dtc*0.25;
+      c.yaw = angleLerp(c.yaw, yawT, Math.min(1, dtc*0.7));
+      var pT = clamp(-c.vel.y*0.14, -0.20, 0.20) + Math.sin(c.t*0.3+c.phase)*0.05;
+      var rT = Math.sin(c.t*0.24+c.phase)*0.11;
+      c.pitch = lerp(c.pitch, pT, Math.min(1, dtc*1.6));
+      c.roll  = lerp(c.roll, rT, Math.min(1, dtc*1.4));
+    }
+
+    c.x = c.pos.x; c.y = c.pos.y; c.z = c.pos.z;
+    c.depth = yToDepth(c.pos.y);
+    /* 鮟鱇的灯会一明一暗地晃，孩子才注意得到那根钓竿 */
+    if (c.group.userData.lure){
+      var lur = c.group.userData.lure;
+      var lp = 0.62 + 0.38*Math.sin(state.time*1.9 + c.phase*1.3);
+      lur.material.opacity = 0.55 + 0.45*lp;
+      lur.scale.setScalar((c.group.userData.lureBase || 1.3) * (0.90 + 0.16*lp));
+    }
+    c.group.position.set(c.pos.x, c.pos.y, c.pos.z);
+    c.group.rotation.y = c.yaw;
+    c.group.rotation.x = c.pitch;
+    c.group.rotation.z = c.roll;
+
+    if (c.fly && c.fly.u >= 1){ (dead || (dead = [])).push(c); }
+  }
+  if (dead) for (var di=0;di<dead.length;di++) removeCreature(dead[di]);
+}
+
+/* 点击发光时惊扰附近生物：它们会加速散开 */
+function scareCreatures(x, y, r){
+  for (var i=0;i<creatures.length;i++){
+    var c = creatures[i];
+    if (c.enter < 1) continue;
+    var dx = c.pos.x-x, dy = c.pos.y-y;
+    var d = Math.sqrt(dx*dx+dy*dy);
+    if (d < r){
+      var k = d > 0.01 ? 1/d : 1;
+      c.scare = rand(0.7, 1.5);
+      /* 掉头往外跑：横向离开惊扰源，纵向也躲开一点 */
+      c.dirX = dx >= 0 ? 1 : -1;
+      c.head = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.45, 0.45);
+      c.headV = clamp(dy*k*1.6, -0.42, 0.42);
+      c.wander = rand(1.4, 2.6);
+    }
+  }
+}
+
+function updateBursts(dt){
+  var i, p;
+  for (i=0;i<bioPool.length;i++){
+    p = bioPool[i];
+    p.userData.age += dt;
+    p.material.uniforms.uAge.value = p.userData.age;
+    p.visible = p.userData.age < p.userData.dur;
+  }
+  for (i=0;i<bubblePool.length;i++){
+    p = bubblePool[i];
+    p.userData.age += dt;
+    p.material.uniforms.uAge.value = p.userData.age;
+    p.visible = p.userData.age < p.userData.dur;
+  }
+  for (i=0;i<ringPool.length;i++){
+    var r = ringPool[i];
+    if (!r.visible) continue;
+    r.userData.age += dt;
+    r.material.uniforms.uAge.value = r.userData.age;
+    if (r.userData.age > r.material.uniforms.uDur.value) r.visible = false;
+  }
+}
+
+function updateFish(dt){
+  if (!fishMesh) return;
+  var t = state.time;
+  for (var k=0;k<schools.length;k++){
+    var sc = schools[k];
+    sc.x += sc.sp*dt*0.75;
+    if (sc.x > 46) sc.x = -46;
+    if (sc.x < -46) sc.x = 46;
+  }
+  for (var i=0;i<FISH_N;i++){
+    var f = fishData[i];
+    var sc2 = schools[f.s];
+    var sway = Math.sin(t*0.55 + f.ph)*0.32;
+    dummy.position.set(
+      sc2.x + f.ox,
+      sc2.y + f.oy + sway,
+      sc2.z + Math.sin(f.ox*0.35)*1.2
+    );
+    dummy.rotation.set(0, 0, sc2.sp > 0 ? -Math.PI*0.5 : Math.PI*0.5);
+    dummy.scale.setScalar(f.sc);
+    dummy.updateMatrix();
+    fishMesh.setMatrixAt(i, dummy.matrix);
+  }
+  fishMesh.instanceMatrix.needsUpdate = true;
+}
+
+function tick(){
+  var dt = Math.min(clock.getDelta(), 0.05);
+  state.time += dt;
+
+  state.still = lerp(state.still, state.stillT, Math.min(1, dt*2.2));
+  state.clear = lerp(state.clear, state.clearT, Math.min(1, dt*2.0));
+  U.uStill.value = state.still;
+  U.uClear.value = state.clear;
+
+  /* ---- 潜航：镜头顺着水柱下沉到选定的一层 ---- */
+  tickAuto(dt);
+  dive.amount = lerp(dive.amount, dive.on ? 1 : 0, Math.min(1, dt*2.6));
+  dive.curY   = lerp(dive.curY, dive.on ? diveBaseY() : 0, Math.min(1, dt*2.4));
+  var dAmt = dive.amount;
+
+  var bobAmp = 0.55*(1-0.85*state.still)*(1-0.55*dAmt);
+  state.bob = (Math.sin(state.time*0.23)*0.62 + Math.sin(state.time*0.112+1.7)*0.38)*bobAmp;
+  /* ---- 视角：上下 / 左右 / 前后（只平移，绝不旋转） ---- */
+  var kv = 15*dt, moved = false;
+  if (keys['arrowleft'])  { cam.tx -= kv; moved = true; }
+  if (keys['arrowright']) { cam.tx += kv; moved = true; }
+  if (keys['arrowup'])    { cam.ty += kv; moved = true; }
+  if (keys['arrowdown'])  { cam.ty -= kv; moved = true; }
+  if (keys['q'])          { cam.tz -= kv*1.6; moved = true; }
+  if (keys['e'])          { cam.tz += kv*1.6; moved = true; }
+  if (moved){ camClamp(); cam.held = true; cam.holdT = state.time; }
+  if (cam.held && state.time - cam.holdT > 2.6) cam.held = false;
+
+  var ax = 0, ay = 0, az = 0;
+  if (cam.roam){
+    var bl = cam.held ? clamp(1 - (state.time - cam.holdT)/2.6, 0, 1) : 1;
+    bl *= (1 - 0.85*state.still);
+    var rk = bl*(1 - 0.52*dAmt);
+    ax = (Math.sin(state.time*0.085)*5.0 + Math.sin(state.time*0.037+2.1)*2.4) * rk;
+    ay = (Math.sin(state.time*0.062+1.3)*3.2) * rk;
+    az = (Math.sin(state.time*0.043+0.7)*5.5) * rk;
+  }
+  cam.x = lerp(cam.x, cam.tx + ax, Math.min(1, dt*1.5));
+  cam.y = lerp(cam.y, cam.ty + ay, Math.min(1, dt*1.5));
+  cam.z = lerp(cam.z, cam.tz + az, Math.min(1, dt*1.2));
+  /* 潜航时镜头拉近 1.9 倍，看的就是这一层 */
+  var camY = clamp(state.bob + cam.y + dive.curY, -30, 27);
+  camera.position.set(cam.x, camY, CAM_DIST*lerp(1, DIVE_ZOOM, dAmt) + cam.z);
+  camera.rotation.set(0, 0, 0);
+
+  U.uTime.value = state.time;
+  /* 背景按镜头的真实深度上色；潜航时把整条色带压缩，屏幕只覆盖当前这一层 */
+  var kz = CAM_DIST / Math.max(1, camera.position.z);
+  U.uBgZoom.value = lerp(1, kz, dAmt);
+  U.uBgBob.value = (Y_TOP - camY)/WORLD_H - 0.5;
+  U.uLit.value = dAmt;
+  /* 海底跟着一起暗下去：深处的岩壁不该比鱼还亮 */
+  if (abyssMats.length && Math.abs(abyssK - (1 - 0.62*dAmt)) > 0.004){
+    abyssK = 1 - 0.62*dAmt;
+    for (var _ai=0;_ai<abyssMats.length;_ai++) abyssMats[_ai].color.setScalar(abyssK);
+  }
+  rulerBody.style.transform = 'translate3d(0,' +
+    (camY/WORLD_H*window.innerHeight*kz).toFixed(2) + 'px,0) scaleY(' + kz.toFixed(4) + ')';
+  /* 标尺被放大后，文字要反向缩回去，否则会被拉长 */
+  if (Math.abs(kz - rulerKz) > 0.015){
+    rulerKz = kz;
+    var inv = 1/kz;
+    for (var rl=0;rl<rulerLabels.length;rl++){
+      var ro = rulerLabels[rl];
+      ro[0].style.transform = (ro[1] === 2 ? 'translateY(-50%) ' : '') + 'scaleY(' + inv.toFixed(4) + ')';
+    }
+  }
+  /* 深处没有阳光，光柱收掉 */
+  var lit = 1 - smoothstep(120, 520, dive.depth)*dAmt;
+  shaftGroup.visible = state.shaft > 0.02 && lit > 0.14;
+
+  tempMesh.position.y = depthToY(470) + Math.sin(state.time*0.12)*1.6;
+  vortexMesh.position.set(U.uVortex.value.x, U.uVortex.value.y, -2);
+  vortexMesh.visible = state.vortexOn;
+
+  updateCreatures(dt);
+  updateFlybyTimer(dt);
+  updateBursts(dt);
+  updateFish(dt);
+
+  if (state.soundOn){
+    Sound.whaleTimer -= dt;
+    if (Sound.whaleTimer < 0){ Sound.whale(); Sound.whaleTimer = rand(13, 28); }
+  }
+
+  renderer.clear();
+  renderer.render(bgScene, bgCam);
+  renderer.clearDepth();
+  renderer.render(scene, camera);
+  updateTags(dt);
+
+  renderThumbStep();
+
+  // 帧率统计
+  state.frames++;
+  if (state.time - state.lastT > 1.2){
+    var fps = state.frames/(state.time - state.lastT);
+    state.frames = 0; state.lastT = state.time;
+    state.fps = fps;
+    var q = state.q;
+    if (fps < 44 && q > 0.55) q = Math.max(0.55, q - 0.12);
+    else if (fps < 52 && q > 0.7) q = Math.max(0.7, q - 0.07);
+    else if (fps > 58 && q < 1) q = Math.min(1, q + 0.05);
+    if (Math.abs(q - state.q) > 0.02){ state.q = q; applyQuality(); }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/* ============================================================
+   9. 初始化
+   ============================================================ */
+onResize();
+applyQuality();
+updateStatus();
+setShaft(1);
+setRoam(true);
+
+/* ============================================================
+   8.7 深度导览：选一层深度，潜航下去看这一层的住户
+   ------------------------------------------------------------
+   展厅本来是一整根竖着的水柱。选中一个深度，镜头顺着水柱
+   下沉、拉近，只留下那一层的居民；越往下光越少、长得越怪。
+   ============================================================ */
+var DIVE_ZOOM = 0.38;
+var STOPS = [
+  { d:0,    lab:'0',    cn:'海面 · 阳光带',
+    note:'阳光直接照进水里，海水是亮的。游得最快的鱼都在这一层。',
+    spread:34,  cast:[['dolphin',2],['tuna',3],['sailfish',2],['manta',1],['eagle',1]] },
+  { d:120,  lab:'120',  cn:'透光层',
+    note:'光还够看清方向，但红光和黄光已经被海水吃掉了。',
+    spread:70,  cast:[['dolphin',2],['angelfish',3],['puffer',2],['moray',2],['eagle',2]] },
+  { d:400,  lab:'400',  cn:'微光层',
+    note:'太阳只剩下一丝蓝光。这里的许多动物开始自己发光。',
+    spread:180, cast:[['shark',2],['whaleshark',1],['bluespot',3],['moon',2],['tuna',1]] },
+  { d:900,  lab:'900',  cn:'微光层深处',
+    note:'最后一点阳光在这里消失，再往下就是永远的黑暗。',
+    spread:290, cast:[['bluespot',2],['moon',2],['oarfish',2],['viperfish',3],['pelican',1]] },
+  { d:1800, lab:'1.8k', cn:'无光层',
+    note:'一点阳光也没有了。这里的鱼自己点灯，用来找路和找吃的。',
+    spread:520, cast:[['nettle',3],['viperfish',3],['pelican',2],['oarfish',2],['angler',1]] },
+  { d:3200, lab:'3.2k', cn:'深渊',
+    note:'水压能把钢铁压扁，动物长得像外星生物。',
+    spread:700, cast:[['angler',4],['viperfish',3],['pelican',2],['nettle',2]] }
+];
+
+function zoneInfo(d){
+  if (d < 200)  return { n:'透光层', range:'0–200 m' };
+  if (d < 1000) return { n:'微光层', range:'200–1000 m' };
+  return { n:'无光层', range:'1000–4000 m' };
+}
+/* 用「屏幕上的距离」找最近的展区：深度轴的深浅比例是不均匀的 */
+function nearestStop(d){
+  var bn = 1e9, bs = STOPS[0];
+  for (var i=0;i<STOPS.length;i++){
+    var k = Math.abs(depthToNorm(d) - depthToNorm(STOPS[i].d));
+    if (k < bn){ bn = k; bs = STOPS[i]; }
+  }
+  return bs;
+}
+function diveBaseY(){
+  /* 贴着所选深度，稍微往下一档，把海床和下层的水带进画面 */
+  return clamp(depthToY(dive.depth) - 1.2, -18, 12.6);
+}
+
+var dive = { on:false, depth:0, curY:0, amount:0, stop:null };
+
+var diveEl      = document.getElementById('dive');
+var btnDiveEl   = document.getElementById('btnDive');
+var diveDEl     = document.getElementById('diveD');
+var diveZEl     = document.getElementById('diveZ');
+var diveTipEl   = document.getElementById('diveTip');
+var diveRangeEl = document.getElementById('diveRange');
+var diveTicksEl = document.getElementById('diveTicks');
+var envTEl = document.getElementById('envT'), envLEl = document.getElementById('envL'), envPEl = document.getElementById('envP');
+var envTBEl = document.getElementById('envTB'), envLBEl = document.getElementById('envLB'), envPBEl = document.getElementById('envPB');
+var diveUEl = document.getElementById('diveU');
+var envWrapEl = document.querySelector('.dive-env');
+
+/* 这一层的水有多冷、多黑、多压 —— 展板上最常被孩子问的三个数 */
+function updateEnv(d, on){
+  if (envWrapEl) envWrapEl.classList.toggle('off', !on);
+  if (!on){
+    envTEl.textContent = '—'; envLEl.textContent = '—'; envPEl.textContent = '—';
+    envTBEl.style.width = '0%'; envLBEl.style.width = '0%'; envPBEl.style.width = '0%';
+    return;
+  }
+  var t = d < 200  ? lerp(24.5, 15.0, d/200)
+        : d < 1000 ? lerp(15.0, 4.2, (d-200)/800)
+        :            lerp(4.2, 1.6, clamp((d-1000)/3000, 0, 1));
+  var l = 100 * Math.exp(-d/120);          /* 光每下潜约 120 m 就衰减到 1/e */
+  var p = 1 + d/10.06;                     /* 每 10 m 增加一个大气压 */
+
+  envTEl.textContent = t.toFixed(1);
+  envLEl.textContent = l >= 10 ? l.toFixed(0)
+                     : l >= 0.1 ? l.toFixed(1)
+                     : l > 0.005 ? l.toFixed(2) : '0';
+  envPEl.textContent = p < 10 ? p.toFixed(1) : String(Math.round(p));
+
+  envTBEl.style.width = clamp(t/25*100, 0, 100).toFixed(1) + '%';
+  envLBEl.style.width = clamp(Math.log10(1 + l)/2*100, 0, 100).toFixed(1) + '%';
+  envPBEl.style.width = clamp(p/400*100, 0, 100).toFixed(1) + '%';
+}
+
+/* 换一层：把不在这层的动物请走，换成本层的住户 */
+function diveReseed(stop){
+  for (var q=creatures.length-1;q>=0;q--) if (!creatures[q].fly) removeCreature(creatures[q]);
+  /* 先数总数，好让它们横着均匀分开，不至于挤在中间 */
+  var total = 0, i, n;
+  for (i=0;i<stop.cast.length;i++) total += stop.cast[i][1];
+  var k = 0;
+  /* 竖向按「一屏有多高」来铺：只按深度均分的话，
+     深处的动物全被压在画面下半截，上半屏空得发慌 */
+  var halfH = 22.9 * DIVE_ZOOM;
+  var yC0 = diveBaseY();
+  var pad = halfH*0.34;              /* 允许越出自己水层一点点，否则每层只有一半画面有人 */
+  /* 横向留给「面板和卡片之间那条空带」：不然鱼都躲到玻璃板后面去了 */
+  var halfW = halfH * Math.max(0.5, window.innerWidth/Math.max(1, window.innerHeight));
+  var x0 = -halfW*0.42, x1 = halfW*0.62;
+  /* 手机上深度面板横跨整个屏幕，动物整体往下挪一点，别全躲在玻璃板后面 */
+  var yShift = window.innerWidth < 760 ? -halfH*0.26 : 0;
+  for (i=0;i<stop.cast.length;i++){
+    var sp = SPEC_BY_ID[stop.cast[i][0]];
+    if (!sp) continue;
+    for (n=0;n<stop.cast[i][1];n++,k++){
+      /* 先在这一屏的高度里随机取一个 y，再夹回这个物种自己的水层 */
+      var ty = yC0 + yShift + rand(-0.92, 0.92)*halfH;
+      ty = clamp(ty, depthToY(sp.band[1]) + 0.5 - pad, depthToY(sp.band[0]) - 0.5 + pad);
+      ty = clamp(ty, -20.6, 20.4);          /* 别钻出水面，也别钻到海床底下 */
+      /* 大块头（鲸鲨、皇带鱼）离上下边缘留出大半个身位，不然一进场就被切掉半截 */
+      var em = Math.min(halfH*0.62, Math.max(1.2, (sp.span || sp.len || 1)*0.78));
+      ty = clamp(ty, yC0 - halfH + em, yC0 + halfH - em);
+      var dd = yToDepth(ty);
+      var slot = (k + 0.5) / Math.max(1, total);
+      var px = x0 + slot*(x1 - x0) + rand(-1.4, 1.4);
+      /* 长条的大鱼别把身子探进两侧的玻璃板里 */
+      var pL = (sp.span || sp.len || 1)*0.5;
+      if (x1 - x0 > pL*2.2) px = clamp(px, x0 + pL, x1 - pL);
+      var pz = rand(-9, 3.2);
+      var c = spawnCreature(sp, dd, { instant:true, silent:true, x: px, z: pz });
+      if (!c) continue;
+      c.enter = 1;
+      c.pos.set(c.x, c.y, c.z);
+      c.dirX = px < 0 ? 1 : -1;
+      c.head = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.40, 0.40);
+      c.headV = rand(-0.10, 0.10);
+      c.vel.set(Math.cos(c.head), c.headV, Math.sin(c.head)).normalize().multiplyScalar(c.speed);
+      c.wander = rand(2.5, 7);
+    }
+  }
+}
+
+function updateDiveUI(){
+  var d = dive.depth, z = zoneInfo(d), st = nearestStop(d);
+  /* 没在潜航时别把「3200 m」挂在那里：那会让人以为现在就在 3200 米 */
+  diveDEl.textContent = dive.on ? Math.round(d) : '全柱';
+  diveUEl.style.display = dive.on ? '' : 'none';
+  diveZEl.textContent = dive.on ? (z.n + ' · ' + z.range) : '0–4000 m · 整个水柱';
+  diveTipEl.textContent = dive.on ? st.note : '往下拖滑块，或者点一个刻度，就能潜到那一层去看。';
+  diveEl.classList.toggle('on', dive.on);
+  btnDiveEl.textContent = dive.on ? '返回全柱' : '开始潜航';
+  btnDiveEl.classList.toggle('on', dive.on);
+  if (document.activeElement !== diveRangeEl){
+    diveRangeEl.value = Math.round(depthToNorm(d)*1000);
+  }
+  for (var i=0;i<STOPS.length;i++){
+    if (STOPS[i].el) STOPS[i].el.classList.toggle('hot', dive.on && STOPS[i] === st);
+  }
+  /* 卡片：不属于这一层的淡下去，并且把本层的住客排到最上面 */
+  var ids = {};
+  if (dive.on) for (var q=0;q<st.cast.length;q++) ids[st.cast[q][0]] = 1;
+  for (var c=0;c<cardEls.length;c++){
+    var mine = !!ids[SPECIES[c].id];
+    cardEls[c].classList.toggle('off', dive.on && !mine);
+    cardEls[c].style.order = dive.on && mine ? 0 : 1;
+  }
+  updateEnv(d, dive.on);
+}
+
+function diveTo(d, opts){
+  opts = opts || {};
+  d = clamp(d, 0, DEPTH_MAX);
+  dive.depth = d;
+  var wasOn = dive.on;
+  dive.on = true;
+  var st = nearestStop(d);
+  if (!wasOn || st !== dive.stop || opts.force){
+    dive.stop = st;
+    diveReseed(st);
+  }
+  updateDiveUI();
+  updateStatus();
+}
+
+function setDive(on){
+  if (on === dive.on){ updateDiveUI(); return; }
+  stopAuto();
+  dive.on = on;
+  if (on){
+    dive.stop = nearestStop(dive.depth);
+    diveReseed(dive.stop);
+  } else {
+    dive.stop = null;
+    seedColumn();
+  }
+  updateDiveUI();
+  updateStatus();
+}
+
+function stepStop(dir){
+  stopAuto();
+  var cur = nearestStop(dive.depth), idx = 0;
+  for (var i=0;i<STOPS.length;i++) if (STOPS[i] === cur) idx = i;
+  idx = clamp(idx + dir, 0, STOPS.length - 1);
+  diveTo(STOPS[idx].d, { force:true });
+}
+
+(function buildDiveTicks(){
+  for (var i=0;i<STOPS.length;i++){
+    (function(st){
+      var el = document.createElement('b');
+      el.style.left = (depthToNorm(st.d)*100).toFixed(2) + '%';
+      el.innerHTML = '<s>' + st.lab + '</s>';
+      el.title = st.cn + ' · ' + st.d + ' m';
+      el.addEventListener('click', function(e){ e.stopPropagation(); stopAuto(); diveTo(st.d, { force:true }); });
+      diveTicksEl.appendChild(el);
+      st.el = el;
+    })(STOPS[i]);
+  }
+})();
+
+btnDiveEl.addEventListener('click', function(){ setDive(!dive.on); });
+diveRangeEl.addEventListener('input', function(){
+  stopAuto();
+  diveTo(normToDepth(parseFloat(diveRangeEl.value)/1000));
+});
+updateDiveUI();
+
+/* ---------- 自动导览：给展厅大屏用的循环漫游 ---------- */
+var AUTO_DWELL = 11;                       /* 每站停留的秒数 */
+var auto = { on:false, i:0, t:0 };
+
+function syncAutoBtn(){
+  if (!btnAuto) return;
+  btnAuto.classList.toggle('on', auto.on);
+  btnAuto.textContent = auto.on ? (auto.i + 1) + '/' + STOPS.length : '导览';
+}
+function setAuto(on){
+  on = !!on;
+  if (on === auto.on) return;
+  auto.on = on;
+  auto.t = 0;
+  if (on){
+    /* 从人现在待在的那一层接着逛，而不是每次从头开始 */
+    auto.i = STOPS.indexOf(nearestStop(dive.depth));
+    if (auto.i < 0) auto.i = 0;
+    diveTo(STOPS[auto.i].d, { force:true });
+    playBubble(0.5);
+  }
+  syncAutoBtn();
+}
+/* 手动一插手，导览就交还给人，不跟人抢镜头 */
+function stopAuto(){ if (auto && auto.on) setAuto(false); }
+
+function tickAuto(dt){
+  if (!auto.on) return;
+  auto.t += dt;
+  if (auto.t < AUTO_DWELL) return;
+  auto.t = 0;
+  auto.i = (auto.i + 1) % STOPS.length;
+  diveTo(STOPS[auto.i].d, { force:true });
+  syncAutoBtn();
+  playBubble(0.5);
+}
+if (btnAuto){
+  btnAuto.addEventListener('click', function(){
+    setAuto(!auto.on);
+    if (!auto.on) playBubble(0.4);
+  });
+}
+
+function seedColumn(){
+  for (var qq=creatures.length-1;qq>=0;qq--) if (!creatures[qq].fly) removeCreature(creatures[qq]);
+  var S = SPEC_BY_ID;
+  spawnCreature(S['manta'],    70, { instant:true, silent:true, x:-9.0, z: 1 });
+  spawnCreature(S['manta'],   140, { instant:true, silent:true, x: 6.5, z:-5 });
+  spawnCreature(S['eagle'],    48, { instant:true, silent:true, x: 3.0, z: 3 });
+  spawnCreature(S['eagle'],   172, { instant:true, silent:true, x:-4.0, z:-7 });
+  spawnCreature(S['bluespot'],380, { instant:true, silent:true, x:-6.5, z: 2 });
+  spawnCreature(S['bluespot'],520, { instant:true, silent:true, x: 7.0, z:-4 });
+  spawnCreature(S['bluespot'],860, { instant:true, silent:true, x:-2.0, z:-9 });
+  spawnCreature(S['moon'],    640, { instant:true, silent:true, x: 4.5, z: 1 });
+  spawnCreature(S['moon'],    780, { instant:true, silent:true, x:-8.0, z:-3 });
+  spawnCreature(S['nettle'], 1500, { instant:true, silent:true, x:-3.0, z: 0 });
+  spawnCreature(S['nettle'], 2600, { instant:true, silent:true, x: 5.5, z:-6 });
+  spawnCreature(S['dolphin'],   62, { instant:true, silent:true, x:-6.0, z: 2 });
+  spawnCreature(S['dolphin'],  132, { instant:true, silent:true, x: 8.0, z:-3 });
+  spawnCreature(S['shark'],    196, { instant:true, silent:true, x: 0.5, z:-6 });
+  spawnCreature(S['whaleshark'], 305, { instant:true, silent:true, x:-2.0, z:-8 });
+  spawnCreature(S['sailfish'],   38, { instant:true, silent:true, x: 6.0, z: 4 });
+  spawnCreature(S['tuna'],       26, { instant:true, silent:true, x:-5.0, z:-4 });
+  spawnCreature(S['angelfish'],  40, { instant:true, silent:true, x: 2.5, z: 3 });
+  spawnCreature(S['angelfish'],  66, { instant:true, silent:true, x:-3.0, z:-2 });
+  spawnCreature(S['puffer'],     88, { instant:true, silent:true, x: 5.0, z: 1 });
+  spawnCreature(S['moray'],     126, { instant:true, silent:true, x:-1.0, z:-5 });
+  /* 下半根水柱的住客：没有这几只，1000–4000 m 会空得只剩两只水母 */
+  spawnCreature(S['oarfish'],    620, { instant:true, silent:true, x: 6.0, z:-6 });
+  spawnCreature(S['oarfish'],    980, { instant:true, silent:true, x:-5.5, z:-2 });
+  spawnCreature(S['viperfish'], 1150, { instant:true, silent:true, x: 2.0, z:-4 });
+  spawnCreature(S['pelican'],   1600, { instant:true, silent:true, x: 4.0, z:-7 });
+  spawnCreature(S['viperfish'], 1850, { instant:true, silent:true, x:-7.0, z: 0 });
+  spawnCreature(S['angler'],    2350, { instant:true, silent:true, x:-2.5, z:-3 });
+  spawnCreature(S['pelican'],   2800, { instant:true, silent:true, x:-6.0, z:-8 });
+  spawnCreature(S['angler'],    3100, { instant:true, silent:true, x: 6.5, z:-5 });
+  spawnCreature(S['nettle'],    3500, { instant:true, silent:true, x: 1.5, z:-6 });
+  for (var i=0;i<creatures.length;i++){ creatures[i].enter = 1; }
+  for (var j=0;j<creatures.length;j++){
+    var c = creatures[j];
+    c.pos.set(c.x, c.y, c.z);
+    c.dirX = Math.random() < 0.5 ? -1 : 1;
+    c.head = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.45, 0.45);
+    c.headV = rand(-0.13, 0.13);
+    c.vel.set(Math.cos(c.head), c.headV, Math.sin(c.head)).normalize().multiplyScalar(c.speed);
+    c.wander = rand(0.6, 3.4);
+  }
+}
+seedColumn();
+
+/* 支持以 URL 参数指定初始状态：
+   ?species=shark  开局展示该物种的讲解卡
+   ?panel=chart    开局展开体型对照表
+   ?fly=1          开局就来一次近景掠过（可加 &side=-1 走脚下，&u=0.6 跳到中途）
+   ?dive=1800      开局直接潜航到 1800 m */
+(function(){
+  var m = location.search.match(/species=([a-z]+)/);
+  if (m && SPEC_BY_ID[m[1]]) showDocent(SPEC_BY_ID[m[1]]);
+  if (/panel=chart/.test(location.search)) showChart();
+  var dm = location.search.match(/dive=(\d+)/);
+  if (dm) diveTo(parseInt(dm[1], 10), { force:true });
+  if (/fly=/.test(location.search)){
+    var fid = location.search.match(/fly=([a-z]+)/);
+    var fu  = location.search.match(/u=([\d.]+)/);
+    var fs  = location.search.match(/side=(-?\d)/);
+    startFlyby((fid && fid[1] !== '1') ? fid[1] : 'whaleshark', {
+      u: fu ? parseFloat(fu[1]) : null,
+      side: fs ? parseInt(fs[1], 10) : null
+    });
+  }
+})();
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
