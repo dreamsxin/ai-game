@@ -291,10 +291,21 @@ export const wingAt = (code) => WINGS[code] ?? null;
 // 3. 掉命只把机翼还原成这一关带进来的那只（Mk.I），攒下来的阶级是真会没的。
 export const MAX_TIER = 3;
 
+/**
+ * 三阶进化。每阶同时抬四个轴：
+ * - dmg：伤害。Mk.III 是 1.8 倍——「火力翻一截」是真的翻。
+ * - cool：冷却。火力密度跟着涨。
+ * - range：弹丸存活时间。速度不动、寿命拉长，射程实实在在远一截——
+ *   短程机翼（防卫炮、霰弹、火焰）升阶后不再是贴脸才有输出。
+ * - area：特殊弹的作用范围。穿甲的爆圈、链弧的跳距、引力井的井口一起变大。
+ * 不变量照旧：pierce / ground / vx 一个都不碰——进化不能把选错的机翼变成对的
+ * （wings.test.js 逐阶验证正确答案的优势倍率不变；四种弱点的推荐答案弹程都远超
+ *  Boss 交火距离，range 缩放不进 effectiveDps 的账）。
+ */
 export const TIERS = [
-  { tier: 1, name: 'Mk.I', dmg: 1, cool: 1, mark: 'I' },
-  { tier: 2, name: 'Mk.II', dmg: 1.25, cool: 0.88, mark: 'II' },
-  { tier: 3, name: 'Mk.III', dmg: 1.55, cool: 0.78, mark: 'III' },
+  { tier: 1, name: 'Mk.I', dmg: 1, cool: 1, range: 1, area: 1, mark: 'I' },
+  { tier: 2, name: 'Mk.II', dmg: 1.35, cool: 0.86, range: 1.25, area: 1.25, mark: 'II' },
+  { tier: 3, name: 'Mk.III', dmg: 1.8, cool: 0.74, range: 1.55, area: 1.55, mark: 'III' },
 ];
 
 export const clampTier = (tier = 1) => Math.min(MAX_TIER, Math.max(1, Math.round(tier)));
@@ -317,7 +328,16 @@ export function wingAtTier(code, tier = 1) {
     cool: wing.cool * step.cool,
     // Mk.III 给带铁球的机翼多挂一枚：进化要看得见，不能只是数字变大。
     orbs: wing.orbs ? wing.orbs + (step.tier === MAX_TIER ? 1 : 0) : 0,
-    volley: wing.volley.map((shot) => ({ ...shot, dmg: shot.dmg * step.dmg })),
+    volley: wing.volley.map((shot) => ({
+      ...shot,
+      dmg: shot.dmg * step.dmg,
+      burstDmg: shot.burstDmg ? shot.burstDmg * step.dmg : 0,
+      // 射程与范围：寿命和特殊弹作用半径一起长，速度与方向原封不动。
+      life: shot.life * step.range,
+      blast: shot.blast ? shot.blast * step.area : 0,
+      chainR: shot.chainR ? shot.chainR * step.area : 0,
+      well: shot.well ? shot.well * step.area : 0,
+    })),
   };
 }
 

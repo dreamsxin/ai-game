@@ -141,6 +141,23 @@ test('进化只放大火力，不改机翼的性质', () => {
   }
 });
 
+test('进化长射程也长范围：短程机翼升阶后不再贴脸才有输出', () => {
+  for (const code of PICKABLE_CODES) {
+    const base = wingAtTier(code, 1);
+    const top = wingAtTier(code, MAX_TIER);
+    for (const [i, shot] of top.volley.entries()) {
+      const from = base.volley[i];
+      // 射程 = 速度 × 寿命，速度不动、寿命拉长——射程实打实远一截。
+      assert.ok(shot.life > from.life, `${code} 第 ${i} 发升阶后射程没涨`);
+      assert.ok(Math.hypot(shot.vx, shot.vy) === Math.hypot(from.vx, from.vy), `${code} 升阶改了弹速`);
+      // 特殊弹的作用半径一起长：爆圈、跳距、井口。
+      if (from.blast > 0) assert.ok(shot.blast > from.blast, `${code} 升阶后爆圈没变大`);
+      if (from.chainR > 0) assert.ok(shot.chainR > from.chainR, `${code} 升阶后链弧跳距没变大`);
+      if (from.well > 0) assert.ok(shot.well > from.well, `${code} 升阶后井口没变大`);
+    }
+  }
+});
+
 test('进化不能把选错的机翼变成对的：倍率之比逐阶不变', () => {
   for (const kind of WEAKNESS_KINDS) {
     if (kind === 'swarm') continue;

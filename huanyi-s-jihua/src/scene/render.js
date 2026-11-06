@@ -95,6 +95,26 @@ export function createRenderer(host) {
 
   // ---- 世界里的东西 ----
   const ship = makeShip();
+  // 阶级光环：两道反向旋转的弧环贴着机身转。Mk.II 起亮一道，Mk.III 两道全开——
+  // 「升阶了」要一眼看出，而且要科幻：能量环比贴图强得多。
+  const auraMat = () => new THREE.MeshBasicMaterial({
+    color: new THREE.Color(HAZARD.pierce),
+    transparent: true,
+    opacity: 0.5,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: false,
+  });
+  const aura = new THREE.Group();
+  const auraArcs = [0.62, 0.5].map((sweep, i) => {
+    const mesh = new THREE.Mesh(new THREE.RingGeometry(7.4 + i * 1.5, 8.4 + i * 1.5, 48, 1, 0, Math.PI * 2 * sweep), auraMat());
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.visible = false;
+    aura.add(mesh);
+    return mesh;
+  });
+  ship.add(aura);
   const echo = makeShip({ ghost: true });
   echo.visible = false;
   stage.world.add(ship);
@@ -415,7 +435,7 @@ export function createRenderer(host) {
     }
   };
 
-  const syncShip = (state) => {
+  const syncShip = (state, dt = 0) => {
     const data = state.ship;
     const tier = data.wing ? Math.min(3, Math.max(1, data.tier ?? 1)) : 1;
     const trim = TIER_COLOR[tier - 1];
@@ -430,7 +450,7 @@ export function createRenderer(host) {
         for (const tip of active.userData.tips) {
           tip.material.color.set(trim);
           tip.material.emissive.set(trim);
-          tip.material.emissiveIntensity = 0.8 + tier * 0.5;
+          tip.material.emissiveIntensity = 0.8 + tier * 0.9;
         }
         // 阶级 = 亮着的灯珠数。Mk.III 三颗全亮，脱手飞出去的翼也标着同一套阶级。
         for (const [i, pip] of active.userData.pips.entries()) {
@@ -440,7 +460,8 @@ export function createRenderer(host) {
         }
       }
       // 尾焰跟着下潜拉长：加速这件事得看得见。三个喷口是一组，拉的是它的纵向（z）。
-      const boost = data.dive > 0 ? 2.2 : 1;
+      // 阶级也加成尾焰：火力更猛的机体喷得更凶。
+      const boost = (data.dive > 0 ? 2.2 : 1) * (1 + (tier - 1) * 0.14);
       ud.flame.scale.set(1, 1, boost);
       ud.flame.position.z = 4.6 + boost * 0.6;
       ud.ring.visible = data.invuln > 0;
@@ -457,6 +478,18 @@ export function createRenderer(host) {
     const drift = data.x - lastX;
     lastX = data.x;
     ship.rotation.z = Math.max(-0.5, Math.min(0.5, -drift * 0.5));
+    // 阶级光环：Mk.II 起一道弧环，Mk.III 两道反向全开、整体大一圈。转起来才有能量场的感觉。
+    const showTier = data.wing ? Math.min(3, Math.max(1, data.tier ?? 1)) : 1;
+    aura.visible = showTier >= 2;
+    for (const [i, arc] of auraArcs.entries()) {
+      arc.visible = aura.visible && (showTier >= 3 || i === 0);
+      if (arc.visible) {
+      arc.rotation.z += dt * (i === 0 ? 3.2 : -2.4);
+      arc.material.opacity = 0.55 + Math.sin(state.elapsed * (showTier >= 3 ? 9 : 6)) * 0.12;
+      arc.material.color.set(TIER_COLOR[showTier - 1] ?? HAZARD.pierce);
+      }
+    }
+    aura.scale.setScalar(showTier >= 3 ? 1.12 : 1);
     const worn = paint(ship);
 
     // 无敌期只闪机身，护盾环常亮——不然看不出还剩多久。
@@ -663,6 +696,10 @@ export function createRenderer(host) {
       const key = shotKey(shot);
       const mesh = shotPool(key).take();
       mesh.position.set(worldX(shot.x), shot.ground ? ALT.low : ALT.shot, worldZ(shot.y));
+      // 阶级看得见：Mk.II/III 的弹就是更大一号（引力井自己管比例，反物质弹有自己的脉动）。
+      // 用绝对值覆盖而不是乘法：池子里的 mesh 会被反复复用，乘法会跨帧累积。
+      const bulk = shot.well || shot.kind === 'anti' ? 1 : 1 + (((shot.tier ?? 1) - 1) * 0.3);
+      mesh.scale.setScalar(bulk);
       if (shot.well) {
         // 引力井：吸积环的半径就是真实作用范围，它把射程画了出来。
         const ud = mesh.userData;
@@ -910,7 +947,7 @@ export function createRenderer(host) {
       stage.setChapter(state.chapter);
       // Boss 战时背景压慢：这时候该看的是弹幕和弱点，不是风景往后跑。
       stage.drift(delta, state.boss ? 0.42 : 1);
-      syncShip(state);
+      syncShip(state, delta);
       syncEnemies(state);
       syncBoss(state);
       syncDrops(state);

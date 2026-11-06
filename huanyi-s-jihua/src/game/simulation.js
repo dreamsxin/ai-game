@@ -254,6 +254,8 @@ function fireShip(ship, dt, nextId) {
       burstDmg: spec.burstDmg ?? 0,
       echo: Boolean(flip),
       life: spec.life,
+      // 阶级跟着子弹走：表现层按它放大弹体——「升阶了，弹都变粗了」看得见。
+      tier: wing ? wing.tier : 1,
       age: 0,
     });
     id += 1;
@@ -304,6 +306,7 @@ function burstOf(shot, startId) {
       burstDmg: 0,
       echo: false,
       life: 0.55,
+      tier: shot.tier ?? 1,
       age: 0,
     });
   }
