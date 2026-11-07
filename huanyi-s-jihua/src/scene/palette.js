@@ -23,6 +23,14 @@ export const HAZARD = {
 export const TIER_COLOR = ['#9fc2ff', '#6effc4', '#ffd447'];
 
 /**
+ * 相位过载（满阶后再捡同型号）的专属色：白青。
+ * 不能沿用 Mk.III 的暖金，否则玩家分不出「这是满阶」还是「这是限时爆发」。
+ */
+export const OVERDRIVE_COLOR = '#e6ffff';
+/** 相位翼场的结构色：冷白偏蓝，给能量骨架打底，阶级色再叠在上面。 */
+export const PHASE_COLOR = '#b9f2ff';
+
+/**
  * 机翼的三条出身三种皮：常规钢蓝、实验紫、秘密金。
  * 场上的三维机翼（models.js）和选翼界面的小图（wingIcon.js）共用这一份，
  * 否则「选的时候是紫的、飞起来是蓝的」——那是两套说法。

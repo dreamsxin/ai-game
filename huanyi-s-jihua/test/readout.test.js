@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  archiveLabel,
   bossRatio,
   briefLine,
   chainLabel,
+  defeatLabel,
   evolveLabel,
   formatScore,
   formatTime,
@@ -16,10 +18,15 @@ import {
   progressRatio,
   recordLabel,
   resultTitle,
+  resumeLabel,
+  retryLabel,
   rewardLabel,
+  runReport,
   scaleFor,
+  shareText,
   starLabel,
   statusLabel,
+  supplyLabel,
   tierLabel,
   weakHint,
   weakLabel,
@@ -157,4 +164,43 @@ test('场地到画布的换算保持比例，短边贴边、长边居中', () =>
   assert.ok(Math.abs(wide.offsetY) < 0.001);
   const tall = scaleFor(100, 600);
   assert.ok(tall.offsetY > 0, '画面太高时上下留边');
+});
+
+// ——— 进度、容错与战报的文案 ———
+
+test('补给只在章节最后一关报，别的关卡一句都不多说', () => {
+  assert.ok(supplyLabel({ status: 'clear', levelIndex: 3 }).includes('第 1 章完成'));
+  assert.ok(supplyLabel({ status: 'clear', levelIndex: 7 }).includes('第 2 章完成'));
+  assert.equal(supplyLabel({ status: 'clear', levelIndex: 1 }), '', '章中间过关不报补给');
+  assert.equal(supplyLabel({ status: 'playing', levelIndex: 3 }), '', '没结算就不该报');
+});
+
+test('失败战报说清楚还差多少，而不是只说任务失败', () => {
+  assert.equal(
+    defeatLabel({ boss: { hp: 120, maxHp: 480 }, bossName: '机器蜈蚣' }),
+    '机器蜈蚣 还剩 25% 体力',
+  );
+  assert.equal(defeatLabel({ boss: null, bossName: '机器蜈蚣' }), '倒在 Boss 出场之前');
+});
+
+test('战绩数字缺字段时按 0 报，不出现 undefined', () => {
+  assert.equal(runReport({ kills: 12, pops: 34, wingLosses: 2 }), '击落 12 · 消弹 34 · 掉翼 2 次');
+  assert.equal(runReport({}), '击落 0 · 消弹 0 · 掉翼 0 次');
+});
+
+test('存档摘要与继续按钮指向同一关，且没存档时不出现', () => {
+  assert.equal(archiveLabel({ unlocked: 0, stars: {}, clears: 0 }), null);
+  const progress = { unlocked: 8, stars: { '01': 3, '02': 2 }, clears: 1 };
+  assert.ok(archiveLabel(progress).includes('进度到第 9 关'));
+  assert.ok(archiveLabel(progress).includes('5 / 48 星'));
+  assert.equal(resumeLabel(progress), '继续 · 第 9 关');
+  assert.equal(retryLabel({ levelIndex: 13 }), '重试第 4 章');
+});
+
+test('分享文案带关卡、分数、星级和当前链接', () => {
+  const text = shareText({ levelIndex: 6, score: 4321, stars: 2 }, 'https://example.test/?sharecode=X');
+  assert.ok(text.includes('第 7 关'));
+  assert.ok(text.includes('0004321'));
+  assert.ok(text.includes('★★☆'));
+  assert.ok(text.includes('https://example.test/?sharecode=X'));
 });

@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import { WINGS } from '../game/wings.js';
-import { HAZARD, TIER_COLOR, wingSkin } from './palette.js';
+import { HAZARD, TIER_COLOR, PHASE_COLOR, wingSkin } from './palette.js';
 import { TILT } from './view.js';
 import { wingProfile, wingSeats, wingTraits, boltAim, boltBarrel, WING_TIP_X } from './wingIcon.js';
 
@@ -461,7 +461,25 @@ export function makeWing(code) {
     }
   }
 
-  group.userData = { tips, pips: [], mats, muzzles, code };
+  group.userData = { tips, pips: [], spines: [], mats, muzzles, code };
+
+  // 共鸣导线：升阶后从翼面里透出来的三条相位纹路。Mk.II 亮一条，Mk.III 三条全亮。
+  // **只长在翼面内侧**（|x| ≤ 5.7），绝不外扩：翼展 12.8 是判定用的数，
+  // 外形再科幻也不能把「看到的宽度」变成另一个数，否则玩家会按错的宽度躲弹。
+  // 默认全灭，由 render.js 按阶级点亮并染色；材质进 mats，脱手的道具压暗时它们一起暗。
+  const spines = [];
+  for (const side of [-1, 1]) {
+    for (let lane = 0; lane < 3; lane += 1) {
+      const z = noseZ + (tailZ - noseZ) * (0.3 + lane * 0.2);
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.16, 0.3), glowMat(TIER_COLOR[1], 0.75));
+      strip.position.set(side * 3.6, 0.5, z);
+      strip.visible = false;
+      mats.push(strip.material);
+      group.add(strip);
+      spines.push({ mesh: strip, lane });
+    }
+  }
+  group.userData.spines = spines;
 
   // 阶级灯珠挂在翼根后缘：亮几颗就是第几阶。跟着翼型的后缘走，不会翘在翼外。
   for (let i = 0; i < 3; i += 1) {
@@ -757,6 +775,132 @@ export function makeShot(kind) {
   // 普通曳光弹拉长到 5.2：3.2 那一版在屏幕上是两列间距均匀的小点，
   // 斜俯视下读起来像给跑道刷了两条车道虚线，而不是一股火力（自审截图里最扎眼的一条）。
   return tracer(HAZARD.shot, 5.2, 0.46);
+}
+
+/**
+ * 相位翼场：升阶时从翼面里「长开」的那一层科幻结构。
+ *
+ * 为什么单独一层、而且**不在 makeWing 里**：翼展 12.8 格是判定用的数，
+ * 能量导轨可以转出机身之外，但「实体机翼有多宽」这一位信息不能被表现层改掉。
+ * 所以它由 render.js 挂到机体上（和 aura 一样），是一层纯表现的能量场。
+ *
+ * 逐阶展开的形状，全是低多边形 + 加色发光，不含任何贴图文字：
+ * - Mk.II：一道贴地能量导轨 + 左右两枚悬浮棱晶（第二副翼解构后的相位骨架）。
+ * - Mk.III：第二道外环、两道交叉倾斜的陀螺环、导轨上跑的八颗能量节点、机背中央共振核心。
+ * - 相位过载：全套结构同时点亮并换成白青，转速翻倍。
+ */
+export function makePhaseFrame() {
+  const group = new THREE.Group();
+  const mats = [];
+  const rails = [];
+  const gyros = [];
+  const cores = [];
+  const conduits = [];
+  const nodes = [];
+  const sails = [];
+  const ribs = [];
+  const halos = [];
+
+  // 全部走加色发光。镜像出来的那两片能量翼必须双面，不然左翼会被整片剔掉。
+  const phase = (color, opacity, double = false) => {
+    const mat = glowMat(color, opacity);
+    if (double) mat.side = THREE.DoubleSide;
+    mats.push(mat);
+    return mat;
+  };
+
+  // 环是平躺的薄环：斜俯视下能读出「绕着机身转」，又不会挡住翼面。
+  // 管径给到 0.2：0.1 那一版在手机上只剩一圈一像素的虚线，等于没画。
+  for (const [i, radius] of [8.8, 10.6].entries()) {
+    const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.2, 6, 64), phase(PHASE_COLOR, 0.6));
+    rail.rotation.x = -Math.PI / 2;
+    rail.position.y = 0.65 + i * 0.75;
+    rail.visible = false;
+    group.add(rail);
+    rails.push(rail);
+  }
+  // 交叉陀螺环：Mk.III 才架起来，从平躺的二维环变成一颗三维的量子陀螺。
+  for (const [i, tilt] of [0.86, -0.86].entries()) {
+    const gyro = new THREE.Mesh(new THREE.TorusGeometry(7.2, 0.18, 6, 48), phase(PHASE_COLOR, 0.5));
+    gyro.rotation.x = -Math.PI / 2 + tilt;
+    gyro.rotation.y = i === 0 ? 0.38 : -0.38;
+    gyro.visible = false;
+    group.add(gyro);
+    gyros.push(gyro);
+  }
+
+  // 能量翼：半透明楔形翼面 + 三根发光翼肋，浮在实体翼上方两格。
+  // 这是「外形变更加科幻」最吃重的一件：Mk.II 只展开内半段，Mk.III 整片张开。
+  // 它是发光的场、不是实体装甲（判定翼展仍在 makeWing 里锁着 12.8 格），
+  // 所以刻意做成半透明、抬高、带骨架，读起来就不会被当成「可以躲的宽度」。
+  const sailShape = new THREE.Shape();
+  sailShape.moveTo(1.5, -3.4);
+  sailShape.lineTo(7.6, -6.6);
+  sailShape.lineTo(7.6, 1.0);
+  sailShape.lineTo(1.5, 3.2);
+  sailShape.closePath();
+  const sailGeometry = new THREE.ShapeGeometry(sailShape);
+  for (const side of [-1, 1]) {
+    const sail = new THREE.Mesh(sailGeometry, phase(PHASE_COLOR, 0.16, true));
+    sail.rotation.x = -Math.PI / 2;
+    sail.position.y = 2.0;
+    sail.scale.x = side;
+    sail.visible = false;
+    group.add(sail);
+    sails.push(sail);
+
+    for (let lane = 0; lane < 3; lane += 1) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.16, 0.26), phase('#ffffff', 0.7));
+      rib.position.set(side * 4.6, 2.05, -3.6 + lane * 2.3);
+      rib.rotation.y = side * (lane - 1) * 0.12;
+      rib.visible = false;
+      group.add(rib);
+      ribs.push(rib);
+    }
+
+    // 悬浮棱晶挂在能量翼尖上方，一根斜撑把它接回翼面——「第二副翼解构成能量骨架」的形状。
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.6, 0), phase('#ffffff', 0.95));
+    crystal.position.set(side * 6.0, 2.3, 0.7);
+    crystal.visible = false;
+    group.add(crystal);
+    cores.push(crystal);
+
+    // 光晕球：棱晶本身只有四五像素，靠这一团加色光才在手机上看得见。
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(2.0, 10, 8), phase(PHASE_COLOR, 0.07));
+    halo.position.copy(crystal.position);
+    halo.visible = false;
+    group.add(halo);
+    halos.push(halo);
+
+    const conduit = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.16, 0.16), phase(PHASE_COLOR, 0.6));
+    conduit.position.set(side * 4.4, 1.5, 0.7);
+    conduit.rotation.z = side * 0.2;
+    conduit.visible = false;
+    group.add(conduit);
+    conduits.push(conduit);
+  }
+  for (let i = 0; i < 8; i += 1) {
+    const node = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), phase('#ffffff', 0.95));
+    node.visible = false;
+    group.add(node);
+    nodes.push(node);
+  }
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.7, 0), phase('#ffffff', 0.85));
+  core.position.set(0, 3.1, 0.2);
+  core.visible = false;
+  group.add(core);
+  const coreHalo = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 8), phase(PHASE_COLOR, 0.07));
+  coreHalo.position.copy(core.position);
+  coreHalo.visible = false;
+  group.add(coreHalo);
+  const coreRing = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.12, 6, 32), phase('#ffffff', 0.6));
+  coreRing.rotation.x = -Math.PI / 2;
+  coreRing.position.copy(core.position);
+  coreRing.visible = false;
+  group.add(coreRing);
+
+  group.userData = { rails, gyros, cores, conduits, nodes, sails, ribs, halos, core, coreHalo, coreRing, mats };
+  return group;
 }
 
 export { ENEMY_ART, flat, glowMat };

@@ -9,6 +9,8 @@ __pycache__/
 .comate/
 .zcode/
 .workbuddy/
+# 发布平台的本地应用标记：带本机绝对路径，重新发布时由平台自己写回
+.*.genie
 
 # neon-echo 的 public/assets 有 355 MB 生成素材，本机保留，不入库
 neon-echo/

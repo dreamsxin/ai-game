@@ -1,6 +1,7 @@
-import { levelCount } from '../game/levels.js';
-import { LAB_CHAPTER, MAX_TIER, WEAKNESS, WINGS, clampTier, tierOf } from '../game/wings.js';
-import { FIELD_H } from '../game/rules.js';
+import { chapterNumber, isChapterEnd, levelCount } from '../game/levels.js';
+import { LAB_CHAPTER, MAX_TIER, SURGE, WEAKNESS, WINGS, clampTier, tierOf } from '../game/wings.js';
+import { CHAPTER_LIFE_BONUS, FIELD_H } from '../game/rules.js';
+import { maxStars, resumeIndex, totalStars } from '../game/progress.js';
 
 // 表现层只读状态，把数字和状态翻成 HUD 上的文案。中文全部集中在这里，App.jsx 里不硬编码字符串。
 const STATUS_TEXT = {
@@ -59,6 +60,46 @@ export const evolveLabel = (ship) => {
   return `再捡一个 ${ship.wing} 可升 ${tierOf(ship.tier + 1).name}`;
 };
 
+// ——— 同频共振：设定层的文案 ———
+// 全部从 wings.js 的 TIERS / SURGE 现算，不手写百分比：
+// 界面说「火力 +125%」而表里其实只涨 35% 是最难查的一种骗人。
+
+/** 阶级的设定名与代号：Mk.II 同频同步、Mk.III 相位共振。 */
+export const tierTitle = (tier = 1) => tierOf(tier).title;
+export const tierCodename = (tier = 1) => tierOf(tier).codename;
+export const tierBrief = (tier = 1) => tierOf(tier).brief;
+
+/** 升阶收益一句话。飘字、选翼面板、文档取的都是这一份。 */
+export const tierGainLabel = (tier = 1) => {
+  const step = tierOf(tier);
+  const gain = (value) => `${value >= 1 ? '+' : '-'}${Math.round(Math.abs(value - 1) * 100)}%`;
+  return `火力 ${gain(step.dmg)} · 射程/范围 ${gain(step.range)} · 冷却 ${gain(step.cool)}`;
+};
+
+/** HUD 上那一格先看过载倒计时，再看连消与进化提示。 */
+export const surgeLabel = (ship) =>
+  (ship?.overdrive ?? 0) > 0 ? `相位过载 ${ship.overdrive.toFixed(1)}s · 火力 ×${SURGE.dmg}` : '';
+
+/** 共鸣条上的阶段说明（也给读屏用）。 */
+export const syncLabel = (ship) => {
+  if (!ship?.wing) return '';
+  const step = tierOf(ship.tier ?? 1);
+  return `${step.codename} ${step.name} · ${step.title}`;
+};
+
+/** 面板里那句「再捡一个会怎样」，满阶改说过载，不让人以为到顶就没用了。 */
+export const nextTierLabel = (ship) => {
+  if (!ship?.wing) return '';
+  const tier = clampTier(ship.tier ?? 1);
+  if (tier >= MAX_TIER) return `阶级封顶 · 再捡同型号触发 ${SURGE.title}（限时火力 ×${SURGE.dmg}）`;
+  const next = tierOf(tier + 1);
+  return `再捡一个 ${ship.wing} → ${next.name} ${next.title} · ${tierGainLabel(tier + 1)}`;
+};
+
+/** 世界观一句话：为什么只有同型号能升阶。 */
+export const loreLine = () =>
+  '机翼带相位编码：只有同型号能同频共振，第二副会解构成能量骨架，把机翼「展开」';
+
 /**
  * 弃翼动作键的状态。主标签永远是「弃翼」（它是这一局唯一的战术输入，名字不该变），
  * 副行说清现在按下去会发生什么；tone 决定键亮成什么样：
@@ -102,6 +143,46 @@ export const progressRatio = (state, bossTime) => {
 export const chainLabel = (chain) => (chain >= 3 ? `连消 ${chain}` : '');
 
 export const resultTitle = (status) => (status === 'won' ? '全线夺回' : '任务失败');
+
+// ——— 进度、容错与战报 ———
+// 这几条文案对应「玩不下去」的三个真实原因：进度会丢、失败太贵、不知道自己怎么输的。
+
+/** 章节过关的补给提示。只有跨章那一屏才有，不是每关都报喜。 */
+export const supplyLabel = (state) =>
+  state.status === 'clear' && isChapterEnd(state.levelIndex)
+    ? `第 ${chapterNumber(state.levelIndex)} 章完成 · 下一章补给 ${CHAPTER_LIFE_BONUS} 条命`
+    : '';
+
+/** 失败战报：死在谁手上、离过还差多少。这一句比「任务失败」有用得多。 */
+export const defeatLabel = (state) => {
+  if (state.boss) {
+    const left = Math.max(0, Math.round((state.boss.hp / state.boss.maxHp) * 100));
+    return `${state.bossName} 还剩 ${left}% 体力`;
+  }
+  return '倒在 Boss 出场之前';
+};
+
+/** 一局的战绩数字。通关、失败、存档摘要都用这一份，免得三处各算一套。 */
+export const runReport = (state) =>
+  `击落 ${state.kills ?? 0} · 消弹 ${state.pops ?? 0} · 掉翼 ${state.wingLosses ?? 0} 次`;
+
+/** 失败面板的主按钮：回本章第一关，而不是回第 1 关。 */
+export const retryLabel = (state) => `重试第 ${chapterNumber(state.levelIndex)} 章`;
+
+/** 标题页的存档摘要。没存档时返回 null，让 App 整块不渲染。 */
+export const archiveLabel = (progress) => {
+  if (!progress || !progress.unlocked) return null;
+  const stars = totalStars(progress);
+  const clears = progress.clears ?? 0;
+  return `进度到第 ${resumeIndex(progress) + 1} 关 · ${stars} / ${maxStars()} 星 · 通关 ${clears} 次`;
+};
+
+/** 标题页主按钮：接着上次过掉的那一关继续。 */
+export const resumeLabel = (progress) => `继续 · 第 ${resumeIndex(progress) + 1} 关`;
+
+/** 分享文案。链接直接用当前地址——玩家本来就是点分享链接进来的。 */
+export const shareText = (state, url) =>
+  `我在《换翼S计划》打到第 ${state.levelIndex + 1} 关 · ${formatScore(state.score)} 分 ${starLabel(state.stars)}\n${url}`;
 
 // 只有真刷掉旧的最高分才报新纪录，否则每局都报喜就不值钱了。
 export const recordLabel = (isRecord) => (isRecord ? '新纪录' : null);

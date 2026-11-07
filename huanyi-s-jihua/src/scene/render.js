@@ -12,7 +12,8 @@ import { WEAKNESS, WINGS, tierOf } from '../game/wings.js';
 import { orbsOf } from '../game/simulation.js';
 import { weakSpots } from '../game/boss.js';
 import { ALT, pixelScale, worldX, worldZ } from './view.js';
-import { HAZARD, TIER_COLOR } from './palette.js';
+import { HAZARD, TIER_COLOR, OVERDRIVE_COLOR, PHASE_COLOR } from './palette.js';
+import { tierGainLabel } from './readout.js';
 import { createStage } from './stage.js';
 import {
   createPool,
@@ -23,6 +24,7 @@ import {
   makeGate,
   makeGhostHull,
   makeOrb,
+  makePhaseFrame,
   makeShip,
   makeShot,
   makeWing,
@@ -54,6 +56,7 @@ const wingFor = (holder, slot, code) => {
       active.userData.mats = [shade];
       active.userData.tips = [];
       active.userData.pips = [];
+      active.userData.spines = [];
     }
     cache.set(code, active);
     slot.add(active);
@@ -115,6 +118,12 @@ export function createRenderer(host) {
     return mesh;
   });
   ship.add(aura);
+  // 相位翼场：升阶时真的「长开」的那一层结构，不是一张贴上去的光环。
+  // 展开进度由 evolve 事件清零、syncShip 每帧推到 1，所以升阶是一次看得见的变形。
+  const phaseFrame = makePhaseFrame();
+  ship.add(phaseFrame);
+  let phaseAnim = 1;
+  let surgeFlash = 0;
   const echo = makeShip({ ghost: true });
   echo.visible = false;
   stage.world.add(ship);
@@ -155,6 +164,21 @@ export function createRenderer(host) {
           dim(made);
           for (const child of made.children ?? []) dim(child);
         }
+        // 能量鞘：升阶／过载的子弹外面再套一层发光晕。挂在子弹自己身上，
+        // 池子复用时按帧用 set 覆盖 visible／颜色／大小，绝不能乘法累积。
+        const sheath = new THREE.Sprite(
+          new THREE.SpriteMaterial({
+            map: glowTexture(),
+            color: new THREE.Color(TIER_COLOR[1]),
+            transparent: true,
+            opacity: 0.35,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          }),
+        );
+        sheath.visible = false;
+        made.add(sheath);
+        made.userData.sheath = sheath;
         return made;
       });
       shotPools.set(key, pool);
@@ -374,13 +398,31 @@ export function createRenderer(host) {
       } else if (effect.type === 'catch' || effect.type === 'swap') {
         note(FIELD_W / 2, 96, `${effect.code} ${WINGS[effect.code]?.name ?? ''}`, HAZARD.pierce);
       } else if (effect.type === 'evolve') {
-        spark(effect.x, effect.y, TIER_COLOR[effect.tier - 1] ?? HAZARD.gold, 18, 40);
-        shockwave(effect.x, effect.y, TIER_COLOR[effect.tier - 1] ?? HAZARD.gold, 8, 0.45);
-        note(FIELD_W / 2, 92, `${effect.code} → ${tierOf(effect.tier).name}`, TIER_COLOR[effect.tier - 1]);
-        bang('#ffe9a8', 0.3);
-        stage.punch(2);
+        const trim = TIER_COLOR[effect.tier - 1] ?? HAZARD.gold;
+        const lore = tierOf(effect.tier);
+        // 冲击环画的就是共鸣清弹的真实半径：范围加强不是 HUD 上的一个数字，是场上这一圈。
+        spark(effect.x, effect.y, trim, 26, 52);
+        shockwave(effect.x, effect.y, trim, effect.radius ?? 12, 0.55);
+        shockwave(effect.x, effect.y, '#ffffff', 12, 0.35);
+        note(FIELD_W / 2, 92, `${lore.codename} · ${lore.title} → ${lore.name}`, trim);
+        note(FIELD_W / 2, 86, tierGainLabel(effect.tier), trim);
+        if (effect.cleared > 0) note(FIELD_W / 2, 78, `相位冲击 · 震碎 ${effect.cleared} 发敌弹`, trim);
+        bang('#ffe9a8', 0.42);
+        stage.punch(2.6);
+        phaseAnim = 0;
+      } else if (effect.type === 'overdrive') {
+        spark(effect.x, effect.y, OVERDRIVE_COLOR, 30, 60);
+        shockwave(effect.x, effect.y, OVERDRIVE_COLOR, effect.radius ?? 12, 0.7);
+        shockwave(effect.x, effect.y, '#ffffff', 18, 0.45);
+        note(FIELD_W / 2, 92, 'OVERDRIVE · 相位过载', OVERDRIVE_COLOR);
+        note(FIELD_W / 2, 86, `火力再 ×1.35 · 持续 ${(effect.time ?? 0).toFixed(1)}s`, OVERDRIVE_COLOR);
+        bang(OVERDRIVE_COLOR, 0.5);
+        stage.punch(3.2);
+        surgeFlash = 1;
+        phaseAnim = Math.min(phaseAnim, 0.55);
       } else if (effect.type === 'topped') {
-        note(FIELD_W / 2, 92, `${effect.code} 已满阶`, HAZARD.pierce);
+        // 过载那一声由 audio.js 顶掉 topped，这里只留一行不抢戏的小字。
+        note(FIELD_W / 2, 92, `${effect.code} 阶级封顶 · 转相位过载`, HAZARD.pierce);
       } else if (effect.type === 'burst') {
         spark(effect.x, effect.y, HAZARD.lab, 16, 58);
         shockwave(effect.x, effect.y, HAZARD.lab, 12, 0.5);
@@ -438,7 +480,14 @@ export function createRenderer(host) {
   const syncShip = (state, dt = 0) => {
     const data = state.ship;
     const tier = data.wing ? Math.min(3, Math.max(1, data.tier ?? 1)) : 1;
+    const surge = (data.overdrive ?? 0) > 0;
     const trim = TIER_COLOR[tier - 1];
+    // 过载是「限时的一层」，颜色必须和满阶的暖金分开，否则玩家读不出还剩多久。
+    const glow = surge ? OVERDRIVE_COLOR : trim;
+    // 升阶不是换皮，是一次展开：0.55 秒从 35% 长到 100%。
+    phaseAnim = Math.min(1, phaseAnim + dt / 0.55);
+    surgeFlash = Math.max(0, surgeFlash - dt * 1.6);
+    const unfold = 1 - (1 - phaseAnim) ** 3;
 
     const paint = (target) => {
       const ud = target.userData;
@@ -457,6 +506,12 @@ export function createRenderer(host) {
           pip.visible = i < tier;
           pip.material.color.set(trim);
           pip.material.emissive.set(trim);
+        }
+        // 翼面共鸣导线：Mk.II 亮中间一条，Mk.III／过载三条全亮。
+        for (const { mesh, lane } of active.userData.spines ?? []) {
+          mesh.visible = (tier >= 2 || surge) && (lane === 1 || tier >= 3 || surge);
+          mesh.material.color.set(glow);
+          mesh.material.opacity = tier >= 3 || surge ? 0.85 : 0.55;
         }
       }
       // 尾焰跟着下潜拉长：加速这件事得看得见。三个喷口是一组，拉的是它的纵向（z）。
@@ -480,16 +535,99 @@ export function createRenderer(host) {
     ship.rotation.z = Math.max(-0.5, Math.min(0.5, -drift * 0.5));
     // 阶级光环：Mk.II 起一道弧环，Mk.III 两道反向全开、整体大一圈。转起来才有能量场的感觉。
     const showTier = data.wing ? Math.min(3, Math.max(1, data.tier ?? 1)) : 1;
-    aura.visible = showTier >= 2;
+    aura.visible = showTier >= 2 || surge;
     for (const [i, arc] of auraArcs.entries()) {
-      arc.visible = aura.visible && (showTier >= 3 || i === 0);
+      arc.visible = aura.visible && (showTier >= 3 || surge || i === 0);
       if (arc.visible) {
-      arc.rotation.z += dt * (i === 0 ? 3.2 : -2.4);
-      arc.material.opacity = 0.55 + Math.sin(state.elapsed * (showTier >= 3 ? 9 : 6)) * 0.12;
-      arc.material.color.set(TIER_COLOR[showTier - 1] ?? HAZARD.pierce);
+        arc.rotation.z += dt * (i === 0 ? 3.2 : -2.4) * (surge ? 2 : 1);
+        arc.material.opacity = 0.55 + Math.sin(state.elapsed * (showTier >= 3 ? 9 : 6)) * 0.12 + surgeFlash * 0.2;
+        arc.material.color.set(glow);
       }
     }
-    aura.scale.setScalar(showTier >= 3 ? 1.12 : 1);
+    aura.scale.setScalar((showTier >= 3 ? 1.12 : 1) * (0.75 + unfold * 0.25));
+
+    // 相位翼场：一层层「长开」的科幻结构。全部用 set 覆盖，池子／复用不会跨帧累积。
+    // 配色分三路：阶级弧环走暖金、能量骨架走冷青白、棱晶与核心留纯白。
+    // 第一版把所有部件都染成阶级色，加色混叠之后整架飞机糊成一团金光，形状反而没了。
+    const f = phaseFrame.userData;
+    const full = showTier >= 3 || surge;
+    const frameGlow = surge ? OVERDRIVE_COLOR : showTier >= 3 ? PHASE_COLOR : TIER_COLOR[1];
+    phaseFrame.visible = Boolean(data.wing) && (showTier >= 2 || surge) && state.status !== 'dying';
+    phaseFrame.scale.setScalar(0.35 + unfold * 0.65);
+    const spin = surge ? 2.2 : 1;
+    for (const [i, rail] of f.rails.entries()) {
+      rail.visible = showTier >= 2 && (i === 0 || full);
+      rail.rotation.z += dt * (i === 0 ? 1.6 : -1.1) * spin;
+      rail.material.color.set(frameGlow);
+      rail.material.opacity = (i === 0 ? 0.55 : 0.4) + surgeFlash * 0.3 + Math.sin(state.elapsed * 5) * 0.06;
+    }
+    for (const [i, gyro] of f.gyros.entries()) {
+      gyro.visible = full;
+      gyro.rotation.y += dt * (i === 0 ? 1.3 : -1.5) * spin;
+      gyro.material.color.set(frameGlow);
+      gyro.material.opacity = 0.35 + surgeFlash * 0.3;
+    }
+    for (const [i, crystal] of f.cores.entries()) {
+      crystal.visible = showTier >= 2 || surge;
+      crystal.rotation.y += dt * 2.4 * spin;
+      crystal.rotation.x += dt * 1.1 * spin;
+      crystal.position.y = 2.3 + Math.sin(state.elapsed * 3 + i * 2) * 0.28;
+      crystal.material.color.set('#ffffff');
+      crystal.material.opacity = 0.9 + surgeFlash * 0.1;
+    }
+    for (const conduit of f.conduits) {
+      conduit.visible = showTier >= 2 || surge;
+      conduit.material.color.set(frameGlow);
+      conduit.material.opacity = 0.45 + surgeFlash * 0.3;
+    }
+    for (const [i, node] of f.nodes.entries()) {
+      node.visible = full;
+      const angle = state.elapsed * 1.5 * spin + (Math.PI * 2 * i) / f.nodes.length;
+      node.position.set(Math.cos(angle) * 8.8, 0.7, Math.sin(angle) * 8.8);
+      node.material.color.set('#ffffff');
+      node.material.opacity = 0.85 + surgeFlash * 0.15;
+    }
+    f.core.visible = full;
+    if (full) {
+      f.core.rotation.y += dt * 1.8 * spin;
+      f.core.scale.setScalar(1 + Math.sin(state.elapsed * (surge ? 14 : 7)) * 0.16 + surgeFlash * 0.2);
+      f.core.material.color.set('#ffffff');
+      f.core.material.opacity = 0.9 + surgeFlash * 0.1;
+    }
+
+    // 能量翼：Mk.II 只展开内半段，Mk.III／过载整片张开。缩的是「从翼根往外长」，
+    // 不是把整片翼缩小一半——所以翼肋的位置也跟着往根部收。
+    const span = full ? 1 : 0.55;
+    for (const [i, sail] of f.sails.entries()) {
+      const side = i === 0 ? -1 : 1;
+      sail.visible = showTier >= 2 || surge;
+      sail.scale.x = side * span;
+      sail.material.color.set(frameGlow);
+      sail.material.opacity = (full ? 0.16 : 0.1) + surgeFlash * 0.1;
+    }
+    for (const [i, rib] of f.ribs.entries()) {
+      const side = i < 3 ? -1 : 1;
+      rib.visible = showTier >= 2 || surge;
+      rib.position.x = side * (2.6 + 2.0 * span);
+      rib.scale.x = span;
+      rib.material.color.set(frameGlow);
+      rib.material.opacity = (full ? 0.68 : 0.4) + surgeFlash * 0.15;
+    }
+    for (const [i, halo] of f.halos.entries()) {
+      halo.visible = showTier >= 2 || surge;
+      halo.position.y = f.cores[i].position.y;
+      halo.material.color.set(frameGlow);
+      halo.material.opacity = 0.07 + surgeFlash * 0.1;
+    }
+    f.coreHalo.visible = full;
+    f.coreHalo.material.color.set(frameGlow);
+    f.coreHalo.material.opacity = 0.07 + surgeFlash * 0.12;
+    f.coreRing.visible = full;
+    if (full) {
+      f.coreRing.rotation.z += dt * 2.2 * spin;
+      f.coreRing.material.color.set(frameGlow);
+      f.coreRing.material.opacity = 0.5 + surgeFlash * 0.3;
+    }
     const worn = paint(ship);
 
     // 无敌期只闪机身，护盾环常亮——不然看不出还剩多久。
@@ -648,6 +786,12 @@ export function createRenderer(host) {
         tip.material.color.set(trim);
         tip.material.emissive.set(trim);
       }
+      // 阶级跟着翼走：脱手的道具上，共鸣导线也按阶级亮着，捡回来是什么样一眼看得出。
+      // 这里只改颜色与可见性，不碰 opacity——压暗／还原那一笔由 shadeWing 管。
+      for (const { mesh, lane } of wing.userData.spines ?? []) {
+        mesh.visible = tier >= 2 && (lane === 1 || tier >= 3);
+        mesh.material.color.set(usable ? trim : '#8b93a7');
+      }
 
       // 抛出去再落回来：自己脱手的那 0.42 秒抬一把、翻得飞快，之后转速降下来平着飘。
       // 运载火箭掉的那枚没有这一下（它不是被谁扔出来的），所以只有 mine 走抛物线。
@@ -700,6 +844,14 @@ export function createRenderer(host) {
       // 用绝对值覆盖而不是乘法：池子里的 mesh 会被反复复用，乘法会跨帧累积。
       const bulk = shot.well || shot.kind === 'anti' ? 1 : 1 + (((shot.tier ?? 1) - 1) * 0.3);
       mesh.scale.setScalar(bulk);
+      const sheath = mesh.userData.sheath;
+      if (sheath) {
+        const shotTier = Math.min(3, Math.max(1, shot.tier ?? 1));
+        sheath.visible = shotTier >= 2 || Boolean(shot.surge);
+        sheath.material.color.set(shot.surge ? OVERDRIVE_COLOR : TIER_COLOR[shotTier - 1]);
+        sheath.material.opacity = shot.surge ? 0.62 : shotTier >= 3 ? 0.45 : 0.3;
+        sheath.scale.setScalar(shot.surge ? 11 : shotTier >= 3 ? 8 : 6.5);
+      }
       if (shot.well) {
         // 引力井：吸积环的半径就是真实作用范围，它把射程画了出来。
         const ud = mesh.userData;

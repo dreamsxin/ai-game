@@ -290,3 +290,23 @@ export const briefing = (index) => {
 
 /** 每章第一关才给选机翼，其余关卡只能带着上一关剩下的翅膀继续飞。 */
 export const canSelect = (index) => Boolean(levelAt(index).select);
+
+/**
+ * 这一关所在章的第一关。失败重试、继续游戏都落在这里——
+ * 它一定是选翼关，所以「从本章重来」必然包含一次重新配置火力的机会。
+ * 用 chapter 字段现算而不是 index % 4：将来一章多加一关，这两条也不会错位。
+ */
+export const chapterStart = (index = 0) => {
+  const chapter = levelAt(index).chapter;
+  const first = LEVELS.findIndex((level) => level.chapter === chapter);
+  return first < 0 ? 0 : first;
+};
+
+/** 这一关是不是本章的最后一关（或整部游戏的最后一关）——跨章补给就挂在它后面。 */
+export const isChapterEnd = (index = 0) => {
+  const chapter = levelAt(index).chapter;
+  return !LEVELS.some((level, i) => i > index && level.chapter === chapter);
+};
+
+/** 这一关是第几章（1 起）。文案里说「第 2 章」比说索引好懂。 */
+export const chapterNumber = (index = 0) => levelAt(index).chapter + 1;

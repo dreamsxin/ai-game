@@ -39,6 +39,14 @@ export const HURT_INVULN = 1.6;
 export const START_LIVES = 3;
 export const RESPAWN_DELAY = 1.1;
 
+// ——— 跨章补给 ———
+// 打完一章多给一条命，最多攒到 5 条。三章补给刚好把 3 条命的容错垫到 5 条上限。
+// 为什么加：16 关一局十几分钟，后期一次失误就掉命，三条命打到底的容错太薄；
+// 而「打不过就回到第 1 关」不是难度，是劝退。补给只加容错，不动敌人强度，
+// 也就不碰 Boss 血量那条反推链（levels.js 的 bossHp 与 playthrough 的时长断言）。
+export const MAX_LIVES = 5;
+export const CHAPTER_LIFE_BONUS = 1;
+
 // 敌弹可以被打掉，所以敌弹有血量。1 血意味着任何一发子弹都能消掉它。
 export const ENEMY_BULLET_HP = 1;
 
@@ -49,6 +57,17 @@ export const LIFE_BONUS = 800;
 export const SKIP_SCORE = 1200;
 // 进化一次给一笔分。攒阶级本来就要冒着「翅膀被打掉」的风险，值得记账。
 export const EVOLVE_SCORE = 600;
+
+// ——— 同频共振：捡到同型号机翼那一刻 ———
+// 升阶不只是把数字调大：两副同构翼面合榫的瞬间会向外放一圈相位冲击，
+// 把半径内的敌弹震碎（照样算连消、照样给分），并给一小段无敌。
+// 于是「去接那只翼」是一次有战术收益的动作，而不是顺路捡个道具。
+export const SYNC_BURST_R = 26;
+export const SYNC_BURST_INVULN = 0.7;
+// 满阶之后再捡同型号不再是空捡：换成一段限时过载（火力再翻一截），
+// 阶级仍封顶在 Mk.III，过载只是临时的，「投资清零」那条规矩不变。
+export const OVERDRIVE_TIME = 5.5;
+export const OVERDRIVE_SCORE = 400;
 
 // Boss 的死亡演出：血量归零不是当场结算，而是进入 1.3 秒的过载——
 // 间隔 BOSS_BLAST_EVERY 秒在壳体上炸一处，期间不再开火、不再撞人，

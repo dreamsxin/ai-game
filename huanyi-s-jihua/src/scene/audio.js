@@ -81,11 +81,23 @@ export const SOUNDS = {
     noise: { dur: 0.24, gain: 0.05, cutoff: 4200, type: 'highpass', delay: 0.26 },
   },
   // 已经满阶还捡到同型号：一声「收到了，但没得升」的短应答，不是失败音。
+  // 这一版里它会被 overdrive 顶掉：阶级没升，但换来了限时过载，所以该响的是爆发那一声。
   topped: {
     tones: [
       { wave: 'sine', freq: NOTE.C5, to: NOTE.C5, dur: 0.05, gain: 0.07 },
       { wave: 'sine', freq: NOTE.C5, to: NOTE.C5, dur: 0.07, gain: 0.07, delay: 0.08 },
     ],
+  },
+  // 相位过载：满阶之后又叠了一副同构翼面。比进化更长、更高，四层扫频一路顶上去，
+  // 让「到顶了还捡到」也是一次爆发，而不是一句「已满阶」。
+  overdrive: {
+    tones: [
+      { wave: 'sine', freq: NOTE.C5, to: NOTE.C6, dur: 0.42, gain: 0.12 },
+      { wave: 'triangle', freq: NOTE.G4, to: NOTE.G5, dur: 0.3, gain: 0.1, delay: 0.05 },
+      { wave: 'square', freq: NOTE.E5, to: NOTE.C6, dur: 0.34, gain: 0.08, delay: 0.14 },
+      { wave: 'sine', freq: NOTE.C6, to: NOTE.C6, dur: 0.28, gain: 0.09, delay: 0.28 },
+    ],
+    noise: { dur: 0.36, gain: 0.06, cutoff: 5200, type: 'highpass', delay: 0.1 },
   },
   // 反物质弹炸开：低频闷响加一层宽噪，比普通爆炸更「空」。
   burst: {
@@ -264,6 +276,7 @@ export function soundsFor(effects = []) {
   if (find('evolve')) push('evolve');
   else if (find('swap')) push('swap');
   else if (find('catch')) push('catch');
+  else if (find('overdrive')) push('overdrive');
   else if (find('topped')) push('topped');
   if (find('jettison')) push('jettison');
   if (find('revive')) push('revive');
@@ -302,6 +315,8 @@ export const VIBRATION = {
   catch: [12],
   // 进化是一串往上敲的短震，和「接到一只翅膀」的单下分得开。
   evolve: [10, 24, 10, 24, 22],
+  // 相位过载比进化更重一档：它是满阶之后再叠出来的爆发。
+  overdrive: [18, 36, 18, 36, 30],
   die: [60, 40, 60],
   skip: [14, 24, 14, 24],
   bossKill: [30, 40, 60],
@@ -329,6 +344,7 @@ export function vibrationFor(effects = []) {
   if (find('wingLost')) return VIBRATION.wingLost;
   if (find('bare')) return VIBRATION.bare;
   if (find('evolve')) return VIBRATION.evolve;
+  if (find('overdrive')) return VIBRATION.overdrive;
   if (find('jettison')) return VIBRATION.jettison;
   if (find('catch') || find('swap')) return VIBRATION.catch;
   return null;

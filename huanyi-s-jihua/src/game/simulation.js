@@ -14,6 +14,7 @@ import {
   BOSS_SCORE,
   BOSS_DEATH_TIME,
   BOSS_BLAST_EVERY,
+  CHAPTER_LIFE_BONUS,
   DIVE_BOOST,
   DIVE_TIME,
   EVOLVE_SCORE,
@@ -25,11 +26,16 @@ import {
   HURT_INVULN,
   JETTISON_LOCK,
   LIFE_BONUS,
+  MAX_LIVES,
+  OVERDRIVE_SCORE,
+  OVERDRIVE_TIME,
   PLAYER_MAX_Y,
   PLAYER_MIN_Y,
   PLAYER_SPEED,
   PLAYER_Y,
   RESPAWN_DELAY,
+  SYNC_BURST_INVULN,
+  SYNC_BURST_R,
   WELL_KILL,
   WELL_PULL,
   SKIP_SCORE,
@@ -44,7 +50,7 @@ import {
   tuning,
 } from './rules.js';
 import { EMPTY_INPUT } from './input.js';
-import { LEVELS, bossAt, canSelect, levelAt, skipTarget } from './levels.js';
+import { LEVELS, bossAt, canSelect, chapterStart, levelAt, skipTarget } from './levels.js';
 import { MAX_TIER, WINGS, clampTier, damageMultiplier, hitKind, wingAtTier } from './wings.js';
 import { offField, spawnWave, stepEnemy, stepShot } from './enemies.js';
 import { makeBoss, stepBoss } from './boss.js';
@@ -71,6 +77,8 @@ const makeShip = (wing, tier = 1) => ({
   dive: 0,
   lock: 0,
   orbAngle: 0,
+  // 相位过载是满阶之后再叠同型号换来的限时增益，不写进阶级（弃翼／换翼／掉翼都清零）。
+  overdrive: 0,
 });
 
 /** 载入一关。carry 带着上一关的战果：命、分、以及还挂在机上的那只翅膀。 */
@@ -104,10 +112,18 @@ function loadLevel(index, carry = {}) {
     reviveTimer: 0,
     lives: carry.lives ?? START_LIVES,
     score: carry.score ?? 0,
+    // 进本章时的分数。失败重试要把分退回到这里，否则重打同一关就能刷纪录。
+    baseScore: carry.baseScore ?? carry.score ?? 0,
     chain: 0,
     bestChain: carry.bestChain ?? 0,
     pops: carry.pops ?? 0,
     kills: carry.kills ?? 0,
+    // 战报要用的两个数：掉翼几次、总共挨了几下。没有它们，
+    // 「我到底是被弹幕磨死的还是自己浪死的」只能靠回忆。
+    wingLosses: carry.wingLosses ?? 0,
+    hits: carry.hits ?? 0,
+    // 这一章重试过几次。不惩罚，只是让结算面板说实话。
+    retried: carry.retried ?? 0,
     stars: 0,
     nextId: 1,
     effects: [],
@@ -137,32 +153,65 @@ export function chooseWing(state, code) {
   return {
     ...state,
     status: 'playing',
-    ship: { ...state.ship, wing: code, tier: 1 },
+    ship: { ...state.ship, wing: code, tier: 1, overdrive: 0 },
     entryWing: code,
     effects: [{ type: 'catch', code }],
   };
 }
 
-/** 打完一关往下走。skipped 决定是 +1 还是跳 4 关。 */
+/**
+ * 打完一关往下走。skipped 决定是 +1 还是跳 4 关。
+ * 跨章时补一条命（上限 MAX_LIVES）：这一条是给「打到第 13 关死在 Boss 手上」的人留的续气，
+ * 不是难度开关——敌人强度、Boss 血量一点都没动。
+ */
 export function advance(state) {
   if (state.status !== 'clear') return state;
   const next = state.skipped ? skipTarget(state.levelIndex) : state.levelIndex + 1;
-  const carry = {
-    wing: state.ship.wing,
-    tier: state.ship.tier,
-    lives: state.lives,
-    score: state.score,
-    bestChain: state.bestChain,
-    pops: state.pops,
-    kills: state.kills,
-    elapsed: state.elapsed,
-  };
   if (next >= LEVELS.length) {
     // 通关结算：剩下的命折成分。留着命通关比擦着边通关更值钱。
     const finished = { ...state, status: 'won', score: state.score + state.lives * LIFE_BONUS };
     return { ...finished, stars: resultStars(finished), effects: [] };
   }
+  const crossing = levelAt(next).chapter !== state.chapter;
+  const carry = {
+    wing: state.ship.wing,
+    tier: state.ship.tier,
+    lives: crossing ? Math.min(MAX_LIVES, state.lives + CHAPTER_LIFE_BONUS) : state.lives,
+    score: state.score,
+    // 进新章时把「本章起点分」抬到当前分：这一章的失败重试只回到这里，刷不出新纪录。
+    baseScore: crossing ? state.score : state.baseScore,
+    bestChain: state.bestChain,
+    pops: state.pops,
+    kills: state.kills,
+    elapsed: state.elapsed,
+    wingLosses: state.wingLosses ?? 0,
+    hits: state.hits ?? 0,
+    retried: state.retried ?? 0,
+  };
   return loadLevel(next, carry);
+}
+
+/**
+ * 失败后从本章第一关重来。三条约束让「重试」不等于「白送」：
+ * 1. 分数退回进本章时的起点——重打同一关刷不出新纪录；
+ * 2. 命重置成开局那三条，机翼与攒下的阶级一起作废，得重新选一次火力；
+ * 3. 总用时继续累计，结算面板里看得出来这一章是重试过的。
+ */
+export function retryChapter(state) {
+  const start = chapterStart(state.levelIndex);
+  return loadLevel(start, {
+    wing: null,
+    lives: START_LIVES,
+    score: state.baseScore ?? 0,
+    baseScore: state.baseScore ?? 0,
+    bestChain: state.bestChain ?? 0,
+    pops: state.pops ?? 0,
+    kills: state.kills ?? 0,
+    elapsed: state.elapsed ?? 0,
+    wingLosses: state.wingLosses ?? 0,
+    hits: state.hits ?? 0,
+    retried: (state.retried ?? 0) + 1,
+  });
 }
 
 // ——— 几何 ———
@@ -225,11 +274,11 @@ function moveShip(ship, input, dt) {
 }
 
 /**
- * 开火。带翼时用机翼的 volley（已经按阶级放大过），没翼时只剩主机小炮——
+ * 开火。带翼时用机翼的 volley（已经按阶级放大过，过载中再乘一层），没翼时只剩主机小炮——
  * 这一行就是「舍弃机翼＝输出窗口消失」的全部实现。
  */
 function fireShip(ship, dt, nextId) {
-  const wing = ship.wing ? wingAtTier(ship.wing, ship.tier) : null;
+  const wing = ship.wing ? wingAtTier(ship.wing, ship.tier, ship.overdrive > 0) : null;
   const cool = wing ? wing.cool : HULL_GUN.cool;
   let timer = ship.cool - dt;
   let id = nextId;
@@ -256,6 +305,8 @@ function fireShip(ship, dt, nextId) {
       life: spec.life,
       // 阶级跟着子弹走：表现层按它放大弹体——「升阶了，弹都变粗了」看得见。
       tier: wing ? wing.tier : 1,
+      // 过载中的子弹另有一层能量鞘，颜色与常态升阶分开。
+      surge: Boolean(wing?.surge),
       age: 0,
     });
     id += 1;
@@ -307,6 +358,7 @@ function burstOf(shot, startId) {
       echo: false,
       life: 0.55,
       tier: shot.tier ?? 1,
+      surge: Boolean(shot.surge),
       age: 0,
     });
   }
@@ -337,7 +389,7 @@ function jettison(state, effects) {
     ...state,
     nextId: state.nextId + 1,
     drops: [...state.drops, drop],
-    ship: { ...ship, wing: null, tier: 1, dive: DIVE_TIME, invuln: Math.max(ship.invuln, DIVE_TIME) },
+    ship: { ...ship, wing: null, tier: 1, overdrive: 0, dive: DIVE_TIME, invuln: Math.max(ship.invuln, DIVE_TIME) },
   };
 }
 
@@ -430,6 +482,7 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     invuln: Math.max(0, state.ship.invuln - dt),
     dive: Math.max(0, state.ship.dive - dt),
     lock: Math.max(0, state.ship.lock - dt),
+    overdrive: Math.max(0, (state.ship.overdrive ?? 0) - dt),
   };
   // 无敌结束的那一帧如果还没接到新翼，就是这游戏最危险的瞬间——它值得一声警告。
   if (state.ship.dive > 0 && ship.dive === 0 && !ship.wing) effects.push({ type: 'bare' });
@@ -491,6 +544,8 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   let pops = state.pops;
   let kills = state.kills;
   let lives = state.lives;
+  let wingLosses = state.wingLosses ?? 0;
+  let hits = state.hits ?? 0;
   // 这一帧新脱手的机翼已经在 next.drops 里了，从它接着算，别从上一帧的旧列表算。
   let drops = next.drops;
 
@@ -653,6 +708,19 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   }
 
   // ——— 机翼道具 ———
+  // 同频共振：两副同构翼面合榫的瞬间会向外放一圈相位冲击，把半径内的敌弹震碎。
+  // 走 pop() 而不是直接删，所以消弹照样算连消、照样给分、照样出声。
+  // pop 只把槽位置成 null，这一段的最后统一过滤，别把 null 留给下面的挨打判定。
+  const syncBurst = (x, y) => {
+    let cleared = 0;
+    for (let i = 0; i < foes.length; i += 1) {
+      const foe = foes[i];
+      if (!foe || Math.hypot(foe.x - x, foe.y - y) > SYNC_BURST_R) continue;
+      pop(i);
+      cleared += 1;
+    }
+    return cleared;
+  };
   const keptDrops = [];
   for (const drop of drops) {
     const moved = { ...drop, y: drop.y + drop.vy * dt, life: drop.life - dt, grace: Math.max(0, (drop.grace ?? 0) - dt) };
@@ -664,25 +732,40 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     if (moved.grace <= 0 && Math.hypot(moved.x - ship.x, moved.y - ship.y) <= CATCH_R) {
       const tier = clampTier(moved.tier ?? 1);
       if (!ship.wing) {
-        // 空手接翼：捡到什么阶级就是什么阶级。
-        ship = { ...ship, wing: moved.code, tier, lock: JETTISON_LOCK };
+        // 空手接翼：捡到什么阶级就是什么阶级。过载是临时的，接翼不继承。
+        ship = { ...ship, wing: moved.code, tier, overdrive: 0, lock: JETTISON_LOCK };
         effects.push({ type: 'catch', code: moved.code, tier });
       } else if (ship.wing === moved.code) {
-        // 同型号叠加＝进化。这是运载火箭掉重复机翼时最想看到的一幕。
+        // 同型号叠加＝同频共振。阶级往上抬，同时放一圈冲击把身边的弹幕震碎。
         if (ship.tier < MAX_TIER) {
           const next = clampTier(ship.tier + 1);
           score += EVOLVE_SCORE;
-          ship = { ...ship, tier: next, lock: JETTISON_LOCK };
-          effects.push({ type: 'evolve', code: moved.code, tier: next, x: moved.x, y: moved.y });
+          const cleared = syncBurst(ship.x, ship.y);
+          ship = {
+            ...ship,
+            tier: next,
+            lock: JETTISON_LOCK,
+            invuln: Math.max(ship.invuln, SYNC_BURST_INVULN),
+          };
+          effects.push({ type: 'evolve', code: moved.code, tier: next, x: ship.x, y: ship.y, cleared, radius: SYNC_BURST_R });
         } else {
-          // 已经满阶：不浪费成一次静默的空捡，补一发满血提示。
+          // 已经满阶：阶级封顶，换成一段限时相位过载——重复机翼永远不白捡。
+          score += OVERDRIVE_SCORE;
+          const cleared = syncBurst(ship.x, ship.y);
+          ship = {
+            ...ship,
+            overdrive: OVERDRIVE_TIME,
+            lock: JETTISON_LOCK,
+            invuln: Math.max(ship.invuln, SYNC_BURST_INVULN),
+          };
           effects.push({ type: 'topped', code: moved.code, tier: MAX_TIER });
+          effects.push({ type: 'overdrive', code: moved.code, x: ship.x, y: ship.y, cleared, radius: SYNC_BURST_R, time: OVERDRIVE_TIME });
         }
       } else {
-        // 换装：旧的原地脱手（带着它攒的阶级），你还能反悔一次。
+        // 换装：旧的原地脱手（带着它攒的阶级），你还能反悔一次。相位编码不兼容，过载清零。
         keptDrops.push({ id: nextId, code: ship.wing, tier: ship.tier, x: ship.x, y: ship.y, vy: WING_DRIFT_VY, life: WING_DRIFT, grace: CATCH_GRACE, mine: true });
         nextId += 1;
-        ship = { ...ship, wing: moved.code, tier, lock: JETTISON_LOCK };
+        ship = { ...ship, wing: moved.code, tier, overdrive: 0, lock: JETTISON_LOCK };
         effects.push({ type: 'swap', code: moved.code, tier });
       }
       continue;
@@ -690,6 +773,8 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     keptDrops.push(moved);
   }
   drops = keptDrops;
+  // pop 留下的空槽在这里收干净：下面的挨打判定会直接读 foes 里的对象。
+  foes = foes.filter(Boolean);
 
   // ——— 挨打 ———
   // 机翼同时是装甲：带翼被打中只掉翼，裸机被打中才掉命。
@@ -701,14 +786,18 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     // 连消清零，但历史最好成绩留着：这一局压过的最长一串是战绩，不该被一次挨打抹掉。
     bestChain = Math.max(bestChain, chain);
     chain = 0;
+    // 战报记两笔：挨了几下、其中几下是掉翼。掉翼不清零连消以外的东西，
+    // 但「这一局被削掉几次翼」正是玩家复盘时最想知道的那个数。
+    hits += 1;
     if (ship.wing) {
+      wingLosses += 1;
       drops = [
         ...drops,
         { id: nextId, code: ship.wing, tier: ship.tier, x: ship.x, y: ship.y, vy: WING_DRIFT_VY * 0.6, life: WING_DRIFT, grace: CATCH_GRACE, mine: true },
       ];
       nextId += 1;
       effects.push({ type: 'wingLost', code: ship.wing, tier: ship.tier, from: source, x: ship.x, y: ship.y });
-      ship = { ...ship, wing: null, tier: 1, invuln: HURT_INVULN };
+      ship = { ...ship, wing: null, tier: 1, overdrive: 0, invuln: HURT_INVULN };
       return false;
     }
     return true;
@@ -788,6 +877,8 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     pops,
     kills,
     lives,
+    wingLosses,
+    hits,
     nextId,
     effects,
   };

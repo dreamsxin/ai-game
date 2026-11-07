@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, ChevronsDown, Heart, Pause, Play, RotateCcw, Sparkles, Target, Trophy, Volume2, VolumeX } from 'lucide-react';
+import { ChevronRight, ChevronsDown, Heart, Pause, Play, RotateCcw, Share2, Sparkles, Target, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { createInput, mergeInput } from './game/input.js';
-import { STEP, advance, chooseWing, createGame, startGame, step, togglePause } from './game/simulation.js';
+import { STEP, advance, chooseWing, createGame, retryChapter, startGame, step, togglePause } from './game/simulation.js';
+import { loadProgress, mergeProgress, resumeIndex, saveProgress } from './game/progress.js';
 import { WINGS } from './game/wings.js';
-import { bossAt, briefing, levelAt } from './game/levels.js';
+import { bossAt, briefing, canSelect, levelAt } from './game/levels.js';
 import { createRenderer } from './scene/render.js';
 import { VIBRATION, createAudio, vibrate, vibrationFor, winSound } from './scene/audio.js';
 import {
+  archiveLabel,
   bossRatio,
   briefLine,
   chainLabel,
+  defeatLabel,
   evolveLabel,
   formatScore,
   formatTime,
@@ -17,14 +20,24 @@ import {
   jettisonKey,
   labLabel,
   levelLabel,
+  loreLine,
   muteLabel,
+  nextTierLabel,
   progressLabel,
   progressRatio,
   recordLabel,
   resultTitle,
+  resumeLabel,
+  retryLabel,
   rewardLabel,
+  runReport,
+  shareText,
   starLabel,
   statusLabel,
+  supplyLabel,
+  surgeLabel,
+  syncLabel,
+  tierGainLabel,
   tierLabel,
   weakHint,
   wingClass,
@@ -174,6 +187,11 @@ export default function App() {
   const [view, setView] = useState(gameRef.current);
   const [best, setBest] = useState(readBest);
   const [muted, setMuted] = useState(readMuted);
+  // 进度存档只记「打到哪、每关几星、通关几次」。局内状态一概不存：
+  // 存了就等于把「一命到底」的紧张感一起存下来（见 progress.js 的注释）。
+  const [progress, setProgress] = useState(loadProgress);
+  // 复制战绩的三态：idle / ok / fail。fail 时把文案摆出来让人手动复制。
+  const [copyState, setCopyState] = useState('idle');
   const [banner, setBanner] = useState('');
   // 表现层挂掉时的提示。黑屏本身不说话，这行字替它说。
   const [fault, setFault] = useState('');
@@ -200,9 +218,44 @@ export default function App() {
     // 第 1 关是选翼关，所以重开一局就落在选翼界面上。
     push(startGame(0));
     setBanner('');
+    setCopyState('idle');
     // 面板上的按钮是本局第一个用户手势，正好拿它把 AudioContext 解锁。
     sound('catch');
   }, [best, push, sound]);
+
+  /**
+   * 继续上次的进度：接着上次过掉的那一关。
+   * 落点若不是章首（机制上不能选翼），就替它带上这一关的推荐机翼直接开打——
+   * 「继续」不该把人按回本章开头重打四关。
+   */
+  const resume = useCallback(() => {
+    const index = resumeIndex(progress);
+    bestAtStartRef.current = best;
+    push(startGame(index, canSelect(index) ? null : briefing(index).pick));
+    setBanner('');
+    setCopyState('idle');
+    sound('catch');
+  }, [best, progress, push, sound]);
+
+  /** 失败后只回本章，不用把前面十几关重打一遍。 */
+  const retry = useCallback(() => {
+    bestAtStartRef.current = best;
+    push(retryChapter(gameRef.current));
+    setBanner('');
+    setCopyState('idle');
+    sound('catch');
+  }, [best, push, sound]);
+
+  const share = useCallback(async () => {
+    const url = typeof location === 'undefined' ? '' : location.href;
+    try {
+      await navigator.clipboard.writeText(shareText(gameRef.current, url));
+      setCopyState('ok');
+    } catch {
+      // http 域名、旧版 Safari、被拒绝授权：剪贴板用不了就把文案摆出来让人手动复制。
+      setCopyState('fail');
+    }
+  }, []);
 
   const pick = useCallback((code) => {
     push(chooseWing(gameRef.current, code));
@@ -210,6 +263,7 @@ export default function App() {
   }, [push, sound]);
 
   const next = useCallback(() => {
+    setCopyState('idle');
     push(advance(gameRef.current));
   }, [push]);
 
@@ -225,12 +279,15 @@ export default function App() {
   const pause = useCallback(() => {
     const state = gameRef.current;
     if (state.status === 'over' || state.status === 'won') {
-      restart();
+      // 键盘 Esc / P 在结算屏上等于主按钮：失败回本章，通关再来一趟。
+      if (state.status === 'over') retry();
+      else restart();
       return;
     }
     if (state.status === 'ready') {
-      bestAtStartRef.current = best;
-      push(startGame(0));
+      // 有存档就从上次那一章接上，没有才从头开始。
+      if (progress.unlocked > 0) resume();
+      else restart();
       return;
     }
     if (state.status === 'clear') {
@@ -239,7 +296,7 @@ export default function App() {
     }
     if (state.status === 'select') return;
     push(togglePause(state));
-  }, [best, next, push, restart]);
+  }, [next, progress.unlocked, push, restart, resume, retry]);
 
   // 暂停回调走 ref：渲染循环那个 effect 必须只挂一次。
   // 把 pause 写进 deps 会让它随 best 变化重建——而重建一次就是新开一个 WebGL 上下文，
@@ -358,6 +415,21 @@ export default function App() {
     writeBest(view.score);
   }, [view.status, view.score, best]);
 
+  // 过关就落盘。over 不写：失败不该改变「已经解锁到哪」，那是玩家已经拿到的旅程。
+  // stamp 去重是因为 clear 会停留好几秒，React 重渲染不该把同一关反复写一遍。
+  const savedRef = useRef('');
+  useEffect(() => {
+    if (view.status !== 'clear' && view.status !== 'won') return;
+    const stamp = `${view.status}:${view.levelKey}:${view.score}:${view.stars}`;
+    if (savedRef.current === stamp) return;
+    savedRef.current = stamp;
+    setProgress((current) => {
+      const merged = mergeProgress(current, view);
+      saveProgress(merged);
+      return merged;
+    });
+  }, [view.status, view.levelKey, view.score, view.stars]);
+
   // 卸载时关掉 AudioContext。浏览器对同时存在的 context 有上限，热更新时不关会攒着。
   useEffect(() => () => audioRef.current?.dispose(), []);
 
@@ -417,6 +489,11 @@ export default function App() {
   const brief = briefing(view.levelIndex);
   const hp = bossRatio(view);
   const jettison = jettisonKey(view.ship);
+  const surge = surgeLabel(view.ship);
+  // 跨章那一屏才有的补给提示；存档摘要只在真有进度时出现。
+  const supply = cleared ? supplyLabel(view) : '';
+  const archive = archiveLabel(progress);
+  const hasSave = progress.unlocked > 0;
 
   return (
     <div className="app">
@@ -438,9 +515,31 @@ export default function App() {
         </div>
         <div className="stat">
           <span className={`stat-value${view.ship.wing ? '' : ' stat-bare'}`}>{wingLabel(view.ship)}</span>
-          <span className="stat-label">{chainLabel(view.chain) || evolveLabel(view.ship) || brief.label}</span>
+          <span className="stat-label">
+            {surge || chainLabel(view.chain) || evolveLabel(view.ship) || brief.label}
+          </span>
         </div>
         </header>
+
+        {/* 共鸣条：三格就是三阶，过载时整条换白青并脉动。
+            阶级跟着机翼走，裸机时它必须一起灭，否则 HUD 会在骗人。 */}
+        <div className={`sync-meter${surge ? ' sync-meter-surge' : ''}`} aria-label={syncLabel(view.ship) || '无机翼'}>
+          <span className="sync-meter-name">
+            {view.ship.wing ? syncLabel(view.ship) : '无机翼 · 无相位场'}
+          </span>
+          <span className="sync-meter-pips" aria-hidden="true">
+            {[1, 2, 3].map((step) => (
+              <i
+                key={step}
+                className={view.ship.wing && view.ship.tier >= step ? 'pip-on' : ''}
+                style={{
+                  borderColor: TIER_COLOR[step - 1],
+                  background: view.ship.wing && view.ship.tier >= step ? TIER_COLOR[step - 1] : 'transparent',
+                }}
+              />
+            ))}
+          </span>
+        </div>
 
         {fault && <p className="fault">表现层没起来：{fault}　·　刷新页面重试</p>}
         {banner && <p className="banner">{banner}</p>}
@@ -490,32 +589,47 @@ export default function App() {
             <p className="panel-status">{statusLabel(view.status)}</p>
             {/* 键盘玩家的快捷键摆在暂停里：这一屏停下来喘口气，正好看得进去。 */}
             {paused && !coarse && <p className="panel-detail">Esc / P 继续 · R 重新开始 · M 静音</p>}
+            {paused && view.ship.wing && (
+              <p className="panel-detail">{syncLabel(view.ship)} · {tierGainLabel(view.ship.tier)}</p>
+            )}
+            {paused && <p className="panel-detail">{nextTierLabel(view.ship)}</p>}
 
             {ready && (
               <>
+                {/* 首屏只放三句：怎么动、怎么保命、为什么翅膀重要。
+                    其余设定收进折叠区——手机上一长串说明会把「出击」顶到屏幕外，
+                    等于让第一次打开的人先读说明书、再找按钮。 */}
                 <ul className="panel-tips">
-                  {/* 开头两三条是这只手怎么操作，按指针类型给：触屏说拖和点，键盘说键位。 */}
-                  {(coarse
-                    ? [
-                        '屏幕任意处按住拖动走位，火力一直是自动开的',
-                        '轻点一下弃翼：机翼脱落，主机下潜 1 秒无敌，但只剩小炮',
-                      ]
-                    : [
-                        '方向键 / WASD 走位，火力一直是自动开的',
-                        'Space / Z / X / J 弃翼下潜：机翼脱落，1 秒无敌，但只剩小炮',
-                        'Esc / P 暂停 · R 重开 · M 静音',
-                      ]
-                  ).map((tip) => (
-                    <li key={tip}>{tip}</li>
-                  ))}
-                  <li>斜俯视 2.5D 战场：往上是远方，敌人从地平线那头压过来</li>
-                  <li>脱下来的翅膀会往上飘，接回来还能用；飘出画面就真没了</li>
+                  <li>
+                    {coarse
+                      ? '按住屏幕任意处拖动走位，火力一直是自动开的'
+                      : '方向键 / WASD 走位，火力一直是自动开的'}
+                  </li>
+                  <li>
+                    {coarse
+                      ? '轻点一下弃翼：机翼脱落，主机下潜 1 秒无敌，但只剩小炮'
+                      : 'Space / Z / X / J 弃翼下潜：机翼脱落，1 秒无敌，但只剩小炮'}
+                  </li>
                   <li>带着翼被打中只掉翼，裸机被打中才掉命——翅膀就是你的装甲</li>
-                  <li>捡到<b>同型号</b>的机翼就升阶，Mk.III 火力翻一截；换型号从 Mk.I 重来</li>
-                  <li>敌弹可以被打掉，连消越多分越高、音越亮</li>
-                  <li>打不进弱点的那一声又钝又闷，听到它就说明这只翅膀选错了</li>
-                  <li>第 9 关起解锁实验机翼：引力井、链弧炮、相位激光、反物质弹、量子分身</li>
                 </ul>
+
+                <details className="panel-more">
+                  <summary>更多设定与操作</summary>
+                  <ul className="panel-tips">
+                    <li>斜俯视 2.5D 战场：往上是远方，敌人从地平线那头压过来</li>
+                    <li>脱下来的翅膀会往上飘，接回来还能用；飘出画面就真没了</li>
+                    <li><b>同频共振</b>：只有同型号能叠。Mk.II 火力 +50%，Mk.III +125%，射程与范围一起变长</li>
+                    <li>叠翼瞬间放一圈相位冲击震碎附近敌弹；满阶再叠触发限时「相位过载」</li>
+                    <li>机翼会随阶级展开成能量翼；换型号编码不兼容，从 Mk.I 重来</li>
+                    <li>敌弹可以被打掉，连消越多分越高、音越亮</li>
+                    <li>打不进弱点的那一声又钝又闷，听到它就说明这只翅膀选错了</li>
+                    <li>第 9 关起解锁实验机翼：引力井、链弧炮、相位激光、反物质弹、量子分身</li>
+                    {!coarse && <li>Esc / P 暂停 · R 重开 · M 静音</li>}
+                  </ul>
+                </details>
+
+                {/* 有存档的人最该先看到「接着上次打」，而不是最高分。 */}
+                {archive && <p className="panel-detail panel-archive">{archive}</p>}
                 {/* 旧纪录放在标题页：目标是什么，出发前就该看见。 */}
                 {best > 0 && (
                   <p className="panel-detail panel-best">
@@ -557,8 +671,11 @@ export default function App() {
                   ))}
                 </div>
                 <p className="panel-detail">
+                  <Sparkles size={13} aria-hidden="true" /> {loreLine()}
+                </p>
+                <p className="panel-detail">
                   <Target size={13} aria-hidden="true" /> 这一关的运载火箭里装着 {brief.drops.join(' / ')}
-                  ；捡到同型号就升阶
+                  ；同型号叠上去就升阶，翼面会真的展开
                 </p>
               </>
             )}
@@ -569,10 +686,17 @@ export default function App() {
                 <p className="panel-detail">
                   {levelLabel(view)} · {view.skipped ? '走了跳关门，直接省 4 关' : `击破 ${view.bossName}`}
                 </p>
+                <p className="panel-detail">{runReport(view)} · 最长连消 {view.bestChain}</p>
                 <p className="panel-detail">
-                  消弹 {view.pops} 发 · 最长连消 {view.bestChain} · 现在挂着 {wingName(view.ship.wing)}
+                  现在挂着 {wingName(view.ship.wing)}
                   {tierLabel(view.ship.tier) ? ` ${tierLabel(view.ship.tier)}` : ''}
                 </p>
+                {/* 跨章补给要当面说：玩家该知道「下一章多一条命」是他打完这一章换来的。 */}
+                {supply && (
+                  <p className="panel-detail panel-supply">
+                    <Heart size={13} aria-hidden="true" /> {supply}
+                  </p>
+                )}
                 <button type="button" className="panel-action" onClick={next}>
                   <ChevronRight size={18} aria-hidden="true" />
                   继续推进
@@ -598,28 +722,81 @@ export default function App() {
                   ))}
                 </p>
                 <p className="panel-detail">{rewardLabel(view.stars)}</p>
+                {/* 失败最需要的不是「任务失败」，而是「你还差多少」。 */}
+                {view.status === 'over' && <p className="panel-detail panel-defeat">{defeatLabel(view)}</p>}
                 <p className="panel-detail">
-                  {levelLabel(view)} · 消弹 {view.pops} · 击落 {view.kills} · 用时 {formatTime(view.elapsed)}
+                  {levelLabel(view)} · {runReport(view)} · 用时 {formatTime(view.elapsed)}
                 </p>
+                {view.retried > 0 && <p className="panel-detail">这一章重试过 {view.retried} 次</p>}
                 <p className="panel-detail">
                   <Trophy size={13} aria-hidden="true" /> 最高 {formatScore(best)}
                 </p>
+                {/* 分享是这游戏唯一「出圈」的部分：一句话拉人进来比谁飞得远。 */}
+                <button type="button" className="panel-action panel-action-ghost" onClick={share}>
+                  <Share2 size={16} aria-hidden="true" />
+                  {copyState === 'ok' ? '已复制，发出去吧' : copyState === 'fail' ? '复制失败，请手动复制' : '复制战绩'}
+                </button>
+                {copyState === 'fail' && (
+                  <p className="panel-share-text">
+                    {shareText(view, typeof location === 'undefined' ? '' : location.href)}
+                  </p>
+                )}
               </>
             )}
 
             {!selecting && !cleared && (
               <div className="panel-actions">
-                <button type="button" className="panel-action" onClick={finished || ready ? restart : pause}>
-                  {finished ? <RotateCcw size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
-                  {finished ? '再来一趟' : ready ? '出击' : '继续'}
-                </button>
-                {/* 暂停里给一条退路：打错了机翼、接了个电话，都该能重开而不必先送掉三条命。 */}
+                {ready &&
+                  (hasSave ? (
+                    <>
+                      <button type="button" className="panel-action" onClick={resume}>
+                        <Play size={18} aria-hidden="true" />
+                        {resumeLabel(progress)}
+                      </button>
+                      <button type="button" className="panel-action panel-action-ghost" onClick={restart}>
+                        <RotateCcw size={18} aria-hidden="true" />
+                        从第 1 关重来
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="panel-action" onClick={restart}>
+                      <Play size={18} aria-hidden="true" />
+                      出击
+                    </button>
+                  ))}
+
                 {paused && (
-                  <button type="button" className="panel-action panel-action-ghost" onClick={restart}>
-                    <RotateCcw size={18} aria-hidden="true" />
-                    重新开始
-                  </button>
+                  <>
+                    <button type="button" className="panel-action" onClick={pause}>
+                      <Play size={18} aria-hidden="true" />
+                      继续
+                    </button>
+                    {/* 暂停里的退路只退到本章：接个电话、挑错机翼，不该罚掉前面十几关。 */}
+                    <button type="button" className="panel-action panel-action-ghost" onClick={retry}>
+                      <RotateCcw size={18} aria-hidden="true" />
+                      重开本章
+                    </button>
+                  </>
                 )}
+
+                {finished &&
+                  (view.status === 'won' ? (
+                    <button type="button" className="panel-action" onClick={restart}>
+                      <RotateCcw size={18} aria-hidden="true" />
+                      再来一趟
+                    </button>
+                  ) : (
+                    <>
+                      {/* 失败的主按钮是「留在这一章」：回第 1 关重打十几关，是弃坑的第一步。 */}
+                      <button type="button" className="panel-action" onClick={retry}>
+                        <RotateCcw size={18} aria-hidden="true" />
+                        {retryLabel(view)}
+                      </button>
+                      <button type="button" className="panel-action panel-action-ghost" onClick={restart}>
+                        从第 1 关重来
+                      </button>
+                    </>
+                  ))}
               </div>
             )}
           </div>

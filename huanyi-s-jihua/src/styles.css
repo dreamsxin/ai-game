@@ -118,6 +118,72 @@ body {
   color: var(--warm);
 }
 
+/* 共鸣条：阶级是这一局最值钱的信息，HUD 下面给它单独一条。
+   三颗灯珠就是三阶；过载时整条换白青并脉动，不必读字也知道还在爆发。
+   和 HUD 一样不吃指针事件，免得在走位区开一块死区。 */
+.sync-meter {
+  position: absolute;
+  z-index: 2;
+  top: 58px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(8, 14, 32, 0.72);
+  border: 1px solid var(--edge);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  pointer-events: none;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.sync-meter-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sync-meter-pips {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.sync-meter-pips i {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid;
+  border-radius: 50%;
+  opacity: 0.45;
+  transform: scale(0.86);
+  transition: transform 0.25s, opacity 0.25s;
+}
+
+.sync-meter-pips i.pip-on {
+  opacity: 1;
+  transform: scale(1);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.sync-meter-surge {
+  color: #e6ffff;
+  border-color: rgba(230, 255, 255, 0.8);
+  animation: surge-pulse 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes surge-pulse {
+  from { box-shadow: 0 0 8px rgba(230, 255, 255, 0.25); }
+  to { box-shadow: 0 0 20px rgba(230, 255, 255, 0.7); }
+}
+
 .stage {
   position: relative;
   flex: 1;
@@ -650,6 +716,77 @@ body {
   border: 1px solid rgba(148, 163, 199, 0.4);
 }
 
+/* ——— 进度、容错与战报 ——— */
+
+/* 折叠的进阶说明：首屏只留三句操作，其余收在这里。
+   summary 得看着像个能点的东西，否则玩家不会想到去点它。 */
+.panel-more {
+  margin: 0 0 14px;
+  text-align: left;
+}
+
+.panel-more summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  color: var(--cool);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.panel-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-more summary::before {
+  content: '＋';
+  font-weight: 700;
+}
+
+.panel-more[open] summary::before {
+  content: '－';
+}
+
+.panel-more .panel-tips {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+}
+
+/* 存档摘要比最高分更像「我回来过」，给它冷色。 */
+.panel-archive {
+  color: var(--cool);
+}
+
+/* 跨章补给是好消息，用暖金。 */
+.panel-supply {
+  color: var(--accent);
+}
+
+/* 失败战报是诊断，不是责备。 */
+.panel-defeat {
+  color: var(--cool);
+}
+
+/* 剪贴板被拒时的兜底：把文案摆出来，一眼能全选。 */
+.panel-share-text {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 199, 0.45);
+  background: rgba(6, 11, 26, 0.8);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
 /* 宽屏上的限宽交给 .frame，这里只在矮屏上把 HUD 收一收，别跟舞台抢高度。 */
 @media (max-height: 560px) {
   .stat-score .stat-value {
@@ -659,14 +796,23 @@ body {
   .stat-label {
     display: none;
   }
+
+  .sync-meter-name {
+    display: none;
+  }
 }
 
 /* 关掉动效的人是真的不想看动效，庆祝动画和下潜脉动也不例外——内容本身一条都不少。 */
 @media (prefers-reduced-motion: reduce) {
   .panel-settle,
   .panel-badge,
-  .panel-stars i {
+  .panel-stars i,
+  .sync-meter-surge {
     animation: none;
+  }
+
+  .sync-meter-pips i {
+    transition: none;
   }
 
   .pad-key-dive {
