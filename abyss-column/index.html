@@ -163,7 +163,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#01050a;colo
   opacity:0;pointer-events:none;transition:opacity .35s}
 .chart-bg.on{opacity:1;pointer-events:auto}
 .chart{position:fixed;z-index:12;left:50%;top:50%;transform:translate(-50%,-46%) scale(.97);
-  width:min(680px,94vw);max-height:86vh;overflow-y:auto;padding:26px 28px 22px;border-radius:22px;
+  width:min(680px,94vw);max-height:91vh;overflow-y:auto;padding:24px 28px 20px;border-radius:22px;
   background:linear-gradient(160deg,rgba(15,38,56,.95),rgba(4,12,20,.94));
   border:1px solid rgba(140,205,232,.20);
   box-shadow:0 26px 80px rgba(0,0,0,.65),inset 0 1px 0 rgba(200,240,255,.14);
@@ -174,23 +174,23 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#01050a;colo
 .c-head{display:flex;align-items:center;gap:10px}
 .chart h3{margin:0;font-family:var(--serif);font-weight:400;font-size:24px;letter-spacing:.08em;color:#eefaff}
 .chart h3 em{font-style:normal;font-size:9.5px;letter-spacing:.22em;color:var(--ink-3);margin-left:9px}
-.chart .c-sub{margin:8px 0 15px;font-size:11.5px;line-height:1.7;letter-spacing:.02em;color:rgba(158,198,218,.82)}
-/* 17 行要在 900px 屏高龄里排完，行距得收紧一点，否则最后一行会被面板底边切掉 */
-.sc-row{display:flex;align-items:center;gap:11px;margin-bottom:6px}
-.sc-row .sc-n{flex:0 0 96px;text-align:right;font-size:12.5px;letter-spacing:.02em;line-height:1.25;
+.chart .c-sub{margin:7px 0 12px;font-size:11px;line-height:1.65;letter-spacing:.02em;color:rgba(158,198,218,.82)}
+/* 21 种加成年人要在一屏里排完，行距收紧；最后一行不能被面板底边切掉 */
+.sc-row{display:flex;align-items:center;gap:11px;margin-bottom:3px}
+.sc-row .sc-n{flex:0 0 100px;text-align:right;font-size:12px;letter-spacing:.02em;line-height:1.15;
   color:rgba(206,234,245,.94)}
-.sc-row .sc-n s{display:block;text-decoration:none;font-size:8.5px;letter-spacing:.04em;
-  color:rgba(120,160,180,.62);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-row .sc-n s{display:block;text-decoration:none;font-size:7.5px;letter-spacing:.03em;line-height:1.15;
+  color:rgba(120,160,180,.62);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sc-row .sc-track{position:relative;flex:1;height:17px;border-radius:10px;background:rgba(255,255,255,.04);
   overflow:hidden;background-image:repeating-linear-gradient(to right,
     rgba(140,205,232,.12) 0 1px,transparent 1px 20%)}
 .sc-row .sc-track>div{position:absolute;left:0;top:2px;bottom:2px;border-radius:9px;min-width:3px;
   transition:width .6s cubic-bezier(.2,.8,.25,1)}
-.sc-row .sc-v{flex:0 0 58px;font-family:var(--serif);font-size:13.5px;letter-spacing:.02em;color:rgba(220,246,255,.94)}
+.sc-row .sc-v{flex:0 0 56px;font-family:var(--serif);font-size:12.5px;letter-spacing:.02em;color:rgba(220,246,255,.94)}
 .sc-row.hum .sc-n{color:#ffc7e0}
 .sc-row.hum .sc-track>div{background:linear-gradient(90deg,rgba(255,199,224,.9),rgba(255,199,224,.35))}
-.chart .c-foot{margin:16px 0 0;font-size:10.5px;line-height:1.7;letter-spacing:.02em;color:rgba(130,170,190,.7);
-  padding-top:13px;border-top:1px solid rgba(140,205,232,.10)}
+.chart .c-foot{margin:11px 0 0;font-size:10px;line-height:1.65;letter-spacing:.02em;color:rgba(130,170,190,.7);
+  padding-top:10px;border-top:1px solid rgba(140,205,232,.10)}
 /* 内容比面板高时，底部留一道渐隐，暗示还能往下滚 */
 .chart::after{content:"";position:sticky;bottom:-22px;display:block;height:34px;
   margin:0 -28px -22px;pointer-events:none;
@@ -849,7 +849,7 @@ var SMOOTH_VERT = [
 '      p.z += cos(uTime*uRate*0.52 + uPhase + u*6.283 + d*1.7) * d * uSway * 0.85;',
 '      p.y -= (1.0 - rel) * uPulse * d * 0.9;',
 '    }',
-'  } else {',
+'  } else if (uKind < 2.5) {',
 /* 鱼：沿体表的行进波。
    uWaveN  体长之内可见的波数（鳗 ~1.4 全身扭 / 金枪鱼 ~0.5 只有尾柄在动）
    uAmp0   开始摆动的位置（鲀 0.72：躯干完全不动，只有尾鳍像钟摆）
@@ -874,6 +874,19 @@ var SMOOTH_VERT = [
 '      if (uVert > 0.5) p.y += wvf*0.24; else p.x += wvf*0.24;',
 '      p.z += rowPh * uRow * u * 0.16;',
 '      p.y += rowPh * uRow * u * 0.07;',
+'    }',
+'  } else {',
+/* 珊瑚 / 海藻：整株固着在礁石上，只有身体随水轻摇。
+   ty 0 = 珊瑚枝（几乎不动），ty 1 = 藻叶（从根部到尖端越来越大） */
+'    float pv = clamp(v, 0.0, 1.0);',
+'    if (ty < 0.5){',
+'      float swc = sin(uTime*0.85 + uPhase + pv*1.9);',
+'      p.x += swc * uSway * 0.55 * pv * pv;',
+'      p.z += cos(uTime*0.62 + uPhase + pv*1.4) * uSway * 0.22 * pv * pv;',
+'    } else {',
+'      float kw = sin(uTime*1.15 - pv*2.7 + uPhase + u*1.1);',
+'      p.x += kw * uSway * pv * pv;',
+'      p.z += cos(uTime*0.92 - pv*2.2 + uPhase + u*0.8) * uSway * 0.35 * pv * pv;',
 '    }',
 '  }',
 '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
@@ -1011,7 +1024,7 @@ GLSL_NOISE,
 '      col *= 0.86 + 0.22*fold2;',
 '      alpha *= (1.0 - d*0.35) * 0.72 * uOpacity;',
 '    }',
-'  } else {',
+'  } else if (uKind < 2.5) {',
 /* ---------------- 鱼类 ---------------- */
 '    float dor = cos(u*6.2831853)*0.5 + 0.5;',
 '    vec3 backC = vec3(0.200,0.250,0.300), bellyC = vec3(0.520,0.570,0.610), finC = vec3(0.170,0.210,0.250);',
@@ -1025,7 +1038,9 @@ GLSL_NOISE,
 '    else if (uPattern > 12.5 && uPattern < 13.5){ backC = vec3(0.520,0.575,0.600); bellyC = vec3(0.780,0.820,0.840); finC = vec3(0.560,0.140,0.130); }',
 '    else if (uPattern > 13.5 && uPattern < 14.5){ backC = vec3(0.040,0.055,0.080); bellyC = vec3(0.190,0.230,0.255); finC = vec3(0.045,0.060,0.085); }',
 '    else if (uPattern > 14.5 && uPattern < 15.5){ backC = vec3(0.085,0.062,0.058); bellyC = vec3(0.150,0.105,0.095); finC = vec3(0.075,0.055,0.050); }',
-'    else if (uPattern > 15.5){ backC = vec3(0.038,0.033,0.036); bellyC = vec3(0.095,0.070,0.075); finC = vec3(0.045,0.038,0.040); }',
+'    else if (uPattern > 15.5 && uPattern < 16.5){ backC = vec3(0.038,0.033,0.036); bellyC = vec3(0.095,0.070,0.075); finC = vec3(0.045,0.038,0.040); }',
+'    else if (uPattern > 16.5 && uPattern < 17.5){ backC = vec3(0.520,0.615,0.660); bellyC = vec3(0.905,0.905,0.870); finC = vec3(0.640,0.700,0.700); }',
+'    else if (uPattern > 17.5){ backC = vec3(0.470,0.350,0.140); bellyC = vec3(0.830,0.735,0.480); finC = vec3(0.560,0.440,0.200); }',
 '    float fs = clamp((v - 1.0)/0.17, 0.0, 1.0);',
 '    if (vTy < 0.5){',
 '      col = mix(bellyC, backC, smoothstep(0.40, 0.62, dor));',
@@ -1115,20 +1130,51 @@ GLSL_NOISE,
 '        col = mix(col, vec3(0.140,0.100,0.090), smoothstep(0.46,0.66,am)*0.65);',
 '        col = mix(col, vec3(0.030,0.024,0.024), smoothstep(0.17,0.02,v)*smoothstep(0.60,0.24,dor)*0.70);',
 '        col = mix(col, vec3(0.620,0.590,0.540), smoothstep(0.012,0.0,abs(v-0.175))*smoothstep(0.34,0.12,dor)*0.30);',
-'      } else {',
+'      } else if (uPattern < 16.5){',
 /* 宽咽鱼：几乎全黑，只有一点点暗红 */
 '        col = mix(bellyC, backC, smoothstep(0.24, 0.70, dor));',
 '        col = mix(col, vec3(0.120,0.070,0.080), smoothstep(0.14,0.02,v)*smoothstep(0.62,0.28,dor)*0.55);',
 '        col *= 0.94 + 0.10*sin(v*18.0 + u*2.0);',
+'      } else if (uPattern < 17.5){',
+/* 斑马鱼：银白底 + 五条深蓝竖纹（横着划过身体的蓝条，所以纹路顺着 v 排） */
+'        col = mix(bellyC, backC, smoothstep(0.40, 0.86, dor));',
+'        float zb = abs(fract(v*5.4 + 0.22) - 0.5);',
+'        float zk = smoothstep(0.21, 0.07, zb);',
+'        col = mix(col, vec3(0.080,0.135,0.205), zk*smoothstep(0.04, 0.24, dor)*0.90);',
+'        col = mix(col, vec3(0.985,0.965,0.900), smoothstep(0.34,0.04,dor)*0.40);',
+'        col = mix(col, vec3(0.720,0.700,0.470), smoothstep(0.55,0.30,dor)*smoothstep(0.25,0.55,v)*0.22);',
+'        col *= 0.97 + 0.05*sin(u*24.0);',
+'      } else {',
+/* 海马：黄褐底色 + 一圈圈骨板 + 浅色的前腹 */
+'        col = mix(bellyC, backC, smoothstep(0.34, 0.78, dor));',
+'        float ring = abs(fract(v*14.0 + dor*0.10) - 0.5);',
+'        col = mix(col, backC*0.66, smoothstep(0.30, 0.46, ring)*smoothstep(0.16,0.34,dor)*0.55);',
+'        col = mix(col, vec3(0.900,0.830,0.610), smoothstep(0.66,0.28,dor)*0.32);',
+'        col *= 0.93 + 0.13*sin(v*26.0 + u*3.0);',
 '      }',
 /* 眼睛（两侧对称） */
-'      float ek = (uPattern > 14.5 && uPattern < 15.5) ? 1.85 : 1.0;',
-'      float ec = (uPattern > 14.5 && uPattern < 15.5) ? 0.180 : 0.118;',
-'      float dv = abs(v - ec);',
-'      float du = min(abs(u - 0.150), abs(u - 0.850));',
-'      float ed = length(vec2(du*2.4, dv*3.2))/ek;',
-'      col = mix(col, vec3(0.012,0.020,0.028), smoothstep(0.062, 0.030, ed));',
-'      col = mix(col, vec3(1.0), smoothstep(0.020, 0.004, length(vec2((du-0.014*ek)*3.6, (dv-0.017*ek)*3.6))/ek)*0.80);',
+'      if (uPattern > 17.5){',
+/* 海马的眼睛长在头两侧，吻端前面没有身子，所以位置偏后一点 */
+'        float du2 = min(abs(u - 0.25), abs(u - 0.75));',
+'        float dv2 = abs(v - 0.205);',
+'        float ed2 = length(vec2(du2*2.9, dv2*3.4));',
+'        col = mix(col, vec3(0.020,0.014,0.008), smoothstep(0.075, 0.036, ed2));',
+'        col = mix(col, vec3(1.0), smoothstep(0.024, 0.005, length(vec2((du2-0.016)*4.0, (dv2-0.020)*4.0)))*0.75);',
+'      } else if (uPattern > 16.5){',
+'        float du1 = min(abs(u - 0.20), abs(u - 0.80));',
+'        float dv1 = abs(v - 0.155);',
+'        float ed1 = length(vec2(du1*2.9, dv1*3.6));',
+'        col = mix(col, vec3(0.010,0.016,0.024), smoothstep(0.070, 0.032, ed1));',
+'        col = mix(col, vec3(1.0), smoothstep(0.022, 0.004, length(vec2((du1-0.014)*3.9, (dv1-0.018)*3.9)))*0.80);',
+'      } else {',
+'        float ek = (uPattern > 14.5 && uPattern < 15.5) ? 1.85 : 1.0;',
+'        float ec = (uPattern > 14.5 && uPattern < 15.5) ? 0.180 : 0.118;',
+'        float dv = abs(v - ec);',
+'        float du = min(abs(u - 0.150), abs(u - 0.850));',
+'        float ed = length(vec2(du*2.4, dv*3.2))/ek;',
+'        col = mix(col, vec3(0.012,0.020,0.028), smoothstep(0.062, 0.030, ed));',
+'        col = mix(col, vec3(1.0), smoothstep(0.020, 0.004, length(vec2((du-0.014*ek)*3.6, (dv-0.017*ek)*3.6))/ek)*0.80);',
+'      }',
 '    } else if (vTy < 1.5){',
 /* 尾鳍 */
 '      col = finC * (1.05 + 0.16*fs);',
@@ -1140,7 +1186,8 @@ GLSL_NOISE,
 '      if (uPattern > 11.5 && uPattern < 12.5){ col = mix(col, vec3(0.930,0.800,0.270), smoothstep(0.25,0.80,fs)*0.75); col = mix(col, vec3(0.060,0.070,0.080), smoothstep(0.10,0.02,fs)*0.6); }',
 '      if (uPattern > 12.5 && uPattern < 13.5) col = mix(col, vec3(0.660,0.170,0.150), smoothstep(0.30,0.85,fs)*0.80);',
 '      if (uPattern > 13.5 && uPattern < 14.5) col = mix(col, vec3(0.070,0.090,0.110), 0.55);',
-'      if (uPattern > 15.5) alpha *= 0.90;',
+'      if (uPattern > 15.5 && uPattern < 16.5) alpha *= 0.90;',
+'      if (uPattern > 16.5 && uPattern < 17.5){ col = mix(col, vec3(0.900,0.930,0.860), smoothstep(0.30,0.90,fs)*0.55); alpha *= 0.92; }',
 '      alpha *= 0.94;',
 '    } else if (vTy < 2.5){',
 /* 背鳍 / 臀鳍 */
@@ -1150,13 +1197,38 @@ GLSL_NOISE,
 '      if (uPattern > 11.5 && uPattern < 12.5) col = mix(col, vec3(0.950,0.820,0.280), smoothstep(0.52,0.92,v));',
 '      if (uPattern > 12.5 && uPattern < 13.5){ col = mix(col, vec3(0.760,0.230,0.190), 0.85); alpha *= 0.94; }',
 
-'      if (uPattern > 15.5){ col = mix(col, vec3(0.420,0.130,0.150), 0.55); alpha *= 0.80; }',
+'      if (uPattern > 15.5 && uPattern < 16.5){ col = mix(col, vec3(0.420,0.130,0.150), 0.55); alpha *= 0.80; }',
+'      if (uPattern > 17.5){ col = mix(col, vec3(0.880,0.800,0.560), 0.70); alpha *= 0.72; }',
 '      alpha *= 0.90;',
 '    } else {',
 /* 胸鳍 */
 '      col = finC * 0.98;',
 '      if (uPattern > 10.5 && uPattern < 11.5) alpha *= 0.40;',
+'      if (uPattern > 17.5){ col = mix(col, vec3(0.900,0.820,0.580), 0.60); alpha *= 0.60; }',
 '      alpha *= 0.88;',
+'    }',
+'  } else {',
+/* ---------------- 珊瑚 / 海藻 ---------------- */
+'    if (vTy < 0.5){',
+/* 珊瑚枝：根部深、尖端亮，表面撒满小小的珊瑚虫 */
+'      vec3 cb = vec3(0.88,0.42,0.44);',
+'      if (uPattern > 19.75) cb = vec3(0.95,0.62,0.30);',
+'      else if (uPattern > 19.45) cb = vec3(0.64,0.42,0.78);',
+'      float tip = smoothstep(0.22, 1.0, v);',
+'      col = mix(cb*0.50, cb*1.16, tip);',
+'      float polyp = fbm2(vec2(u*11.0, v*20.0));',
+'      col = mix(col, cb*1.62, smoothstep(0.54,0.76,polyp)*0.62);',
+'      col *= 0.80 + 0.28*abs(sin(u*50.2655));',
+'      col = mix(col, vec3(0.99,0.93,0.90), smoothstep(0.94,1.0,v)*0.28);',
+'      alpha = 1.0;',
+'    } else {',
+/* 藻叶：根部深绿、尖端发黄，中脉浅、边缘半透明 */
+'      vec3 kb = mix(vec3(0.075,0.145,0.075), vec3(0.320,0.400,0.150), smoothstep(0.0,0.70,v));',
+'      col = mix(kb, vec3(0.560,0.530,0.240), smoothstep(0.58,1.0,v)*0.60);',
+'      float mid = sin(clamp(u,0.0,1.0)*3.1415927);',
+'      col *= 0.72 + 0.42*mid;',
+'      col *= 0.92 + 0.14*sin(v*17.0 + u*4.0);',
+'      alpha = 0.94*(0.50 + 0.50*mid);',
 '    }',
 '  }',
 /* 菲涅尔轮廓光 */
@@ -1497,7 +1569,264 @@ function buildFishSmooth(spec){
   return g;
 }
 
-/* ---------- 平滑地形 / 烟囱 / 鲸落 / 鱼 ---------- */
+/* ---------- 海马：整条鱼里唯一「站着」的 ---------- */
+function buildSeahorseSmooth(spec){
+  var H = spec.len;
+  /* 沿背脊的一串控制点：y 高度、z 前后（负 = 前方）、r 半径，全部按体高归一。
+     从吻端一路排到卷起来的尾尖 —— 海马的尾巴没有鳍，是一根会抓东西的「手」。 */
+  var SP = [
+    [0.780,-0.300,0.014], [0.800,-0.255,0.020], [0.822,-0.208,0.026],
+    [0.856,-0.160,0.042], [0.892,-0.112,0.062], [0.926,-0.062,0.074],
+    [0.952,-0.012,0.072], [0.948, 0.040,0.060], [0.910, 0.076,0.044],
+    [0.856, 0.092,0.034], [0.790, 0.092,0.038], [0.706, 0.086,0.048],
+    [0.612, 0.076,0.055], [0.508, 0.064,0.058], [0.400, 0.052,0.056],
+    [0.296, 0.040,0.048], [0.200, 0.026,0.036], [0.116, 0.006,0.026],
+    [0.052,-0.026,0.019], [0.008,-0.072,0.015], [-0.014,-0.124,0.012],
+    [0.020,-0.168,0.010], [0.078,-0.184,0.009], [0.128,-0.158,0.008],
+    [0.144,-0.114,0.007]
+  ];
+  var pos=[], au=[], av=[], aty=[], asd=[], idx=[], nV = 0;
+  var N = SP.length, NR = 14, i, j;
+
+  for (i=0;i<N;i++){
+    var p0 = SP[Math.max(0,i-1)], p1 = SP[Math.min(N-1,i+1)];
+    var tyv = p1[0]-p0[0], tzv = p1[1]-p0[1];
+    var tl = Math.sqrt(tyv*tyv + tzv*tzv) || 1; tyv/=tl; tzv/=tl;
+    var nyv = -tzv, nzv = tyv;                 /* 截面内的法线 */
+    var y0 = SP[i][0]*H, z0 = SP[i][1]*H, r0 = SP[i][2]*H;
+    for (j=0;j<=NR;j++){
+      var a = (j/NR)*TAU, ca = Math.cos(a), sa = Math.sin(a);
+      var ip = ca*r0*1.04;                     /* 前后方向略胖，左右很扁 —— 海马是侧扁的 */
+      pos.push(sa*r0*0.58, y0 + nyv*ip, z0 + nzv*ip);
+      au.push(j/NR); av.push(i/(N-1)); aty.push(0); asd.push(0);
+    }
+  }
+  for (i=0;i<N-1;i++){
+    for (j=0;j<NR;j++){
+      var b0 = i*(NR+1)+j, b1 = b0+(NR+1);
+      idx.push(b0, b1, b0+1, b0+1, b1, b1+1);
+    }
+  }
+  nV += N*(NR+1);
+
+  function patch(nu, nv, fn, ty, sd){
+    var base = nV, ii, jj;
+    for (ii=0;ii<=nu;ii++){
+      for (jj=0;jj<=nv;jj++){
+        var m = fn(ii/nu, jj/nv);
+        pos.push(m[0], m[1], m[2]);
+        au.push(m[3]); av.push(m[4]); aty.push(ty); asd.push(sd || 0);
+      }
+    }
+    for (ii=0;ii<nu;ii++){
+      for (jj=0;jj<nv;jj++){
+        var a0 = base + ii*(nv+1) + jj, a1 = a0 + (nv+1);
+        idx.push(a0, a1, a0+1, a0+1, a1, a1+1);
+      }
+    }
+    nV += (nu+1)*(nv+1);
+  }
+
+  /* 背鳍：背上一小片一直抖的扇子（海马前进主要靠它） */
+  patch(3, 6, function(s, q){
+    var yy = (0.360 + q*0.280)*H;
+    var zz = (0.104 + s*0.098*Math.sin((0.10 + q*0.88)*Math.PI))*H;
+    return [ 0, yy, zz, s, q ];
+  }, 2, 0);
+  /* 头顶的冠：小小一片，像戴了顶王冠 */
+  patch(2, 4, function(s, q){
+    var yy = (0.952 + s*0.060*Math.sin((0.10 + q*0.86)*Math.PI))*H;
+    var zz = (-0.070 + q*0.090)*H;
+    return [ 0, yy, zz, s, q ];
+  }, 2, 0);
+  /* 胸鳍：脖子后面一对小耳朵 */
+  for (var sg=-1; sg<=1; sg+=2){
+    (function(sgn){
+      patch(2, 4, function(s, q){
+        return [ sgn*(0.024 + s*0.056)*H,
+                 (0.735 + q*0.090)*H,
+                 (-0.030 + q*0.048 - s*0.032)*H,
+                 s, q ];
+      }, 3, sgn);
+    })(sg);
+  }
+
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('aU', new THREE.Float32BufferAttribute(au,1));
+  g.setAttribute('aV', new THREE.Float32BufferAttribute(av,1));
+  g.setAttribute('aTy', new THREE.Float32BufferAttribute(aty,1));
+  g.setAttribute('aSide', new THREE.Float32BufferAttribute(asd,1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
+}
+
+/* ---------- 珊瑚 / 海藻：固着在礁石上的两种「植物」 ----------
+   珊瑚是分枝的管状骨骼，海藻是一丛会随水摆的叶片。
+   两者的高度都按 0–1 写，再乘 spec.hgt，和鱼的 L 一个道理。 */
+function buildPlantSmooth(spec){
+  var H = spec.hgt || 1;
+  var pos=[], au=[], av=[], aty=[], asd=[], idx=[], nV = 0;
+  var NR = 8, i, j;
+
+  function tube(pts, rads, ty){
+    var base = nV, M = pts.length, k, m;
+    for (k=0;k<M;k++){
+      var p0 = pts[Math.max(0,k-1)], p1 = pts[Math.min(M-1,k+1)];
+      var tx = p1[0]-p0[0], tyv = p1[1]-p0[1], tz = p1[2]-p0[2];
+      var tl = Math.sqrt(tx*tx+tyv*tyv+tz*tz) || 1; tx/=tl; tyv/=tl; tz/=tl;
+      var ux = 0, uy = 1, uz = 0;
+      if (Math.abs(tyv) > 0.90){ ux = 1; uy = 0; }
+      var bx = uy*tz - uz*tyv, by = uz*tx - ux*tz, bz = ux*tyv - uy*tx;
+      var bl = Math.sqrt(bx*bx+by*by+bz*bz) || 1; bx/=bl; by/=bl; bz/=bl;
+      var cx = tyv*bz - tz*by, cy = tz*bx - tx*bz, cz = tx*by - tyv*bx;
+      for (m=0;m<=NR;m++){
+        var a = (m/NR)*TAU;
+        var c1 = Math.cos(a)*rads[k], s1 = Math.sin(a)*rads[k];
+        pos.push(pts[k][0] + bx*c1 + cx*s1,
+                 pts[k][1] + by*c1 + cy*s1,
+                 pts[k][2] + bz*c1 + cz*s1);
+        au.push(m/NR); av.push(k/(M-1)); aty.push(ty); asd.push(0);
+      }
+    }
+    for (k=0;k<M-1;k++){
+      for (m=0;m<NR;m++){
+        var a0 = base + k*(NR+1)+m, a1 = a0+(NR+1);
+        idx.push(a0, a1, a0+1, a0+1, a1, a1+1);
+      }
+    }
+    nV += M*(NR+1);
+  }
+
+  if (spec.plant === 'coral'){
+    var grow = function(ox, oy, oz, dx, dy, dz, len, r0, r1, depth){
+      var segs = 4, pts = [], rads = [], k;
+      var px = ox, py = oy, pz = oz, dxx = dx, dyy = dy, dzz = dz;
+      for (k=0;k<=segs;k++){
+        pts.push([px, py, pz]);
+        rads.push(lerp(r0, r1, Math.pow(k/segs, 0.72)));
+        px += dxx*len/segs; py += dyy*len/segs; pz += dzz*len/segs;
+        dxx += (Math.random()-0.5)*0.22;
+        dzz += (Math.random()-0.5)*0.22;
+        dyy = Math.min(1.0, dyy + 0.07);
+        var dl = Math.sqrt(dxx*dxx + dyy*dyy + dzz*dzz) || 1;
+        dxx/=dl; dyy/=dl; dzz/=dl;
+      }
+      tube(pts, rads, 0);
+      if (depth <= 0) return;
+      var nb = depth > 1 ? 4 : 3;
+      for (var c=0;c<nb;c++){
+        var ang = (c/nb)*TAU + Math.random()*1.5;
+        var spread = 0.42 + Math.random()*0.42;
+        var nx2 = dxx + Math.cos(ang)*spread;
+        var nz2 = dzz + Math.sin(ang)*spread;
+        var nl = Math.sqrt(nx2*nx2 + dyy*dyy + nz2*nz2) || 1;
+        grow(px, py, pz, nx2/nl, dyy/nl, nz2/nl, len*0.68, r1, r1*0.50, depth-1);
+      }
+    };
+    grow(0, 0, 0, 0, 1, 0, 0.42*H, 0.086*H, 0.055*H, 2);
+  } else {
+    /* 巨藻：一丛各自朝不同方向立起来的叶片 */
+    var blades = 9;
+    for (var b=0;b<blades;b++){
+      var ang0 = (b/blades)*TAU + Math.random()*0.5;
+      var lean = 0.05 + Math.random()*0.11;
+      var bh = H*(0.62 + Math.random()*0.38);
+      var NV2 = 15, NU2 = 2, base2 = nV, ii, jj;
+      for (ii=0;ii<=NV2;ii++){
+        var t = ii/NV2;
+        var yy = t*bh;
+        var cxx = Math.cos(ang0)*lean*t*bh + Math.sin(t*3.0 + b*1.7)*0.050*bh;
+        var czz = Math.sin(ang0)*lean*t*bh + Math.cos(t*2.4 + b*1.1)*0.038*bh;
+        /* 叶片两头收尖、中间最宽；末端必须真的收到 0，不然顶端是一刀切平的 */
+        var wv = Math.max(0, Math.sin(Math.min(1, t*1.02)*Math.PI));
+        var w = (0.003 + 0.019*Math.pow(wv, 0.55)) * bh;
+        var twist = ang0 + Math.PI*0.5 + Math.sin(t*2.2 + b)*0.55;
+        var sx = Math.cos(twist), sz = Math.sin(twist);
+        for (jj=0;jj<=NU2;jj++){
+          var s = jj/NU2 - 0.5;
+          pos.push(cxx + sx*w*s, yy, czz + sz*w*s);
+          au.push(jj/NU2); av.push(t); aty.push(1); asd.push(0);
+        }
+      }
+      for (ii=0;ii<NV2;ii++){
+        for (jj=0;jj<NU2;jj++){
+          var a0 = base2 + ii*(NU2+1)+jj, a1 = a0+(NU2+1);
+          idx.push(a0, a1, a0+1, a0+1, a1, a1+1);
+        }
+      }
+      nV += (NV2+1)*(NU2+1);
+    }
+  }
+
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('aU', new THREE.Float32BufferAttribute(au,1));
+  g.setAttribute('aV', new THREE.Float32BufferAttribute(av,1));
+  g.setAttribute('aTy', new THREE.Float32BufferAttribute(aty,1));
+  g.setAttribute('aSide', new THREE.Float32BufferAttribute(asd,1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
+}
+
+/* ---------- 浅水的珊瑚礁台：一道长满珊瑚的礁顶剪影 ---------- */
+var REEF_Y = 19.30;
+function reefTopY(x){
+  return REEF_Y
+       + Math.sin(x*0.26 + 1.1)*0.42 + Math.sin(x*0.11 + 2.3)*0.24
+       + Math.sin(x*0.63 + 0.7)*0.09
+       + Math.sin(x*1.65 + 0.9)*0.10 + Math.sin(x*3.10 + 2.2)*0.045;
+}
+function buildReef(){
+  var N = 150, half = 34, z = -11, ROWS = 5;
+  var pos=[], col=[], idx=[];
+  var cTop = new THREE.Color(0x43766d), cMid = new THREE.Color(0x22464b), cBot = new THREE.Color(0x1a4358);
+  for (var i=0;i<=N;i++){
+    var x = -half + (i/N)*half*2;
+    var top = reefTopY(x);
+    /* 礁石不是一块悬在水里的板：脚下这道斜坡一直往下接到暗处。
+       底边刻意取水色，边缘才化在海里，不会看成一道生硬的剪影 */
+    var bot = REEF_Y - 10.5
+            - 2.2*Math.sin(x*0.091 + 1.3)
+            - 1.0*Math.cos(x*0.33 + 0.4);
+    /* 岩面上的明暗：隆起处受光，凹处积影 */
+    var n1 = Math.sin(x*1.9+0.5)*0.5 + Math.sin(x*4.3+2.1)*0.32 + Math.sin(x*0.7+1.2)*0.5;
+    for (var r=0;r<=ROWS;r++){
+      var f = r/ROWS;
+      var yy = lerp(top, bot, f*f*0.90 + f*0.10);
+      var c = f < 0.42 ? cTop.clone().lerp(cMid, f/0.42) : cMid.clone().lerp(cBot, (f-0.42)/0.58);
+      /* 礁顶受光最亮，往下越来越暗；再叠几条竖向的岩纹，免得礁壁糊成一块死黑 */
+      var k = f < 0.34 ? (0.80 + 0.30*n1)
+                       : Math.max(0.16, 0.94 - (f - 0.34)*1.20);
+      k *= 1 - 0.11*Math.sin(x*5.2 + f*7.0) + 0.05*Math.sin(x*8.4 - f*3.1);
+      pos.push(x, yy, z);
+      col.push(c.r*k, c.g*k, c.b*k);
+    }
+  }
+  for (i=0;i<N;i++){
+    for (var r2=0;r2<ROWS;r2++){
+      var a = i*(ROWS+1)+r2, b = a+(ROWS+1);
+      idx.push(a, b, a+1,  a+1, b, b+1);
+    }
+  }
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col,3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  var m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  m.frustumCulled = false;
+  var grp = new THREE.Group();
+  grp.add(m);
+  return grp;
+}
+
+
+/* ---------- 平滑地形 / 烟囱 / 鲸落 ---------- */
 /* 海底的几层山脊和鲸落骨架都是纯色顶点材质，没有雾可吃。
    潜航到深处时把它们整体压暗，否则海底会比鱼还亮。 */
 var abyssMats = [];
@@ -1938,6 +2267,11 @@ function buildAbyss(){
 buildAbyss();
 scene.add(abyssGroup);
 
+/* 浅水的珊瑚礁台：一道长满珊瑚的礁顶，是「珊瑚礁」这一站的落脚点 */
+var reefGroup = buildReef();
+reefGroup.renderOrder = 0;
+scene.add(reefGroup);
+
 
 /* ---------- 旋涡 ---------- */
 var vortexMat = new THREE.ShaderMaterial({
@@ -2222,7 +2556,37 @@ var SPECIES = [
     fins:{ dorsal:{t0:0.46, t1:0.97, h:0.030, peak:0.50, sweep:0.008},
            anal:{t0:0.50, t1:0.97, h:0.026, peak:0.50, sweep:0.008},
            pec:{t:0.16, len:0.040, drop:0.016, sweep:0.022} },
-    pal:{ back:0x0a0808, belly:0x161010, fin:0x0b0909, eye:0x040404, eyeLt:0xffffff } }
+    pal:{ back:0x0a0808, belly:0x161010, fin:0x0b0909, eye:0x040404, eyeLt:0xffffff } },
+  /* ---------- 珊瑚礁区（浅水里最热闹的地方） ---------- */
+  { id:'zebrafish', cn:'斑马鱼', latin:'Danio rerio', kind:'fish', pattern:17,
+    real:{ v:0.04, label:'体长' }, fact:'身上有几条深蓝色的纵纹，一条挨着一条，游起来像水里的斑马。它只有一根手指那么长，却是全世界实验室里最常见的小鱼——科学家用它研究心跳、骨骼和再生。',
+    depth:6, band:[0,45], len:0.60, flapSpeed:3.05, sway:0.26, dispFloor:1.05,
+    swim:{ mode:'subcarangiform', amp:0.086, amp0:0.40, ampExp:1.65, waveN:0.95, vert:0, row:0.42, finWave:0.40 },
+    rim:0x9fe8ff, layer:'上层 · 透光层', thumbScale:0.92,
+    body:[[0,0.020,0.013,0.010],[0.09,0.050,0.030,0.006],[0.21,0.082,0.049,0.002],
+          [0.35,0.096,0.057,0.000],[0.49,0.092,0.054,0.000],[0.63,0.080,0.045,0.001],
+          [0.77,0.058,0.031,0.003],[0.89,0.032,0.015,0.005],[1,0.016,0.008,0.007]],
+    fins:{ caudal:{kind:'v', up:0.078, dn:0.078, depth:0.070, notch:0.46},
+           dorsal:{t0:0.54, t1:0.69, h:0.070, peak:0.34, sweep:0.030},
+           anal:{t0:0.61, t1:0.76, h:0.056, peak:0.36, sweep:0.024},
+           pec:{t:0.27, len:0.062, drop:0.016, sweep:0.028} },
+    pal:{ back:0x2f5f86, belly:0xdbe9ef, fin:0x3b6d92, eye:0x0a1016, eyeLt:0xffffff } },
+  { id:'seahorse', cn:'海马', latin:'Hippocampus kuda', kind:'fish', shape:'seahorse', pattern:18,
+    real:{ v:0.15, label:'体高' }, fact:'它游不快，就干脆不走——用卷起来的尾巴勾住海草，让海水替它摇。生宝宝的是爸爸：海马妈妈把卵放进爸爸肚子上的育儿袋，由爸爸怀胎、生下一窝小海马。',
+    depth:14, band:[0,45], len:0.55, flapSpeed:0.95, sway:0.30,
+    swim:{ mode:'labriform', amp:0.028, amp0:0.55, ampExp:2.2, waveN:0.50, vert:0, row:1.00, finWave:0.85 },
+    rim:0xffd98a, layer:'上层 · 透光层', thumbScale:1.0,
+    pal:{ eye:0x1a1408, eyeLt:0xffffff } },
+  { id:'coral', cn:'鹿角珊瑚', latin:'Acropora cervicornis', kind:'plant', plant:'coral', pattern:19,
+    real:{ v:0.55, label:'群体高度' }, fact:'珊瑚看着像石头，其实是成千上万只小动物住在一起，每一只都伸出小小的触手抓浮游生物。它身体里还住着会晒太阳的藻类：藻类做饭，珊瑚提供房间，谁也离不开谁。',
+    depth:12, band:[0,80], hgt:1.0, sway:0.10, flapSpeed:0.85,
+    rim:0xff9fc0, layer:'上层 · 透光层', thumbScale:1.0,
+    pal:{ back:0xd4677f, belly:0xf2a2b4, fin:0xc95a72 } },
+  { id:'kelp', cn:'巨藻', latin:'Macrocystis pyrifera', kind:'plant', plant:'kelp', pattern:20,
+    real:{ v:3.0, label:'株高' }, fact:'它一天能往上长半米，是世界上长得最快的生物之一。它没有真正的根，只用一团像手指的固着器抓住岩石；叶子里的气囊让叶片浮起来，好晒到更多太阳。',
+    depth:20, band:[0,80], hgt:1.0, sway:0.58, flapSpeed:1.05,
+    rim:0xbfe08a, layer:'上层 · 透光层', thumbScale:1.0,
+    pal:{ back:0x3f5a22, belly:0x7f8f3f, fin:0x536b28 } }
 ];
 /* 每种动物的游动方式（讲解卡里显示，对应真实鱼类运动学分类） */
 var SWIM_CN = {
@@ -2230,7 +2594,8 @@ var SWIM_CN = {
   moon:'伞体脉动', nettle:'伞体脉动',
   dolphin:'上下摆尾', shark:'摆尾滑行', whaleshark:'缓慢摆尾', sailfish:'疾摆尾鳍',
   angelfish:'胸鳍划水', puffer:'钟摆摆尾', moray:'全身波浪', tuna:'尾柄急摆',
-  oarfish:'背鳍波动', viperfish:'弓身波浪', angler:'摆尾伏击', pelican:'鞭状波浪'
+  oarfish:'背鳍波动', viperfish:'弓身波浪', angler:'摆尾伏击', pelican:'鞭状波浪',
+  zebrafish:'小尾快摆', seahorse:'背鳍振动', coral:'固着滤食', kelp:'随波摆动'
 };
 var SPEC_BY_ID = {};
 for (var si=0; si<SPECIES.length; si++) SPEC_BY_ID[SPECIES[si].id] = SPECIES[si];
@@ -2254,13 +2619,20 @@ function exhibitSize(m){
   for (var i=0;i<SPECIES.length;i++){
     var sp = SPECIES[i];
     var d = exhibitSize(sp.real.v), k;
-    sp.gain = d < MIN_DISP ? MIN_DISP/d : 1;
-    d = Math.max(d, MIN_DISP);
+    /* 有些小东西（斑马鱼）按最小可见尺寸放会跟珊瑚一样大，允许它再小一点 */
+    var floor = sp.dispFloor || MIN_DISP;
+    sp.gain = d < floor ? floor/d : 1;
+    d = Math.max(d, floor);
     if (sp.kind === 'ray'){
       k = d/sp.span;  sp.span = d;  sp.len *= k;
       sp.flapAmp *= k;                 /* 扇动幅度按展幅缩放，否则大鱼翅膀只会颤一下 */
     } else if (sp.kind === 'fish'){
       k = d/sp.len;   sp.len = d;
+    } else if (sp.kind === 'plant'){
+      /* 珊瑚 / 海藻：hgt 是整株的高度，geometry 按 0–1 的高度写，直接乘上去。
+         巨藻按真实比例会到 3.5 个单位高，从礁顶一立就捅出水面了，礁区里封顶 2.6 */
+      if (sp.plant === 'kelp') d = Math.min(d, 2.6);
+      k = d/(sp.hgt || 1);  sp.hgt = d;
     } else {
       k = (d*0.5)/sp.bell;  sp.bell = d*0.5;
     }
@@ -2304,8 +2676,12 @@ function buildCreatureModel(spec, fogMul, forThumb){
   var isRay = spec.kind === 'ray';
   var isJelly = spec.kind === 'jelly';
   var isFish = spec.kind === 'fish';
+  var isPlant = spec.kind === 'plant';
   var geo = cacheGeo(spec.id+'_smooth', function(){
-    return isRay ? buildRaySmooth(spec) : (isJelly ? buildJellySmooth(spec) : buildFishSmooth(spec));
+    return isRay ? buildRaySmooth(spec)
+         : isJelly ? buildJellySmooth(spec)
+         : isPlant ? buildPlantSmooth(spec)
+         : (spec.shape === 'seahorse' ? buildSeahorseSmooth(spec) : buildFishSmooth(spec));
   });
   var sw = spec.swim || {};
   var mat = new THREE.ShaderMaterial({
@@ -2318,7 +2694,7 @@ function buildCreatureModel(spec, fogMul, forThumb){
       uPulse: { value: spec.pulse || 0 },
       uCurl: { value: 0 },
       uSway: { value: spec.sway || 0.4 },
-      uKind: { value: isRay ? 0 : (isJelly ? 1 : 2) },
+      uKind: { value: isRay ? 0 : (isJelly ? 1 : (isPlant ? 3 : 2)) },
       uPattern: { value: spec.pattern },
       uRim: { value: new THREE.Color(spec.rim) },
       uOpacity: { value: 1 },
@@ -2338,7 +2714,7 @@ function buildCreatureModel(spec, fogMul, forThumb){
     vertexShader: SMOOTH_VERT,
     fragmentShader: SMOOTH_FRAG,
     transparent: true,
-    depthWrite: (isRay || isFish),
+    depthWrite: (isRay || isFish || (isPlant && spec.plant === 'coral')),
     side: THREE.DoubleSide
   });
   var mesh = new THREE.Mesh(geo, mat);
@@ -2391,7 +2767,8 @@ var TEMPO = {
   manta:1.0, eagle:1.05, bluespot:0.95,
   dolphin:1.10, shark:1.15, whaleshark:0.72,
   sailfish:1.85, angelfish:0.95, puffer:0.55, moray:1.15, tuna:1.85,
-  oarfish:0.62, viperfish:0.95, angler:0.45, pelican:0.70
+  oarfish:0.62, viperfish:0.95, angler:0.45, pelican:0.70,
+  zebrafish:1.15, seahorse:0.30, coral:0, kelp:0
 };
 var creatures = [];
 
@@ -2399,17 +2776,20 @@ function spawnCreature(spec, depth, opts){
   opts = opts || {};
   if (creatures.length >= MAX_CREATURES) return null;
   var model = buildCreatureModel(spec, 1, false);
-  var d = clamp(depth, spec.band[0], spec.band[1]);
+  /* 珊瑚海藻的高度由礁顶说了算：按水层夹一下就会被推离礁石，所以不夹 */
+  var d = spec.kind === 'plant' ? depth : clamp(depth, spec.band[0], spec.band[1]);
   var startX = opts.x != null ? opts.x : rand(-8,8);
   var startZ = opts.z != null ? opts.z : rand(-7, 5);
   var startY = depthToY(d);
   var isRay = spec.kind === 'ray';
   var isFish = spec.kind === 'fish';
+  var isPlant = spec.kind === 'plant';
   /* 游速按体长的 0.45 次方走（体型越大绝对值越快、但每秒身位越少），
      再乘一个物种节奏系数：金枪鱼 / 旗鱼快，河鲀 / 鲸鲨慢。 */
-  var spd = (isRay || isFish)
-    ? 1.12 * Math.pow(Math.max(0.5, isRay ? spec.span : spec.len), 0.45) * (TEMPO[spec.id] || 1)
-    : rand(0.50, 0.80);
+  var spd = isPlant ? 0
+    : ((isRay || isFish)
+      ? 1.12 * Math.pow(Math.max(0.5, isRay ? spec.span : spec.len), 0.45) * (TEMPO[spec.id] || 1)
+      : rand(0.50, 0.80));
   spd *= rand(0.94, 1.06);
   var c = {
     spec: spec,
@@ -2427,7 +2807,8 @@ function spawnCreature(spec, depth, opts){
     hideT: 0, hideSide: 1, hideSwap: true,
     /* 半个体长：判断「整条鱼都出画了」时要把尾巴算进去 */
     halfL: spec.kind === 'ray' ? spec.span*0.5
-         : (spec.kind === 'fish' ? spec.len*0.5 : spec.bell*1.3),
+         : (spec.kind === 'fish' ? spec.len*0.5
+         : (spec.kind === 'plant' ? (spec.hgt||1)*0.5 : spec.bell*1.3)),
     wander: rand(0, 1.4),
     dash: 0, dashT: rand(5, 13),
     yaw: rand(-Math.PI, Math.PI),
@@ -2441,7 +2822,7 @@ function spawnCreature(spec, depth, opts){
     t: 0,
     st: 0,
     enter: 0,
-    enterDur: opts.instant ? 0 : rand(1.9, 2.8),
+    enterDur: (opts.instant || isPlant) ? 0 : rand(1.9, 2.8),
     fromX: opts.fromX != null ? opts.fromX
          : (startX < 0 ? -1 : 1) * (viewHalfW(startZ) + 12),
     fromY: startY + rand(-7, 7),
@@ -2449,17 +2830,24 @@ function spawnCreature(spec, depth, opts){
     scare: 0
   };
   if (c.mats[0]) c.mats[0].uniforms.uPhase.value = c.phase;
+  /* 珊瑚不是同一种颜色：每一株随机挑粉 / 紫 / 橙三套配色之一 */
+  if (isPlant && spec.plant === 'coral' && c.mats[0]){
+    var hv = Math.random();
+    c.mats[0].uniforms.uPattern.value = hv < 0.40 ? 19.2 : (hv < 0.74 ? 19.6 : 19.9);
+  }
   model.rotation.order = 'YXZ';
   model.position.set(c.fromX, c.fromY, startZ);
   var sc = opts.scale || 1;
   model.scale.setScalar(sc);
   if (isRay) model.rotation.x = -Math.PI*0.5 + 0.72;
-  else model.rotation.z = rand(-0.08,0.08);
+  else if (!isPlant) model.rotation.z = rand(-0.08,0.08);
+  else model.rotation.y = rand(-Math.PI, Math.PI);
   scene.add(model);
   creatures.push(c);
   if (!opts.silent){
     var p = new THREE.Vector3(c.x, c.y, 0);
-    spawnRing(p, spec.kind === 'ray' ? spec.span*3.4 : (isFish ? spec.len*2.6 : spec.bell*5.2));
+    spawnRing(p, spec.kind === 'ray' ? spec.span*3.4
+                 : (isFish ? spec.len*2.6 : (isPlant ? (spec.hgt||1)*3.0 : spec.bell*5.2)));
     var bb = bubblePool[bubRef.i % bubblePool.length]; bubRef.i++;
     bb.userData.age = 0;
     bb.material.uniforms.uOrigin.value.copy(p);
@@ -2696,6 +3084,10 @@ function buildThumbs(){
     } else if (sp.kind === 'fish'){
       sc = 8.6/sp.len * (sp.lure ? 0.72 : 1);
       g.position.y = sp.lure ? -0.45 : 0;
+    } else if (sp.kind === 'plant'){
+      /* 珊瑚 / 海藻是从 y=0 往上长的，先缩到画框里，再整体下移一半把它居中 */
+      sc = 7.2/(sp.hgt || 1);
+      g.position.y = -(sp.hgt || 1)*sc*0.5;
     } else {
       sc = 5.4/(sp.bell*2.35);
       g.position.y = sp.bell*sc*0.85;
@@ -2873,8 +3265,8 @@ function buildChart(){
       '<b class="sc-v">' + (r.dsp || numSize(r.v)) + ' m</b></div>';
   }
   html += '<p class="c-foot">标注尺寸为该物种成年个体的常见值。鲸鲨是现存最大的鱼类，最长记录接近 12 米；' +
-          '蓝斑魟的体盘只有 30–40 厘米，比一只书包还小。' +
-          '左侧深度轴为了在一屏里放下 4000 米做了压缩，这里的横向条形才是真实比例。</p>';
+          '斑马鱼只有 4 厘米，比一根手指还短。左侧深度轴为了在一屏里放下 4000 米做了压缩，' +
+          '这里的横向条形才是真实比例 —— 最短的那根不是画错了，是真的那么小。</p>';
   chartEl.innerHTML = html;
   var cx = document.getElementById('chartX');
   if (cx) cx.addEventListener('click', hideChart);
@@ -2914,7 +3306,9 @@ function updateTags(dt){
       continue;
     }
     var sp = t.c.spec;
-    var off = sp.kind === 'ray' ? sp.span*0.30 : (sp.kind === 'fish' ? sp.len*0.26 : sp.bell*2.3);
+    var off = sp.kind === 'ray' ? sp.span*0.30
+            : (sp.kind === 'fish' ? sp.len*0.26
+            : (sp.kind === 'plant' ? (sp.hgt||1)*0.55 : sp.bell*2.3));
     _tagV.copy(t.c.pos); _tagV.y += off;
     _tagV.project(camera);
     if (_tagV.z > 1){ t.el.style.opacity = '0'; continue; }
@@ -3334,6 +3728,14 @@ function updateCreatures(dt){
     var isFish2 = sp.kind === 'fish';
     var swm = sp.swim || null;
     c.t += dtc;
+    /* 珊瑚 / 海藻：长在礁石上，不巡游也不出水，只有身体随水轻摇 */
+    if (sp.kind === 'plant'){
+      c.pos.set(c.x, c.y, c.z);
+      c.depth = yToDepth(c.pos.y);
+      c.group.position.copy(c.pos);
+      c.group.rotation.y = c.yaw;
+      continue;
+    }
     /* 潜航时水层边界放宽一点：屏幕上才铺得开，不然每层只有半屏有人 */
     var bandPad = dive.on ? 2.6 : 0;
     var yLo = depthToY(sp.band[1]) + 1.0 - bandPad;
@@ -3366,9 +3768,25 @@ function updateCreatures(dt){
       c.wander -= dtc;
       if (c.wander <= 0){
         c.wander = isRay ? rand(7.0, 13.0) : (isFish2 ? rand(5.5, 10.5) : rand(10, 17));
-        if (outOfView(c) && Math.random() < 0.62) c.dirX = -c.dirX;
+        /* 礁区住户有一个「家」：游出这个范围就掉头回来。
+           没有这条，一群小鱼二十秒后全飘到画外，礁台上只剩珊瑚。 */
+        var dxh = c.homeR > 0 ? c.pos.x - c.homeX : 0;
+        if (c.homeR > 0 && Math.abs(dxh) > c.homeR){
+          c.dirX = dxh > 0 ? -1 : 1;
+          c.wander = Math.min(c.wander, 1.6);
+        } else if (outOfView(c) && Math.random() < 0.62){
+          c.dirX = -c.dirX;
+        }
         c.head  = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.50, 0.50);
         c.headV = rand(-0.16, 0.16) * (isRay ? 1.5 : 1);
+      }
+
+      /* 1.5 礁区住户有一个「家」：一出家门就掉头。每帧都查，
+             不然一趟航道要游十几秒，鱼早就飘到画外去了。 */
+      if (c.homeR > 0){
+        var dxh0 = c.pos.x - c.homeX;
+        if (dxh0 > c.homeR && c.dirX > 0){ c.dirX = -1; c.wander = Math.min(c.wander, 0.12); }
+        else if (dxh0 < -c.homeR && c.dirX < 0){ c.dirX = 1; c.wander = Math.min(c.wander, 0.12); }
       }
 
       /* 2. 冲刺 / 受惊 */
@@ -3415,18 +3833,25 @@ function updateCreatures(dt){
         var dxx = c.pos.x-o.pos.x, dyy = c.pos.y-o.pos.y, dzz = c.pos.z-o.pos.z;
         var d2 = dxx*dxx + dyy*dyy + dzz*dzz;
         var R = isRay ? Math.max(3.6, sp.span*0.62)
-              : (isFish2 ? Math.max(2.4, sp.len*0.85) : Math.max(2.2, sp.bell*2.6));
+              : (isFish2 ? Math.max(1.8, sp.len*0.90) : Math.max(2.2, sp.bell*2.6));
         if (d2 < R*R && d2 > 0.0004){
           var dd = Math.sqrt(d2);
           var w = (1 - dd/R) * mul;
           _sep.x += dxx/dd*w; _sep.y += dyy/dd*w; _sep.z += dzz/dd*w;
         }
       }
+      /* 挤在一起的一群小鱼，分离力会叠成一团把整群炸开，
+         反过来盖住航向——必须封顶，不然鱼只会越漂越远 */
+      var sl = _sep.length();
+      if (sl > mul*0.55) _sep.multiplyScalar(mul*0.55/sl);
       _tv.add(_sep.multiplyScalar(0.9));
 
       /* 5. 水层与纵深回避（水平方向不设墙，鱼可以游出画面） */
       if (c.pos.z >  CR_Z_HI-3.0) _tv.z -= ((c.pos.z-(CR_Z_HI-3.0))/3.0)*mul*1.5;
       if (c.pos.z <  CR_Z_LO+3.0) _tv.z += (((CR_Z_LO+3.0)-c.pos.z)/3.0)*mul*1.5;
+      /* 礁区里还有一道「家的纵深」：别越游越靠后，最后躲到礁石后面去 */
+      if (c.homeR > 0 && c.homeZ != null) _tv.z += (c.homeZ - c.pos.z)*0.55;
+      if (c.homeR > 0 && c.homeY != null) _tv.y += (c.homeY - c.pos.y)*0.30;
       if (c.pos.y >  yHi-1.6) _tv.y -= ((c.pos.y-(yHi-1.6))/1.6)*mul*1.3;
       if (c.pos.y <  yLo+1.6) _tv.y += (((yLo+1.6)-c.pos.y)/1.6)*mul*1.3;
 
@@ -3441,12 +3866,14 @@ function updateCreatures(dt){
         _tv.y += ( rx/dv*1.05 - ry/dv*0.5) * mul * 1.7 * infl;
       }
 
-      /* 7. 方向单独平滑（转弯有惯性），速度大小交给推进节奏 */
+      /* 7. 方向单独平滑（转弯有惯性），速度大小交给推进节奏。
+             注意这里必须用一个「存下来的」方向：每帧都从当前速度重新起算的话，
+             上一步转出来的角度会被这一步丢掉，鱼就永远只会照着最初的方向直着走。 */
       var turn = isRay ? 2.0 : (isFish2 ? 1.6 : 0.9);
       var kf = Math.min(1, dtc*turn);
-      var vcur = c.vel.length();
-      if (vcur > 0.001) _dir.copy(c.vel).multiplyScalar(1/vcur);
-      else _dir.copy(_tv);
+      if (!c.sdir) c.sdir = c.vel.clone();
+      if (c.sdir.lengthSq() < 1e-6) c.sdir.set(1, 0, 0);
+      _dir.copy(c.sdir).normalize();
       _tv.normalize();
       /* 鳐类随翅膀的下压上浮一点，像真的在水里「飞」 */
       if (isRay){
@@ -3458,6 +3885,7 @@ function updateCreatures(dt){
       if (_dir.lengthSq() < 1e-6) _dir.copy(_tv);
       if (_dir.lengthSq() < 1e-6) _dir.set(1, 0, 0);
       _dir.normalize();
+      c.sdir.copy(_dir);
 
       /* 8. 推进节奏：扇翼 / 喷水 / 摆尾的那一下才加速，其余时间滑行 */
       var gm = gaitThrust(c, sp, dtc);
@@ -3503,6 +3931,7 @@ function updateCreatures(dt){
           c.head  = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.35, 0.35);
           c.headV = rand(-0.12, 0.12);
           c.vel.set(Math.cos(c.head), c.headV, Math.sin(c.head)).normalize().multiplyScalar(c.speed);
+          if (c.sdir) c.sdir.copy(c.vel).normalize();
           c.wrapCool = 0.8;
         }
       } else {
@@ -3697,6 +4126,7 @@ function tick(){
   tickAuto(dt);
   dive.amount = lerp(dive.amount, dive.on ? 1 : 0, Math.min(1, dt*2.6));
   dive.curY   = lerp(dive.curY, dive.on ? diveBaseY() : 0, Math.min(1, dt*2.4));
+  dive.zoom   = lerp(dive.zoom, dive.on ? stopZoomOf(dive.depth) : DIVE_ZOOM, Math.min(1, dt*2.2));
   var dAmt = dive.amount;
 
   var bobAmp = 0.55*(1-0.85*state.still)*(1-0.55*dAmt);
@@ -3726,7 +4156,7 @@ function tick(){
   cam.z = lerp(cam.z, cam.tz + az, Math.min(1, dt*1.2));
   /* 潜航时镜头拉近 1.9 倍，看的就是这一层 */
   var camY = clamp(state.bob + cam.y + dive.curY, -30, 27);
-  camera.position.set(cam.x, camY, CAM_DIST*lerp(1, DIVE_ZOOM, dAmt) + cam.z);
+  camera.position.set(cam.x, camY, CAM_DIST*lerp(1, dive.zoom, dAmt) + cam.z);
   camera.rotation.set(0, 0, 0);
 
   U.uTime.value = state.time;
@@ -3810,9 +4240,10 @@ setRoam(true);
    ============================================================ */
 var DIVE_ZOOM = 0.38;
 var STOPS = [
-  { d:0,    lab:'0',    cn:'海面 · 阳光带',
-    note:'阳光直接照进水里，海水是亮的。游得最快的鱼都在这一层。',
-    spread:34,  cast:[['dolphin',2],['tuna',3],['sailfish',2],['manta',1],['eagle',1]] },
+  { d:45,   lab:'45',   cn:'珊瑚礁 · 阳光带',
+    note:'阳光直接照进水里，海水是亮的。珊瑚把礁石盖成一座花园，小鱼躲在枝杈间。',
+    zoom:0.17, spread:20, reef:true,
+    cast:[['coral',7],['kelp',4],['zebrafish',8],['seahorse',2],['angelfish',1],['puffer',1]] },
   { d:120,  lab:'120',  cn:'透光层',
     note:'光还够看清方向，但红光和黄光已经被海水吃掉了。',
     spread:70,  cast:[['dolphin',2],['angelfish',3],['puffer',2],['moray',2],['eagle',2]] },
@@ -3846,10 +4277,18 @@ function nearestStop(d){
 }
 function diveBaseY(){
   /* 贴着所选深度，稍微往下一档，把海床和下层的水带进画面 */
-  return clamp(depthToY(dive.depth) - 1.2, -18, 12.6);
+  return clamp(depthToY(dive.depth) - 1.2, -18, 19.2);
+}
+/* 每个展区自己的镜头远近：珊瑚礁那块要贴近看，深水层才用默认的 0.38 */
+function stopZoomOf(d){
+  var z = nearestStop(d).zoom || DIVE_ZOOM;
+  /* 竖屏能看到的横向宽度只有横屏的一半，贴近看的时候动物会大得像贴在脸上，
+     所以手机上把镜头退回来一点 */
+  if (window.innerWidth < 760) z = Math.max(z, 0.30) * 1.05;
+  return z;
 }
 
-var dive = { on:false, depth:0, curY:0, amount:0, stop:null };
+var dive = { on:false, depth:0, curY:0, amount:0, stop:null, zoom:DIVE_ZOOM };
 
 var diveEl      = document.getElementById('dive');
 var btnDiveEl   = document.getElementById('btnDive');
@@ -3891,13 +4330,17 @@ function updateEnv(d, on){
 /* 换一层：把不在这层的动物请走，换成本层的住户 */
 function diveReseed(stop){
   for (var q=creatures.length-1;q>=0;q--) if (!creatures[q].fly) removeCreature(creatures[q]);
-  /* 先数总数，好让它们横着均匀分开，不至于挤在中间 */
+  /* 会游的动物单独数一遍：横向槽位只在它们之间均分，
+     不然珊瑚海藻先占掉一半槽位，鱼就全被挤到画面右半边去了 */
   var total = 0, i, n;
-  for (i=0;i<stop.cast.length;i++) total += stop.cast[i][1];
-  var k = 0;
+  for (i=0;i<stop.cast.length;i++){
+    var sp0 = SPEC_BY_ID[stop.cast[i][0]];
+    if (sp0 && sp0.kind !== 'plant') total += stop.cast[i][1];
+  }
+  var plantK = 0, fishK = 0;
   /* 竖向按「一屏有多高」来铺：只按深度均分的话，
      深处的动物全被压在画面下半截，上半屏空得发慌 */
-  var halfH = 22.9 * DIVE_ZOOM;
+  var halfH = 22.9 * stopZoomOf(stop.d);
   var yC0 = diveBaseY();
   var pad = halfH*0.34;              /* 允许越出自己水层一点点，否则每层只有一半画面有人 */
   /* 横向留给「面板和卡片之间那条空带」：不然鱼都躲到玻璃板后面去了 */
@@ -3908,7 +4351,7 @@ function diveReseed(stop){
   for (i=0;i<stop.cast.length;i++){
     var sp = SPEC_BY_ID[stop.cast[i][0]];
     if (!sp) continue;
-    for (n=0;n<stop.cast[i][1];n++,k++){
+    for (n=0;n<stop.cast[i][1];n++){
       /* 先在这一屏的高度里随机取一个 y，再夹回这个物种自己的水层 */
       var ty = yC0 + yShift + rand(-0.92, 0.92)*halfH;
       ty = clamp(ty, depthToY(sp.band[1]) + 0.5 - pad, depthToY(sp.band[0]) - 0.5 + pad);
@@ -3917,21 +4360,53 @@ function diveReseed(stop){
       var em = Math.min(halfH*0.62, Math.max(1.2, (sp.span || sp.len || 1)*0.78));
       ty = clamp(ty, yC0 - halfH + em, yC0 + halfH - em);
       var dd = yToDepth(ty);
-      var slot = (k + 0.5) / Math.max(1, total);
-      var px = x0 + slot*(x1 - x0) + rand(-1.4, 1.4);
-      /* 长条的大鱼别把身子探进两侧的玻璃板里 */
+      var slot = (fishK + 0.5) / Math.max(1, total);
+      /* 礁区是一整片横贯画面的礁台，小鱼散得比别的展区宽一点；
+         但还是留在「深度面板左边、卡片列右边」那条看得见的海水里 */
+      var px = stop.reef
+        ? x0*1.35 + slot*(x1*1.15 - x0*1.35) + rand(-0.45, 0.45)
+        : x0 + slot*(x1 - x0) + rand(-1.4, 1.4);
+      if (sp.kind === 'plant'){
+        /* 珊瑚和海藻不悬在水里：沿礁顶铺开，根扎在礁石上。
+           用黄金分割间距撒点，珊瑚和海藻才会交替出现，而不是左一半右一半 */
+        var gf = (plantK*0.6180339887) % 1;
+        px = -halfW*1.50 + gf*halfW*3.00 + rand(-0.35, 0.35);
+        plantK++;
+        /* 珊瑚贴着礁顶长；巨藻根部埋进礁石一点，看着才像扎住的 */
+        ty = reefTopY(px) - (sp.plant === 'kelp' ? 0.34 : 0.06);
+        dd = yToDepth(ty);
+      } else {
+        fishK++;
+        /* 礁区里的鱼都在礁石上方游，别贴着礁顶的轮廓线穿模 */
+        if (stop.reef) ty = Math.max(ty, reefTopY(px) + 0.62);
+      }
+      /* 长条的大鱼别把身子探进两侧的玻璃板里（珊瑚海藻除外：它们本来就贴着礁顶铺开） */
       var pL = (sp.span || sp.len || 1)*0.5;
-      if (x1 - x0 > pL*2.2) px = clamp(px, x0 + pL, x1 - pL);
-      var pz = rand(-9, 3.2);
+      if (sp.kind !== 'plant' && x1 - x0 > pL*2.2) px = clamp(px, x0 + pL, x1 - pL);
+      /* 斑马鱼爱成群：两条一对贴着游，散开就没那味儿了 */
+      if (sp.kind !== 'plant' && sp.id === 'zebrafish'){
+        px += (n % 2 ? -0.62 : 0.62) + rand(-0.16, 0.16);
+        ty += (n % 4 < 2 ? 0.30 : -0.26) + rand(0, 0.95);
+        dd = yToDepth(ty);
+      }
+      var pz = sp.kind === 'plant' ? -10.2 : rand(-9, 3.2);
       var c = spawnCreature(sp, dd, { instant:true, silent:true, x: px, z: pz });
       if (!c) continue;
       c.enter = 1;
       c.pos.set(c.x, c.y, c.z);
-      c.dirX = px < 0 ? 1 : -1;
+      /* 礁区的鱼各游各的方向，不然十条一起朝同一边走，回头画面里一条都不剩 */
+      c.dirX = stop.reef ? (Math.random() < 0.5 ? 1 : -1) : (px < 0 ? 1 : -1);
       c.head = (c.dirX >= 0 ? 0 : Math.PI) + rand(-0.40, 0.40);
       c.headV = rand(-0.10, 0.10);
       c.vel.set(Math.cos(c.head), c.headV, Math.sin(c.head)).normalize().multiplyScalar(c.speed);
       c.wander = rand(2.5, 7);
+      /* 礁区是一块「礁盘」：住户各自守着自己那一小块来回游 */
+      if (stop.reef){
+        c.homeX = px;
+        c.homeZ = pz;
+        c.homeY = ty;
+        c.homeR = 1.7 + rand(0, 1.2);
+      }
     }
   }
 }
@@ -4089,6 +4564,22 @@ function seedColumn(){
   spawnCreature(S['angelfish'],  66, { instant:true, silent:true, x:-3.0, z:-2 });
   spawnCreature(S['puffer'],     88, { instant:true, silent:true, x: 5.0, z: 1 });
   spawnCreature(S['moray'],     126, { instant:true, silent:true, x:-1.0, z:-5 });
+  /* 珊瑚礁：礁顶上一排珊瑚和海藻，外加一群在枝杈间穿来穿去的斑马鱼 */
+  var RX = [-13.6, -8.4, -3.2, 2.4, 7.6, 12.9];
+  var RC = ['coral','kelp','coral','kelp','coral','kelp'];
+  for (var ri=0; ri<RX.length; ri++){
+    var rsp = S[RC[ri]];
+    var ry2 = reefTopY(RX[ri]) - (RC[ri] === 'kelp' ? 0.34 : 0.06);
+    spawnCreature(rsp, yToDepth(ry2), { instant:true, silent:true, x: RX[ri], z:-10.2 });
+  }
+  spawnCreature(S['zebrafish'], 22, { instant:true, silent:true, x:-11.2, z:-3.5 });
+  spawnCreature(S['zebrafish'], 26, { instant:true, silent:true, x:-10.1, z:-2.4 });
+  spawnCreature(S['zebrafish'], 30, { instant:true, silent:true, x: -9.0, z:-3.0 });
+  spawnCreature(S['zebrafish'], 34, { instant:true, silent:true, x: -7.8, z:-2.2 });
+  spawnCreature(S['zebrafish'], 28, { instant:true, silent:true, x:  6.4, z:-3.2 });
+  spawnCreature(S['zebrafish'], 32, { instant:true, silent:true, x:  7.6, z:-2.6 });
+  spawnCreature(S['seahorse'],  36, { instant:true, silent:true, x:  0.8, z:-9.0 });
+  spawnCreature(S['seahorse'],  40, { instant:true, silent:true, x: -4.6, z:-8.6 });
   /* 下半根水柱的住客：没有这几只，1000–4000 m 会空得只剩两只水母 */
   spawnCreature(S['oarfish'],    620, { instant:true, silent:true, x: 6.0, z:-6 });
   spawnCreature(S['oarfish'],    980, { instant:true, silent:true, x:-5.5, z:-2 });
