@@ -9,10 +9,11 @@
 import * as THREE from 'three';
 import { BOSS_DEATH_TIME, FIELD_W, WING_DRIFT } from '../game/rules.js';
 import { WEAKNESS, WINGS, tierOf, wingAtTier } from '../game/wings.js';
+import { GEAR, MAX_FORMATION, escortsOf, gearSpec } from '../game/gear.js';
 import { orbsOf } from '../game/simulation.js';
 import { weakSpots } from '../game/boss.js';
 import { ALT, pixelScale, worldX, worldZ } from './view.js';
-import { HAZARD, TIER_COLOR, OVERDRIVE_COLOR, PHASE_COLOR } from './palette.js';
+import { HAZARD, TIER_COLOR, OVERDRIVE_COLOR, PHASE_COLOR, gearSkin } from './palette.js';
 import { tierGainLabel } from './readout.js';
 import { createStage } from './stage.js';
 import {
@@ -21,7 +22,9 @@ import {
   makeBoss,
   makeDrop,
   makeEnemy,
+  makeEscort,
   makeGate,
+  makeGearDrop,
   makeGhostHull,
   makeOrb,
   makePhaseFrame,
@@ -74,6 +77,8 @@ const wingFor = (holder, slot, code) => {
 
 /** 每种火力对应一种模型。同型号的子弹共用一个池子，回声（量子分身）的另开一个。 */
 const shotKey = (shot) => {
+  // 僚机弹按型号分池：三型的识别色不同，共用一个池子会串色。
+  if (shot.source === 'gear') return `escort:${shot.gearCode ?? 'E1'}`;
   if (shot.well) return 'well';
   const kind = ['flame', 'beam', 'anti', 'shard', 'pierce', 'bomb'].includes(shot.kind) ? shot.kind : 'pellet';
   return shot.echo ? `${kind}:echo` : kind;
@@ -139,6 +144,35 @@ export function createRenderer(host) {
   const trailPool = createPool(stage.world, makeGhostHull);
   const orbPool = createPool(stage.world, makeOrb);
   const dropPool = createPool(stage.world, makeDrop);
+  // 装备是第二槽，道具和僚机都不跟机翼共用池子：形状不同，混用会在复用那一帧闪出菱形。
+  const gearDropPool = createPool(stage.world, makeGearDrop);
+  const escortPools = new Map();
+  const escortPool = (code) => {
+    let pool = escortPools.get(code);
+    if (!pool) {
+      pool = createPool(stage.world, () => makeEscort(code));
+      escortPools.set(code, pool);
+    }
+    return pool;
+  };
+  // 主机到每架僚机的连线：合流那一刻它把「这是一支编队」说清楚。
+  // 最多三架，所以固定 6 个顶点，用不到的挪到镜头外，不做动态扩容。
+  const linkGeo = new THREE.BufferGeometry();
+  const linkPos = new Float32Array(MAX_FORMATION * 2 * 3);
+  linkGeo.setAttribute('position', new THREE.BufferAttribute(linkPos, 3));
+  const linkMesh = new THREE.LineSegments(
+    linkGeo,
+    new THREE.LineBasicMaterial({
+      color: new THREE.Color('#bfe9ff'),
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  stage.world.add(linkMesh);
+  // 僚机的插值位置（场地格）。判定层的 escortsOf 是目标，这一份是「正在飞过去」。
+  let escortPos = new Map();
   const boss = makeBoss();
   boss.visible = false;
   stage.world.add(boss);
@@ -162,7 +196,7 @@ export function createRenderer(host) {
     if (!pool) {
       const [kind, tag] = key.split(':');
       pool = createPool(stage.world, () => {
-        const made = makeShot(kind);
+        const made = kind === 'escort' ? makeShot(kind, gearSkin(tag).lead) : makeShot(kind);
         if (tag === 'echo') {
           const dim = (mesh) => {
             if (mesh.material) mesh.material = mesh.material.clone();
@@ -430,6 +464,35 @@ export function createRenderer(host) {
       } else if (effect.type === 'topped') {
         // 过载那一声由 audio.js 顶掉 topped，这里只留一行不抢戏的小字。
         note(FIELD_W / 2, 92, `${effect.code} 阶级封顶 · 转相位过载`, HAZARD.pierce);
+      } else if (effect.type === 'gearCarrier') {
+        note(FIELD_W / 2, 56, `掉落 ${effect.code} 装备`, gearSkin(effect.code).lead);
+      } else if (effect.type === 'gearCatch' || effect.type === 'gearSync') {
+        // 合流不是升阶：不放相位冲击、不画能量翼，改画一道从后方追上来的入列光弧。
+        const skin = gearSkin(effect.code);
+        const x = effect.x ?? FIELD_W / 2;
+        const y = effect.y ?? 116;
+        spark(x, y, skin.lead, effect.type === 'gearSync' ? 18 : 12, 34);
+        shockwave(x, y, skin.lead, effect.type === 'gearSync' ? 9 : 7, 0.45);
+        note(FIELD_W / 2, 88, `${effect.code} ${GEAR[effect.code]?.name ?? ''} ${effect.type === 'gearSync' ? `合流 ×${effect.level}` : '入列'}`, skin.lead);
+        bang(skin.lead, 0.24);
+        stage.punch(1.8);
+      } else if (effect.type === 'gearFull') {
+        note(FIELD_W / 2, 88, `编队已满 ×${MAX_FORMATION} · 折算战果`, gearSkin(effect.code).lead);
+      } else if (effect.type === 'gearSwap') {
+        note(FIELD_W / 2, 88, `${effect.code} 换装 · 编队重置`, gearSkin(effect.code).lead);
+      } else if (effect.type === 'gearBlock') {
+        // 僚机替主机挡下致命一击：这一下必须比「掉翼」更响，玩家才记得住这笔取舍。
+        const skin = gearSkin(effect.code);
+        spark(effect.x ?? FIELD_W / 2, effect.y ?? 120, skin.lead, 24, 52);
+        shockwave(effect.x ?? FIELD_W / 2, effect.y ?? 120, skin.lead, 13, 0.55);
+        shockwave(effect.x ?? FIELD_W / 2, effect.y ?? 120, '#ffffff', 8, 0.3);
+        note(FIELD_W / 2, 90, `僚机替挡 · 编队 -1`, skin.lead);
+        bang(skin.lead, 0.42);
+        stage.punch(3.4);
+      } else if (effect.type === 'gearLost') {
+        note(FIELD_W / 2, 100, effect.reason === 'block' ? '最后一架僚机耗尽' : '掉命 · 编队 -1', HAZARD.warm);
+      } else if (effect.type === 'gearGone') {
+        note(FIELD_W / 2, 104, `${effect.code} 装备飘走了`, HAZARD.warm);
       } else if (effect.type === 'burst') {
         spark(effect.x, effect.y, HAZARD.lab, 16, 58);
         shockwave(effect.x, effect.y, HAZARD.lab, 12, 0.5);
@@ -747,6 +810,69 @@ export function createRenderer(host) {
     orbPool.end();
   };
 
+  /**
+   * 僚机编队。目标坐标直接读判定层的 escortsOf（纯函数），这一层只做插值与演出：
+   * 延迟跟随像有惯性、新僚机从屏幕下方俯冲入列、主机与编队之间拉一道连线光弧、
+   * 每架有独立的炮口闪光与拖尾。判定层完全不知道这些。
+   *
+   * 位置一律用绝对值覆盖，池子复用不会把 scale / opacity 累乘；僚机不进 hitBoxes，
+   * 也不参与无敌闪烁——它是一支跟着飞的小队，不是机身的另一块装甲。
+   */
+  const syncEscorts = (state, dt = 0) => {
+    const targets = escortsOf(state.ship);
+    const visible = ship.visible && state.status !== 'dying';
+    for (const pool of escortPools.values()) pool.begin();
+    const next = new Map();
+    const link = linkGeo.getAttribute('position');
+    const cool = (state.ship.gear ? gearSpec(state.ship.gear)?.fire.cool : 0) ?? 0.5;
+    const heat = cool > 0 ? Math.min(1, Math.max(0, (state.ship.gearCool ?? 0) / cool)) : 0;
+    let cursor = 0;
+    for (const escort of targets) {
+      const key = `${escort.code}:${escort.index}`;
+      const seen = escortPos.get(key);
+      const from = seen ?? { x: escort.x, y: escort.y + 26 };
+      const follow = Math.min(1, dt * 6.5);
+      const px = from.x + (escort.x - from.x) * follow;
+      const py = from.y + (escort.y - from.y) * follow;
+      next.set(key, { x: px, y: py });
+      const mesh = escortPool(escort.code).take();
+      const skin = gearSkin(escort.code);
+      const ud = mesh.userData;
+      mesh.visible = visible;
+      // 抬高 1.35 格：僚机挂在主机正后方（判定位置不变），但表现层要把它从
+      // 三层发动机羽流里拎出来，否则单架编队在屏幕上就是尾焰末端的一团青光。
+      mesh.position.set(worldX(px), ALT.ship + 1.35, worldZ(py));
+      mesh.rotation.z = Math.max(-0.4, Math.min(0.4, -(escort.x - from.x) * 0.4));
+      mesh.rotation.y = Math.sin(state.elapsed * 1.5 + escort.index) * 0.06;
+      if (ud.ring) ud.ring.rotation.z += dt * 1.5;
+      ud.flash.visible = visible && state.status === 'playing';
+      if (ud.flash.visible) {
+        const power = heat ** 3;
+        ud.flash.material.color.set(skin.lead);
+        ud.flash.material.opacity = Math.min(0.7, power);
+        ud.flash.scale.setScalar(1.8 + power * 1.3);
+      }
+      ud.halo.material.color.set(skin.halo);
+      ud.halo.material.opacity = 0.34 + Math.sin(state.elapsed * 3 + escort.index) * 0.1;
+      if (!seen && visible) {
+        spark(escort.x, escort.y, skin.lead, 12, 26);
+        shockwave(escort.x, escort.y, skin.lead, 6, 0.42);
+      }
+      // 拖尾只给一粒淡星火：加色混合下多叠几层又会烧成白斑（上一轮的教训）。
+      if (visible && state.status === 'playing') spark(px, py + 1.4, skin.lead, 1, 5);
+      link.setXYZ(cursor, worldX(state.ship.x), ALT.ship + 0.55, worldZ(state.ship.y));
+      link.setXYZ(cursor + 1, worldX(px), ALT.ship + 1.2, worldZ(py));
+      cursor += 2;
+    }
+    escortPos = next;
+    for (const pool of escortPools.values()) pool.end();
+    for (let i = cursor; i < MAX_FORMATION * 2; i += 1) link.setXYZ(i, 0, -400, 0);
+    link.needsUpdate = true;
+    linkMesh.visible = visible && targets.length > 0;
+    linkMesh.material.color.set(gearSkin(state.ship.gear).lead);
+    linkMesh.material.opacity = 0.5 + Math.sin(state.elapsed * 4) * 0.12;
+  };
+
   const syncEnemies = (state) => {
     for (const pool of enemyPools.values()) pool.begin();
     for (const foe of state.enemies) {
@@ -840,7 +966,35 @@ export function createRenderer(host) {
   const syncDrops = (state) => {
     const keys = WEAKNESS[state.weak]?.keys ?? [];
     dropPool.begin();
+    gearDropPool.begin();
     for (const drop of state.drops) {
+      if (drop.kind === 'gear') {
+        // 六边形收纳舱：不翻滚、只缓慢自转，颜色按型号逐帧 set 覆盖（池子会复用）。
+        const mesh = gearDropPool.take();
+        const ud = mesh.userData;
+        const skin = gearSkin(drop.code);
+        const fading = drop.life < 1.4 && Math.floor(drop.life * 10) % 2 === 0;
+        ud.shellMat.color.set(skin.body);
+        ud.shellMat.emissive.set(skin.edge);
+        ud.rimMat.color.set(skin.lead);
+        ud.coreMat.color.set(skin.chrome);
+        ud.halo.material.color.set(skin.halo);
+        ud.halo.material.opacity = fading ? 0.1 : 0.28 + Math.sin(state.elapsed * 4) * 0.07;
+        ud.spin.rotation.y += 0.024;
+        ud.spin.scale.setScalar(fading ? 0.7 : 0.9);
+        mesh.position.set(worldX(drop.x), ALT.shot + 1 + Math.sin(state.elapsed * 3 + drop.x) * 0.55, worldZ(drop.y));
+        marks.push({
+          x: drop.x,
+          y: drop.y,
+          alt: ALT.shot + 12,
+          text: drop.code,
+          color: skin.lead,
+          size: 16,
+          sub: gearSpec(drop.code)?.name ?? null,
+          subColor: skin.chrome,
+        });
+        continue;
+      }
       const mesh = dropPool.take();
       const ud = mesh.userData;
       // 场上那副翼**就是机翼本身**：弃翼是把一整套火力扔出去，扔出去的东西必须看得出是哪一套。
@@ -893,6 +1047,7 @@ export function createRenderer(host) {
       });
     }
     dropPool.end();
+    gearDropPool.end();
   };
 
   const syncGate = (state) => {
@@ -1198,6 +1353,7 @@ export function createRenderer(host) {
       // Boss 战时背景压慢：这时候该看的是弹幕和弱点，不是风景往后跑。
       stage.drift(delta, state.boss ? 0.42 : 1);
       syncShip(state, delta);
+      syncEscorts(state, delta);
       syncEnemies(state);
       syncBoss(state);
       syncDrops(state);
@@ -1218,6 +1374,11 @@ export function createRenderer(host) {
       trailPool.dispose();
       orbPool.dispose();
       dropPool.dispose();
+      gearDropPool.dispose();
+      for (const pool of escortPools.values()) pool.dispose();
+      stage.world.remove(linkMesh);
+      linkGeo.dispose();
+      linkMesh.material.dispose();
       ringPool.dispose();
       for (const pool of enemyPools.values()) pool.dispose();
       for (const pool of shotPools.values()) pool.dispose();

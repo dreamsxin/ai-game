@@ -16,6 +16,7 @@ import { canSelect } from '../src/game/levels.js';
 const MODULES = [
   '../src/game/boss.js',
   '../src/game/enemies.js',
+  '../src/game/gear.js',
   '../src/game/input.js',
   '../src/game/levels.js',
   '../src/game/random.js',
@@ -105,4 +106,17 @@ test('输入层与渲染层的接口对得上：scale 注入口收的是 {sx, sy
   const frame = mergeInput(EMPTY_INPUT, input.snapshot());
   assert.equal(askedFor, 'called');
   assert.ok(frame.drag.dx > 0);
+});
+
+test('选翼面板预带装备：出击之后僚机真的在场上开火', () => {
+  let game = chooseWing(startGame(0), 'C', 'E1');
+  assert.equal(game.ship.gear, 'E1');
+  assert.equal(game.ship.gearLevel, 1);
+  let sawEscortShot = false;
+  for (let i = 0; i < 90; i += 1) {
+    game = step(game, EMPTY_INPUT, STEP);
+    if (game.shots.some((shot) => shot.source === 'gear')) sawEscortShot = true;
+  }
+  assert.ok(sawEscortShot, '带出去的僚机不能只是 HUD 上的一行字');
+  assert.equal(game.status, 'playing');
 });

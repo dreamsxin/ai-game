@@ -10,8 +10,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { makeShip, makeShot, makeWing } from '../src/scene/models.js';
+import { makeEscort, makeShip, makeShot, makeWing } from '../src/scene/models.js';
 import { WINGS } from '../src/game/wings.js';
+import { WING_HALF_W } from '../src/game/rules.js';
+import { GEAR_CODES, MAX_FORMATION, escortsOf } from '../src/game/gear.js';
 
 const bounds = (object) => {
   object.updateMatrixWorld(true);
@@ -89,4 +91,33 @@ test('机体加了背脊、喷口环与机首传感器，且基准透明度都�
   for (const mat of ship.userData.mats) {
     assert.equal(typeof mat.userData.baseOpacity, 'number', '无敌闪烁要按基准淡出，不能把 0.3 的羽流闪成 1');
   }
+});
+
+test('僚机编队整体不越出判定翼展：把模型与光晕都算进去', () => {
+  // 上一轮刚修过「Sprite 被 Box3 算进翼展」这个坑；编队挂在主机后侧，
+  // 但最外侧那两架的 |dx| 已经到 5.0，模型再宽一点就前功尽弃。
+  for (const code of GEAR_CODES) {
+    for (let level = 1; level <= MAX_FORMATION; level += 1) {
+      const ship = { x: 50, y: 124, gear: code, gearLevel: level };
+      for (const escort of escortsOf(ship)) {
+        const mesh = makeEscort(code);
+        mesh.position.set(escort.x - ship.x, 0, escort.y - ship.y);
+        const box = bounds(mesh);
+        assert.ok(box.max.x <= WING_HALF_W, `${code} ×${level} 的右侧探到 ${box.max.x.toFixed(2)} 格`);
+        assert.ok(box.min.x >= -WING_HALF_W, `${code} ×${level} 的左侧探到 ${box.min.x.toFixed(2)} 格`);
+      }
+    }
+  }
+});
+
+test('僚机与装备道具的透明度都按绝对值给：池子复用不会跨帧累积', () => {
+  for (const code of GEAR_CODES) {
+    const escort = makeEscort(code);
+    escort.userData.flash.material.opacity = 0.7;
+    escort.userData.flash.scale.setScalar(2.4);
+    assert.equal(escort.userData.flash.material.opacity, 0.7);
+    assert.equal(escort.userData.flash.scale.x, 2.4, '渲染层每帧用 set 覆盖，不乘法累积');
+  }
+  const shot = makeShot('escort', '#7fe3ff');
+  assert.ok(layers(shot) >= 4, '僚机弹也得是多层叠出来的，不是一根细线');
 });

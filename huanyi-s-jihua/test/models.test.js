@@ -13,9 +13,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { makeDrop, makeShip, makeWing, shadeWing } from '../src/scene/models.js';
+import { makeDrop, makeEscort, makeGearDrop, makeShip, makeShot, makeWing, shadeWing } from '../src/scene/models.js';
 import { WING_HALF_W } from '../src/game/rules.js';
 import { WINGS } from '../src/game/wings.js';
+import { ESCORT_HALF_W, GEAR_CODES } from '../src/game/gear.js';
 import { wingProfile, wingTrim } from '../src/scene/wingIcon.js';
 
 const RAD = Math.PI / 180;
@@ -257,4 +258,43 @@ test('残影与分身用的是同一架飞机的轮廓', () => {
   assert.ok(ghost.userData.ghost, '渲染层靠这一位决定要不要把翼也套成半透明');
   const span = spanOf(arm(ghost, 'C'));
   assert.ok(span.x > 10, `分身的翼展也该在 12 格上下，量到 ${span.x.toFixed(1)}`);
+});
+
+test('三型僚机一型一形一色，半宽连光晕都收在 1.3 格内', () => {
+  const seen = [];
+  for (const code of GEAR_CODES) {
+    const escort = makeEscort(code);
+    escort.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(escort); // Sprite 也会被算进来
+    const half = Math.max(Math.abs(box.min.x), Math.abs(box.max.x));
+    assert.ok(half <= ESCORT_HALF_W + 0.02, `${code} 半宽 ${half.toFixed(2)} 撑破了 ${ESCORT_HALF_W}`);
+    assert.ok(spanOf(escort).z < 7, `${code} 该比主机短一截`);
+    assert.ok(escort.userData.flash.isSprite, `${code} 要有自己的炮口闪光`);
+    assert.ok(escort.userData.mats.every((mat) => typeof mat.userData.baseOpacity === 'number'));
+    seen.push({
+      shape: escort.userData.shape,
+      color: escort.userData.mats[0].color.getHexString(),
+      z: spanOf(escort).z.toFixed(2),
+    });
+  }
+  assert.equal(new Set(seen.map((item) => item.shape)).size, GEAR_CODES.length, '有僚机撞了形状');
+  assert.equal(new Set(seen.map((item) => item.color)).size, GEAR_CODES.length, '有僚机撞了色');
+  assert.equal(new Set(seen.map((item) => item.z)).size, GEAR_CODES.length, '三型的纵向长度也得不一样');
+});
+
+test('装备道具是六边形收纳舱，不是那枚会翻滚的菱形机翼', () => {
+  const gear = makeGearDrop();
+  const hex = gear.userData.spin.children.find((node) => node.geometry?.type === 'CylinderGeometry');
+  assert.equal(hex?.geometry.parameters.radialSegments, 6, '六边形棱柱');
+  assert.ok(gear.userData.spin.children.length >= 3, '舱体、外环、核心三层');
+  assert.equal(makeDrop().userData.spin.children.length, 0, '机翼道具的翼是渲染层按型号挂上去的');
+  assert.ok(gear.userData.halo.isSprite, '装备道具带一圈柔光，远处才认得出');
+});
+
+test('僚机弹细一档、短一截：两路火力叠在同一列也分得开', () => {
+  const escort = makeShot('escort', '#7fe3ff');
+  const plain = makeShot('pellet');
+  assert.ok(spanOf(escort).z < spanOf(plain).z, '僚机弹不该和主机弹一样长');
+  assert.ok(spanOf(escort).x < spanOf(plain).x, '僚机弹该更细');
+  assert.ok(escort.userData.head, '照样要有弹头闪光');
 });

@@ -6,6 +6,8 @@
 // 2. **地形色一律避开敌弹那个红**。敌弹是全局唯一「碰到就掉翼」的东西，
 //    它的颜色不能和背景撞——第四章是红色调的葛布纳斯，所以它的亮色走琥珀橙而不是红。
 
+import { GEAR } from '../game/gear.js';
+
 /** 威胁色：跟章节无关，四章一模一样。认颜色比认形状快。 */
 export const HAZARD = {
   foe: '#ff2f5e', // 敌弹
@@ -119,6 +121,31 @@ export const WING_SKIN = {
 /** 这只机翼该穿哪身皮。参数是 wings.js 里那条记录。 */
 export const wingSkin = (spec = {}) =>
   WING_SKINS[spec.code] ?? (spec.secret ? WING_SKIN.secret : spec.lab ? WING_SKIN.lab : WING_SKIN.plain);
+
+/**
+ * 装备的三身皮。色相直接读 gear.js（单一数据源，HUD 与三维模型不会各写一套）。
+ *
+ * 机翼那 21 个色相几乎铺满一圈，靠「再找三个没用过的色相」是分不开的；
+ * 所以装备改走**明度**：机身是亮银偏冷（l≈0.62）、翼面压到 0.38，
+ * 只有识别件用高饱和亮色。加上它是六边形道具／小机身，形状先一步把两者分开。
+ * 三型之间色相拉开 100° 以上，谁都不会看成另一型。
+ */
+export const GEAR_HUES = Object.fromEntries(
+  Object.entries(GEAR).map(([code, spec]) => [code, spec.hue]),
+);
+
+export const GEAR_SKINS = Object.fromEntries(
+  Object.entries(GEAR_HUES).map(([code, hue]) => [code, {
+    body: hslHex(hue, 0.34, 0.38),
+    edge: hslHex(hue, 0.62, 0.55),
+    lead: hslHex(hue, 0.94, 0.7),
+    chrome: hslHex(hue, 0.18, 0.88),
+    halo: hslHex(hue, 0.9, 0.6),
+  }]),
+);
+
+/** 未知道具不给 undefined：渲染层会当场崩。 */
+export const gearSkin = (code) => GEAR_SKINS[code] ?? GEAR_SKINS.E1;
 
 export const CHAPTER_ART = [
   {

@@ -8,7 +8,8 @@
 
 import * as THREE from 'three';
 import { WINGS } from '../game/wings.js';
-import { HAZARD, TIER_COLOR, PHASE_COLOR, wingSkin } from './palette.js';
+import { GEAR } from '../game/gear.js';
+import { HAZARD, TIER_COLOR, PHASE_COLOR, gearSkin, wingSkin } from './palette.js';
 import { TILT } from './view.js';
 import { wingProfile, wingSeats, wingTraits, wingTrim, boltAim, boltBarrel, WING_TIP_X } from './wingIcon.js';
 
@@ -919,6 +920,130 @@ export function makeDrop() {
   return group;
 }
 
+/**
+ * 装备道具：**六边形悬浮舱**，和菱形机翼道具一眼分开。
+ * 机翼道具画的是整副翼（会翻滚、带阶级灯珠），这一枚是合上的收纳舱——
+ * 捡之前玩家就得知道这是「第二槽」，不是又一只翅膀。
+ */
+export function makeGearDrop() {
+  const group = new THREE.Group();
+  const spin = new THREE.Group();
+  group.add(spin);
+  const shellMat = flat('#d7e6ff', { emissive: '#7fe3ff', glow: 0.72, metalness: 0.62, opacity: 1 });
+  const rimMat = glowMat('#7fe3ff', 0.9);
+  const coreMat = glowMat('#ffffff', 0.85);
+  const hex = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.1, 0.6, 6), shellMat);
+  spin.add(hex);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(4.1, 0.22, 6, 24), rimMat);
+  rim.rotation.x = -Math.PI / 2;
+  spin.add(rim);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 0), coreMat);
+  core.position.y = 0.65;
+  spin.add(core);
+  const halo = headFlare('#7fe3ff', 8.5, 0.34);
+  halo.position.y = 0.4;
+  group.add(halo);
+  const mats = [shellMat, rimMat, coreMat];
+  for (const mat of mats) mat.userData.baseOpacity = mat.opacity;
+  group.userData = { spin, halo, mats, shellMat, rimMat, coreMat };
+  return group;
+}
+
+/**
+ * 僚机：比主机小一号的乘波体，一型一形一色。
+ *
+ * **半宽必须 ≤ 1.3 格**（gear.js 的 ESCORT_HALF_W）：编队最外侧已经站到 |dx| = 5.0，
+ * 模型再宽一点就把「看到的宽度」撑过 12.8 格判定翼展——上一轮刚修掉的坑。
+ * 所以三型的差别做在纵向长度、翼面形状与那件识别装置上，不往外摊。
+ */
+export function makeEscort(code = 'E1') {
+  const spec = GEAR[code] ?? GEAR.E1;
+  const skin = gearSkin(spec.code);
+  const group = new THREE.Group();
+  const mats = [];
+
+  const hullMat = flat(skin.body, { emissive: skin.edge, glow: 0.7, metalness: 0.6, opacity: 1 });
+  hullMat.side = THREE.DoubleSide;
+  mats.push(hullMat);
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.6, 3.4, 4), hullMat);
+  body.rotation.x = -Math.PI / 2;
+  // 不再绕 Z 转 45°：Box3 量的是**变换后的 AABB**，细长锥体一转就把横向撑到 1.63 格，
+  // 编队最外侧那两架会连同光晕一起越出 12.8 格判定翼展。改由 scale.x 压出菱形感。
+  body.scale.x = 0.72;
+  // 三型连机身长短都不一样：环哨最短最圆，梭卫最细长，雁翎居中。
+  body.scale.y = spec.shape === 'ring' ? 0.78 : spec.shape === 'needle' ? 1.16 : 1;
+  group.add(body);
+
+  const wingMat = flat(skin.body, { emissive: skin.edge, glow: 0.6, metalness: 0.55, opacity: 1 });
+  wingMat.side = THREE.DoubleSide;
+  mats.push(wingMat);
+  const leadMat = glowMat(skin.lead, 0.85);
+  mats.push(leadMat);
+  // 一道识别色中脊：僚机只有主机三分之一大，靠这根亮条把「小机身」的轮廓
+  // 从主机尾焰里勾出来。它贴着中线，横向一点宽度都不占。
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 2.5), leadMat);
+  spine.position.set(0, 0.48, -0.15);
+  group.add(spine);
+
+  if (spec.shape === 'swept') {
+    // 雁翎：两片后掠薄板，尾缘拖一道灯条。
+    const panel = new THREE.BoxGeometry(0.9, 0.14, 2.0);
+    for (const side of [-1, 1]) {
+      const mesh = new THREE.Mesh(panel, wingMat);
+      mesh.position.set(side * 0.45, 0, 0.45);
+      mesh.rotation.y = side * 0.32;
+      group.add(mesh);
+    }
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.24), leadMat);
+    tail.position.set(0, 0.16, 1.35);
+    group.add(tail);
+  } else if (spec.shape === 'needle') {
+    // 梭卫：细长针翼 + 一截更尖的机首，看着就比别的型快。
+    const strake = new THREE.BoxGeometry(0.42, 0.12, 2.8);
+    for (const side of [-1, 1]) {
+      const mesh = new THREE.Mesh(strake, wingMat);
+      mesh.position.set(side * 0.6, 0, 0.35);
+      group.add(mesh);
+    }
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.26, 1.5, 4), leadMat);
+    nose.rotation.x = -Math.PI / 2;
+    nose.position.set(0, 0, -2.2);
+    group.add(nose);
+  } else {
+    // 环哨：一圈护环 + 两枚小卫星球，绕着机尾慢慢转（转动由渲染层推）。
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.02, 0.14, 6, 20), leadMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(0, 0.05, 0.55);
+    group.add(ring);
+    for (const side of [-1, 1]) {
+      const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), wingMat);
+      ball.position.set(side * 1.0, 0.05, 0.55);
+      group.add(ball);
+    }
+  }
+
+  // 炮口闪光：每架僚机一份独立材质，所以能看出是哪一架在打。
+  const flash = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(),
+    color: new THREE.Color(skin.lead),
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  }));
+  flash.scale.setScalar(2.4);
+  flash.position.set(0, 0.4, -1.85);
+  flash.visible = false;
+  group.add(flash);
+  const halo = headFlare(skin.halo, 2.2, 0.3);
+  halo.position.set(0, 0.18, 1.55);
+  group.add(halo);
+
+  for (const mat of mats) mat.userData.baseOpacity = mat.opacity;
+  group.userData = { code: spec.code, shape: spec.shape, mats, flash, halo, skin, ring: group.children.find((node) => node.geometry?.type === 'TorusGeometry') ?? null };
+  return group;
+}
+
 /** 跳关门：一道发光的框。撞进去省 4 关，但跳过去的 Boss 一点没削弱。 */
 export function makeGate() {
   const group = new THREE.Group();
@@ -995,7 +1120,11 @@ function tracer(color, length, width = 0.46) {
 }
 
 /** 我方子弹。每种火力一种形状加一种颜色，屏幕上同时飞十几种也认得出来。 */
-export function makeShot(kind) {
+export function makeShot(kind, color) {
+  if (kind === 'escort') {
+    // 僚机弹细一档、短一截、走本型的识别色：两路火力叠在同一列也分得开是谁打的。
+    return tracer(color ?? '#bfe9ff', 3.6, 0.3);
+  }
   if (kind === 'well') {
     const group = new THREE.Group();
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.12, 8, 40), glowMat(HAZARD.lab, 0.8));

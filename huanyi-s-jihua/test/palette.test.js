@@ -2,8 +2,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHAPTER_ART, HAZARD, TIER_COLOR, WING_HUES, WING_SKINS, chapterArt, hsl, hslHex, hueGap } from '../src/scene/palette.js';
+import { CHAPTER_ART, GEAR_HUES, GEAR_SKINS, HAZARD, TIER_COLOR, WING_HUES, WING_SKINS, chapterArt, gearSkin, hsl, hslHex, hueGap } from '../src/scene/palette.js';
 import { WINGS } from '../src/game/wings.js';
+import { GEAR, GEAR_CODES } from '../src/game/gear.js';
 
 test('四章各一套色，取不到的章号会被夹住', () => {
   assert.equal(CHAPTER_ART.length, 4);
@@ -91,4 +92,25 @@ test('色相换算能走往返：HSL → 十六进制 → HSL', () => {
     assert.ok(hueGap(back.h, hue) < 2, `${hue}° 换算回来变成了 ${back.h.toFixed(1)}°`);
     assert.ok(Math.abs(back.l - 0.5) < 0.02, `${hue}° 的亮度走样了`);
   }
+});
+
+test('三型装备的皮与 gear.js 同源：两两拉开，谁也不掉进敌弹红区', () => {
+  assert.equal(Object.keys(GEAR_SKINS).length, GEAR_CODES.length);
+  const foe = hsl(HAZARD.foe).h;
+  for (const code of GEAR_CODES) {
+    assert.equal(GEAR_HUES[code], GEAR[code].hue, `${code} 的色相在两处写了不同的数`);
+    assert.ok(hueGap(GEAR_HUES[code], foe) > 30, `${code} 撞上了敌弹的红`);
+    const skin = GEAR_SKINS[code];
+    for (const key of ['body', 'edge', 'lead', 'chrome', 'halo']) {
+      assert.match(skin[key], /^#[0-9a-f]{6}$/, `${code} 的 ${key} 不是十六进制色`);
+    }
+    assert.ok(hsl(skin.lead).l > 0.6, `${code} 的识别色不够亮`);
+    assert.ok(hsl(skin.body).l > hsl(WING_SKINS.C.body).l, '装备机身比机翼亮一档，靠明度分开');
+  }
+  const hues = GEAR_CODES.map((code) => GEAR_HUES[code]).sort((a, b) => a - b);
+  for (let i = 0; i < hues.length; i += 1) {
+    const next = i + 1 < hues.length ? hues[i + 1] : hues[0] + 360;
+    assert.ok(next - hues[i] >= 60, `装备色相 ${hues[i]}° 和 ${next}° 挨得太近`);
+  }
+  assert.equal(gearSkin('NOPE'), GEAR_SKINS.E1, '未知型号要有兜底，渲染层不能拿到 undefined');
 });

@@ -44,7 +44,7 @@ export function spawnWave(item, { tune, rng, nextId }) {
     const ratio = item.count === 1 ? 0.5 : i / (item.count - 1);
     const x = clamp(FIELD_W / 2 + (ratio - 0.5) * spread * 2, 8, FIELD_W - 8);
     const y = -8 - i * (item.from === 'side' ? 3 : 7);
-    const enemy = makeEnemy(item.kind, id, x, y, { tune, wing: item.wing });
+    const enemy = makeEnemy(item.kind, id, x, y, { tune, wing: item.wing, gear: i === 0 ? item.gear : undefined });
     if (item.from === 'side') enemy.vx = i % 2 === 0 ? 22 : -22;
     if (item.kind === 'ground') enemy.y = -8 - i * 12;
     enemies.push(enemy);
@@ -53,7 +53,7 @@ export function spawnWave(item, { tune, rng, nextId }) {
   return { enemies, nextId: id };
 }
 
-export function makeEnemy(kind, id, x, y, { tune = { hp: 1, fire: 1, speed: 1 }, wing } = {}) {
+export function makeEnemy(kind, id, x, y, { tune = { hp: 1, fire: 1, speed: 1 }, wing, gear } = {}) {
   const base = KINDS[kind];
   const hp = Math.max(1, Math.round(base.hp * tune.hp));
   return {
@@ -73,6 +73,8 @@ export function makeEnemy(kind, id, x, y, { tune = { hp: 1, fire: 1, speed: 1 },
     cool: base.cool > 0 ? base.cool / tune.fire : 0,
     timer: base.cool > 0 ? base.cool / tune.fire : 0,
     wing: wing ?? null,
+    // 这一关的装备主题：只有本关第一波运载火箭的头一架带着，一关一件。
+    gear: gear ?? null,
     age: 0,
   };
 }

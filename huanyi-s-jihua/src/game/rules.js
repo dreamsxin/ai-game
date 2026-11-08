@@ -69,6 +69,16 @@ export const SYNC_BURST_INVULN = 0.7;
 export const OVERDRIVE_TIME = 5.5;
 export const OVERDRIVE_SCORE = 400;
 
+// ——— 装备（僚机）：只增不改，机翼那套常量一个都没动 ———
+// 装备道具与机翼道具是两种东西：菱形会翻滚的是机翼，六边形悬浮的是装备。
+// 运动参数分开写，改装备手感不会顺手把「弃翼窗口」改坏。
+export const GEAR_DROP_LIFE = 9;
+export const GEAR_DROP_VY = 13;
+export const GEAR_DRIFT = 3.2;
+export const GEAR_DRIFT_VY = -32;
+export const GEAR_CATCH_SCORE = 120;
+export const GEAR_SYNC_SCORE = 240;
+
 // Boss 的死亡演出：血量归零不是当场结算，而是进入 1.3 秒的过载——
 // 间隔 BOSS_BLAST_EVERY 秒在壳体上炸一处，期间不再开火、不再撞人，
 // 场上它打出的弹幕在死亡瞬间化为火花（弹幕射击的礼节：通关奖励不是清屏刷分）。

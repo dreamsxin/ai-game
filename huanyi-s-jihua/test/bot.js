@@ -17,6 +17,9 @@ const IDLE_Y = FIELD_H * 0.8;
  * 捡到一个打不进这一关弱点的机翼，等于把手上的钥匙换成一把螺丝刀。
  */
 function worthTaking(state, drop) {
+  // 装备是第二槽，不参与「哪只机翼能打进弱点」的评估。
+  // 不挡住的话 E1/E2/E3 会被当成一颗打不进弱点的机翼，机器人反而会绕着它走。
+  if (drop.kind === 'gear') return 0;
   const ship = state.ship;
   if (!ship.wing) return 2;
   // 同型号＝进化。这是最值钱的一种捡。
@@ -81,7 +84,7 @@ export function botInput(state) {
   // 不想要的机翼道具也要躲：撞上去会把手上的钥匙换成一把螺丝刀。
   // 换掉的旧翼虽然会原地脱手、还能追回来，但那是一次不必要的险。
   for (const drop of state.drops) {
-    if (worthTaking(state, drop) > 0) continue;
+    if (drop.kind === 'gear' || worthTaking(state, drop) > 0) continue;
     const dist = Math.hypot(drop.x - ship.x, drop.y - ship.y);
     if (dist > 14 || dist < 0.001) continue;
     const push = ((14 - dist) / 14) * 3;

@@ -261,6 +261,15 @@ export const LEVELS = [
   },
 ];
 
+/**
+ * 装备主题按章轮换：章内四关掉同型号，玩家攒得出 1→3 的编队；
+ * 跨章换型号则编队重置，是一次新的取舍（见 gear.js 的 gearPick）。
+ * 写在关卡表之后而不是逐关塞进 wave：16 关的数据保持干净，装备节奏一处可调。
+ * Boss 血量、HIT_RATE、PATTERN_HIT 一概不碰——装备不进配平链。
+ */
+const CHAPTER_GEAR = ['E1', 'E2', 'E3', 'E3'];
+for (const level of LEVELS) level.gearDrops = [CHAPTER_GEAR[level.chapter]];
+
 export const levelCount = LEVELS.length;
 
 export const levelAt = (index) => LEVELS[Math.min(Math.max(index, 0), LEVELS.length - 1)];
@@ -282,6 +291,8 @@ export const briefing = (index) => {
     hint: weak.hint,
     pick: recommendedWing(level.boss.weak),
     drops: level.wingDrops,
+    // 这一关能捡到哪一型装备。选翼面板的装备卡和关内掉落都读这一份。
+    gearCodes: level.gearDrops ?? [],
     // 这一关的选单里有哪些机翼。实验机翼从第 3 章起解锁。
     codes: codesFor(level.chapter),
     lab: level.chapter >= LAB_CHAPTER,

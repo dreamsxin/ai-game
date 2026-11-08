@@ -20,6 +20,12 @@ import {
   EVOLVE_SCORE,
   FIELD_H,
   FIELD_W,
+  GEAR_CATCH_SCORE,
+  GEAR_DRIFT,
+  GEAR_DRIFT_VY,
+  GEAR_DROP_LIFE,
+  GEAR_DROP_VY,
+  GEAR_SYNC_SCORE,
   HULL_GUN,
   HULL_HALF_H,
   HULL_HALF_W,
@@ -51,13 +57,31 @@ import {
 } from './rules.js';
 import { EMPTY_INPUT } from './input.js';
 import { LEVELS, bossAt, canSelect, chapterStart, levelAt, skipTarget } from './levels.js';
-import { MAX_TIER, WINGS, clampTier, damageMultiplier, hitKind, wingAtTier } from './wings.js';
+import { MAX_TIER, WEAKNESS, WINGS, clampTier, damageMultiplier, hitKind, wingAtTier } from './wings.js';
+import {
+  GEAR_BLOCK_INVULN,
+  GEAR_FULL_SCORE,
+  gearAfterBlock,
+  gearAfterLoss,
+  gearFields,
+  gearPick,
+  gearSpec,
+  gearVolley,
+  escortsOf,
+} from './gear.js';
 import { offField, spawnWave, stepEnemy, stepShot } from './enemies.js';
 import { makeBoss, stepBoss } from './boss.js';
 import { createRandom } from './random.js';
 
 export { EMPTY_INPUT };
 export const STEP = 1 / 60;
+
+/**
+ * Boss 命中倍率。装备弹带 chipOnly，一律只按弱点 chip 结算——
+ * 单独拎出来是为了让这条约定能被测试直接指着断言，而不是埋在 step 的大循环里。
+ */
+export const bossShotMultiplier = (weak, shot) =>
+  shot.chipOnly ? (WEAKNESS[weak]?.chip ?? 1) : damageMultiplier(weak, shot);
 
 // 跳关门的出现窗口：最后一波清完 3 秒后开门，Boss 出场前关门。
 const GATE_LEAD = 3;
@@ -66,7 +90,7 @@ const ORB_R = 2.6;
 const ORB_DPS = 7;
 const ORB_DIST = 9.5;
 
-const makeShip = (wing, tier = 1) => ({
+const makeShip = (wing, tier = 1, gear = null) => ({
   x: FIELD_W / 2,
   y: PLAYER_Y,
   wing: wing ?? null,
@@ -79,6 +103,8 @@ const makeShip = (wing, tier = 1) => ({
   orbAngle: 0,
   // 相位过载是满阶之后再叠同型号换来的限时增益，不写进阶级（弃翼／换翼／掉翼都清零）。
   overdrive: 0,
+  // 第二槽：装备只在本局内跨关 carry，不进 progress.js 的存档。
+  ...gearFields(gear),
 });
 
 /** 载入一关。carry 带着上一关的战果：命、分、以及还挂在机上的那只翅膀。 */
@@ -101,7 +127,7 @@ function loadLevel(index, carry = {}) {
     entryWing: carry.wing ?? null,
     seed: 1013 + index * 7919,
     waveIndex: 0,
-    ship: makeShip(carry.wing ?? null, carry.tier ?? 1),
+    ship: makeShip(carry.wing ?? null, carry.tier ?? 1, carry.gear ?? null),
     drops: [],
     shots: [],
     foes: [],
@@ -136,8 +162,9 @@ export const createGame = (levelIndex = 0) => ({ ...loadLevel(levelIndex), statu
  * 开一关。给了 wing 就是「选择已经做完了」，直接开打；不给就按关卡规则决定要不要进选翼界面。
  * advance 进到每章第一关时不走这里，所以那几关一定会再问一次「这一关带什么翅膀」。
  */
-export const startGame = (levelIndex = 0, wing = null) => {
-  const state = loadLevel(levelIndex, { wing });
+export const startGame = (levelIndex = 0, wing = null, gearCode = null) => {
+  const gear = gearSpec(gearCode) ? { code: gearCode, level: 1, guard: true } : null;
+  const state = loadLevel(levelIndex, { wing, gear });
   return wing ? { ...state, status: 'playing' } : state;
 };
 
@@ -147,15 +174,24 @@ export const togglePause = (state) => {
   return state;
 };
 
-/** 选翼界面按下某一种机翼。只有 select 状态接受这个动作。 */
-export function chooseWing(state, code) {
+/** 选翼界面按下某一种机翼。只有 select 状态接受这个动作。第三个参数是同一面板上预带的装备。 */
+export function chooseWing(state, code, gearCode = null) {
   if (state.status !== 'select' || !WINGS[code]) return state;
+  const picked = gearSpec(gearCode) ? gearPick({ gear: null }, gearCode) : null;
+  const effects = [{ type: 'catch', code }];
+  if (picked) effects.push({ type: 'gearCatch', code: gearCode, level: picked.fields.gearLevel, preset: true });
   return {
     ...state,
     status: 'playing',
-    ship: { ...state.ship, wing: code, tier: 1, overdrive: 0 },
+    ship: {
+      ...state.ship,
+      wing: code,
+      tier: 1,
+      overdrive: 0,
+      ...(picked ? picked.fields : {}),
+    },
     entryWing: code,
-    effects: [{ type: 'catch', code }],
+    effects,
   };
 }
 
@@ -176,6 +212,10 @@ export function advance(state) {
   const carry = {
     wing: state.ship.wing,
     tier: state.ship.tier,
+    // 装备跟着编队一起过下一关，但不进存档：关掉网页就没了。
+    gear: state.ship.gear
+      ? { code: state.ship.gear, level: state.ship.gearLevel, guard: state.ship.gearGuard }
+      : null,
     lives: crossing ? Math.min(MAX_LIVES, state.lives + CHAPTER_LIFE_BONUS) : state.lives,
     score: state.score,
     // 进新章时把「本章起点分」抬到当前分：这一章的失败重试只回到这里，刷不出新纪录。
@@ -199,6 +239,7 @@ export function advance(state) {
  */
 export function retryChapter(state) {
   const start = chapterStart(state.levelIndex);
+  // 不带 gear：重试本章时整槽装备作废，比掉命「掉一级」更重一档。
   return loadLevel(start, {
     wing: null,
     lives: START_LIVES,
@@ -325,7 +366,21 @@ function fireShip(ship, dt, nextId) {
       emit({ dx: 0, dy: -3, vx: 0, vy: -HULL_GUN.speed, dmg: HULL_GUN.dmg, kind: 'hull', life: 2.2 }, ship.x, false);
     }
   }
-  return { ship: { ...ship, cool: timer }, shots, nextId: id };
+  // 装备槽独立走自己的冷却：机翼换型、升阶、过载都不改它。
+  // 弹数恒等于编队数，而且每发都带 chipOnly —— 打 Boss 永远只按弱点 chip 结算，
+  // 不会把「选错机翼要磨很久」这条地基稀释掉。
+  let gearCool = ship.gearCool ?? 0;
+  const gear = ship.gear ? gearSpec(ship.gear) : null;
+  if (gear) {
+    gearCool -= dt;
+    while (gearCool <= 0) {
+      gearCool += gear.fire.cool;
+      const volley = gearVolley(ship, id);
+      shots.push(...volley.shots);
+      id = volley.nextId;
+    }
+  }
+  return { ship: { ...ship, cool: timer, gearCool }, shots, nextId: id };
 }
 
 const BURST_SPEED = 76;
@@ -374,6 +429,7 @@ function jettison(state, effects) {
   }
   const drop = {
     id: state.nextId,
+    kind: 'wing',
     code: ship.wing,
     // 阶级跟着机翼飞出去。攒到 Mk.III 再弃翼，扔掉的是一整套投资。
     tier: ship.tier,
@@ -396,12 +452,19 @@ function jettison(state, effects) {
 /** 掉命。机翼此时已经不在了（挨打先掉翼），所以走到这里就是裸机被打中。 */
 function killShip(state, effects) {
   const lives = state.lives - 1;
+  // 掉命：装备掉一级而不是清零，也不还原成进关时的满编队。
+  // 重试本章则整槽作废（retryChapter 不带 gear），两档惩罚分开。
+  const hadGear = (state.ship.gearLevel ?? 0) > 0;
+  const code = state.ship.gear;
+  const ship = gearAfterLoss(state.ship);
   effects.push({ type: 'die' });
+  if (hadGear) effects.push({ type: 'gearLost', code, level: ship.gearLevel, reason: 'death' });
   if (lives <= 0) {
-    return { ...state, lives: 0, status: 'over', stars: 0, chain: 0, effects };
+    return { ...state, ship, lives: 0, status: 'over', stars: 0, chain: 0, effects };
   }
   return {
     ...state,
+    ship,
     lives,
     status: 'dying',
     reviveTimer: RESPAWN_DELAY,
@@ -425,7 +488,16 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
       reviveTimer: 0,
       foes: [],
       // 复活只还原成这一关带进来的那只翅膀，而且是 Mk.I：攒下来的阶级是真会没的。
-      ship: { ...makeShip(state.entryWing, 1), invuln: HURT_INVULN },
+      // 装备不同：掉命已经扣掉一级，复活不再还原成进关时那一支满编队——
+      // 否则「掉一级」会被复活偷偷补回来，惩罚就成了假的。
+      ship: {
+        ...makeShip(state.entryWing, 1, {
+          code: state.ship.gear,
+          level: state.ship.gearLevel,
+          guard: state.ship.gearGuard,
+        }),
+        invuln: HURT_INVULN,
+      },
       effects: [{ type: 'revive', code: state.entryWing }],
     };
   }
@@ -445,8 +517,13 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   let enemies = state.enemies;
   let waveIndex = state.waveIndex;
   let nextId = state.nextId;
+  // 一关只掉一件装备：挂在本关第一波运载火箭的头一架上。
+  // 不在 wave 表里逐关写 gear 字段，装备主题由 levels.js 的 gearDrops 统一给。
+  const gearWave = level.waves.findIndex((item) => item.kind === 'carrier');
   while (waveIndex < level.waves.length && next.time >= level.waves[waveIndex].at) {
-    const spawned = spawnWave(level.waves[waveIndex], { tune: state.tune, rng, nextId });
+    const spec = level.waves[waveIndex];
+    const gearCode = waveIndex === gearWave ? level.gearDrops?.[0] ?? null : null;
+    const spawned = spawnWave(gearCode ? { ...spec, gear: gearCode } : spec, { tune: state.tune, rng, nextId });
     enemies = [...enemies, ...spawned.enemies];
     nextId = spawned.nextId;
     effects.push({ type: 'wave', kind: level.waves[waveIndex].kind });
@@ -636,9 +713,12 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     for (const shot of shots) {
       if (shot.dead || shot.hit?.includes('boss')) continue;
       if (!boxHit(shot, { w: 1.2, h: 1.6 }, boss, { w: boss.w / 2, h: boss.h / 2 })) continue;
-      const mult = damageMultiplier(boss.weak, shot);
+      // 僚机弹一律只按 chip 结算：装备给的是「活下来」和「看得爽」，
+      // 不是 Boss 战的火力答案。effectiveDps / bossHp 因此一行都不用改。
+      // 生物系 Boss 本来没有装甲（chip = 1），所以这一条对它是「正常伤害」，不是赦免。
+      const mult = bossShotMultiplier(boss.weak, shot);
       boss = { ...boss, hp: boss.hp - shot.dmg * mult };
-      effects.push({ type: hitKind(boss.weak, shot) });
+      effects.push({ type: shot.chipOnly ? 'chip' : hitKind(boss.weak, shot) });
       if (shot.burst > 0) bursts.push(shot);
       if (shot.pierce === 'armor') shot.hit = [...(shot.hit ?? []), 'boss'];
       else shot.dead = true;
@@ -651,6 +731,16 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     nextId += ring.length;
     shots.push(...ring);
     effects.push({ type: 'burst', x: shot.x, y: shot.y });
+  }
+
+  // 僚机的近身消弹圈：照铁球那套范式，蹭掉的敌弹走 pop()，
+  // 所以照样算连消、照样给分、照样出声。只对敌弹生效，
+  // 不碰杂兵也不碰 Boss —— 装备不进火力配平，只把「活下来」这件事做厚。
+  for (const escort of escortsOf(ship)) {
+    for (let i = 0; i < foes.length; i += 1) {
+      const foe = foes[i];
+      if (foe && Math.abs(escort.x - foe.x) <= escort.r + 1.4 && Math.abs(escort.y - foe.y) <= escort.r + 1.4) pop(i);
+    }
   }
 
   // 铁球：贴身的东西自己会没。球撞到敌弹就把它蹭掉（走 pop，所以照样算连消、照样给分），
@@ -700,10 +790,29 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
       // 运载火箭是关卡中途唯一的换翼机会，所以它掉的是菱形机翼道具。
       drops = [
         ...drops,
-        { id: nextId, code: enemy.wing, x: enemy.x, y: enemy.y, vy: 13, life: 9, mine: false },
+        { id: nextId, kind: 'wing', code: enemy.wing, x: enemy.x, y: enemy.y, vy: 13, life: 9, mine: false },
       ];
       nextId += 1;
       effects.push({ type: 'carrier', code: enemy.wing, x: enemy.x, y: enemy.y });
+    }
+    if (enemy.gear && gearSpec(enemy.gear)) {
+      // 装备从同一枚运载火箭里掉出来，但形状是六边形：捡之前就得能分清是什么。
+      drops = [
+        ...drops,
+        {
+          id: nextId,
+          kind: 'gear',
+          code: enemy.gear,
+          x: enemy.x + 6,
+          y: enemy.y + 2,
+          vy: GEAR_DROP_VY,
+          life: GEAR_DROP_LIFE,
+          grace: 0,
+          mine: false,
+        },
+      ];
+      nextId += 1;
+      effects.push({ type: 'gearCarrier', code: enemy.gear, x: enemy.x + 6, y: enemy.y + 2 });
     }
   }
 
@@ -722,14 +831,50 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     return cleared;
   };
   const keptDrops = [];
-  for (const drop of drops) {
-    const moved = { ...drop, y: drop.y + drop.vy * dt, life: drop.life - dt, grace: Math.max(0, (drop.grace ?? 0) - dt) };
+  // 同一帧机翼和装备都在拾取圈里：先处理机翼，再处理装备。
+  // 两个槽互不相干，所以两件都会捡；排序只是让「换装」发生在编队合流之前，
+  // 免得同一帧里 ship 被两条分支各写一遍，效果飘字也跟着乱序。
+  // 老 drop 没有 kind 字段，一律按机翼兼容（存档、测试构造的旧状态都走旧路径）。
+  const ordered = [...drops].sort((a, b) => (a.kind === 'gear' ? 1 : 0) - (b.kind === 'gear' ? 1 : 0));
+  for (const drop of ordered) {
+    const kind = drop.kind ?? 'wing';
+    const moved = { ...drop, kind, y: drop.y + drop.vy * dt, life: drop.life - dt, grace: Math.max(0, (drop.grace ?? 0) - dt) };
     if (moved.life <= 0 || offField(moved, 14)) {
-      if (moved.mine) effects.push({ type: 'lost', code: moved.code });
+      if (moved.mine) effects.push({ type: kind === 'gear' ? 'gearGone' : 'lost', code: moved.code });
       continue;
     }
     // grace 是刚脱手那一小段：这段时间接不回来，弃翼才是一次真的取舍。
     if (moved.grace <= 0 && Math.hypot(moved.x - ship.x, moved.y - ship.y) <= CATCH_R) {
+      if (kind === 'gear') {
+        // 装备不共用同频共振：捡同型号只是编队 1→2→3 的合流，不放相位冲击。
+        const picked = gearPick(ship, moved.code);
+        if (picked.kind === 'invalid') { keptDrops.push(moved); continue; }
+        if (picked.kind === 'swap' && picked.old) {
+          keptDrops.push({
+            id: nextId,
+            kind: 'gear',
+            code: picked.old.code,
+            level: picked.old.level,
+            x: ship.x,
+            y: ship.y,
+            vy: GEAR_DRIFT_VY,
+            life: GEAR_DRIFT,
+            grace: CATCH_GRACE,
+            mine: true,
+          });
+          nextId += 1;
+        }
+        ship = { ...ship, ...picked.fields };
+        score += picked.kind === 'full' ? GEAR_FULL_SCORE : picked.kind === 'sync' ? GEAR_SYNC_SCORE : GEAR_CATCH_SCORE;
+        effects.push({
+          type: { new: 'gearCatch', sync: 'gearSync', full: 'gearFull', swap: 'gearSwap' }[picked.kind],
+          code: moved.code,
+          level: picked.fields.gearLevel,
+          x: ship.x,
+          y: ship.y,
+        });
+        continue;
+      }
       const tier = clampTier(moved.tier ?? 1);
       if (!ship.wing) {
         // 空手接翼：捡到什么阶级就是什么阶级。过载是临时的，接翼不继承。
@@ -793,11 +938,21 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
       wingLosses += 1;
       drops = [
         ...drops,
-        { id: nextId, code: ship.wing, tier: ship.tier, x: ship.x, y: ship.y, vy: WING_DRIFT_VY * 0.6, life: WING_DRIFT, grace: CATCH_GRACE, mine: true },
+        { id: nextId, kind: 'wing', code: ship.wing, tier: ship.tier, x: ship.x, y: ship.y, vy: WING_DRIFT_VY * 0.6, life: WING_DRIFT, grace: CATCH_GRACE, mine: true },
       ];
       nextId += 1;
       effects.push({ type: 'wingLost', code: ship.wing, tier: ship.tier, from: source, x: ship.x, y: ship.y });
       ship = { ...ship, wing: null, tier: 1, overdrive: 0, invuln: HURT_INVULN };
+      return false;
+    }
+    // 裸机＋还有编队＋这一关的替挡机会没用过：消耗一架僚机，把这条命买回来。
+    // 带翼被打中仍然只掉翼——机翼本身就是装甲，僚机是最后一道防线，不是常驻免费护盾。
+    // 替挡机会用完（gearGuard = false）之后，再挨一下就是真的掉命，装备掉一级。
+    if (ship.gearGuard && (ship.gearLevel ?? 0) > 0) {
+      const code = ship.gear;
+      ship = { ...gearAfterBlock(ship), invuln: GEAR_BLOCK_INVULN };
+      effects.push({ type: 'gearBlock', code, left: ship.gearLevel, from: source, x: ship.x, y: ship.y });
+      if (!ship.gear) effects.push({ type: 'gearLost', code, level: 0, reason: 'block' });
       return false;
     }
     return true;

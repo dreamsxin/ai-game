@@ -230,6 +230,32 @@ export const SOUNDS = {
       { wave: 'sine', freq: NOTE.G5, to: NOTE.E6, dur: 0.48, gain: 0.07, delay: 0.33 },
     ],
   },
+  // 装备那几声刻意和机翼「接到／进化／过载」分开：编队合流不是同频共振，
+  // 不该让玩家听见琶音就以为又升阶了。
+  gearCatch: {
+    tones: [
+      { wave: 'sine', freq: NOTE.G4, to: NOTE.C5, dur: 0.16, gain: 0.09 },
+      { wave: 'triangle', freq: NOTE.C5, to: NOTE.E5, dur: 0.2, gain: 0.08, delay: 0.08 },
+    ],
+  },
+  gearSync: {
+    tones: [
+      { wave: 'triangle', freq: NOTE.E5, to: NOTE.G5, dur: 0.12, gain: 0.09 },
+      { wave: 'sine', freq: NOTE.G5, to: NOTE.C6, dur: 0.26, gain: 0.09, delay: 0.1 },
+    ],
+    noise: { dur: 0.16, gain: 0.035, cutoff: 3600, type: 'highpass', delay: 0.1 },
+  },
+  // 替挡：一记闷响 + 一记上扬的亮音，「挡住了，但少了一架」得同时说得出来。
+  gearBlock: {
+    tones: [
+      { wave: 'square', freq: NOTE.C4, to: NOTE.C3, dur: 0.2, gain: 0.12 },
+      { wave: 'triangle', freq: NOTE.G5, to: NOTE.C6, dur: 0.24, gain: 0.1, delay: 0.06 },
+    ],
+    noise: { dur: 0.22, gain: 0.08, cutoff: 2200 },
+  },
+  gearLost: {
+    tones: [{ wave: 'sine', freq: NOTE.G4, to: NOTE.C4, dur: 0.24, gain: 0.08 }],
+  },
 };
 
 export const SOUND_NAMES = Object.keys(SOUNDS);
@@ -269,6 +295,13 @@ export function soundsFor(effects = []) {
     if (current === undefined || shift > current) picked.set(name, shift);
   };
 
+  // 装备：替挡是救命，优先级压过掉翼；合流／入列排在机翼进化之后，别抢那一声琶音。
+  if (find('gearBlock')) push('gearBlock');
+  if (find('gearSync')) push('gearSync');
+  else if (find('gearCatch') || find('gearSwap') || find('gearFull')) push('gearCatch');
+  if (find('gearLost')) push('gearLost');
+  if (find('gearGone')) push('lost');
+  if (find('gearCarrier')) push('carrier');
   // 火力配置发生变化的几声优先级最高：它们改变的是接下来怎么打。
   if (find('wingLost')) push('wingLost');
   if (find('bare')) push('bare');
@@ -317,6 +350,10 @@ export const VIBRATION = {
   evolve: [10, 24, 10, 24, 22],
   // 相位过载比进化更重一档：它是满阶之后再叠出来的爆发。
   overdrive: [18, 36, 18, 36, 30],
+  // 替挡：两短一长，比掉翼更「挡了一下」而不是「碎了一下」。
+  gearBlock: [24, 16, 30],
+  gearSync: [10, 20, 12],
+  gearCatch: [10],
   die: [60, 40, 60],
   skip: [14, 24, 14, 24],
   bossKill: [30, 40, 60],
@@ -341,6 +378,9 @@ export function vibrationFor(effects = []) {
   if (find('die')) return VIBRATION.die;
   if (find('bossKill')) return VIBRATION.bossKill;
   if (find('skip')) return VIBRATION.skip;
+  if (find('gearBlock')) return VIBRATION.gearBlock;
+  if (find('gearSync')) return VIBRATION.gearSync;
+  if (find('gearCatch') || find('gearSwap') || find('gearFull')) return VIBRATION.gearCatch;
   if (find('wingLost')) return VIBRATION.wingLost;
   if (find('bare')) return VIBRATION.bare;
   if (find('evolve')) return VIBRATION.evolve;

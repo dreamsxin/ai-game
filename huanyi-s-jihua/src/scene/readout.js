@@ -1,5 +1,6 @@
 import { chapterNumber, isChapterEnd, levelCount } from '../game/levels.js';
 import { LAB_CHAPTER, MAX_TIER, SURGE, WEAKNESS, WINGS, clampTier, tierOf } from '../game/wings.js';
+import { GEAR, MAX_FORMATION, gearLine } from '../game/gear.js';
 import { CHAPTER_LIFE_BONUS, FIELD_H } from '../game/rules.js';
 import { maxStars, resumeIndex, totalStars } from '../game/progress.js';
 
@@ -86,6 +87,34 @@ export const syncLabel = (ship) => {
   const step = tierOf(ship.tier ?? 1);
   return `${step.codename} ${step.name} · ${step.title}`;
 };
+
+// ——— 第二槽：装备（僚机）的文案 ———
+// 刻意不叫「阶级」、不提「同频共振」：装备走的是编队数 1→3，
+// 和机翼那条 Mk.I→III 的成长轴分开，HUD 上的词也得跟着分开。
+
+export { gearLine };
+
+/** 装备卡上的一句话：这一型长什么样、强在哪。 */
+export const gearCardLine = (code) => gearLine(code);
+
+/** HUD 那一格：型号、编队数、还有没有替挡机会（读屏也读这一句）。 */
+export const gearLabel = (ship) => {
+  if (!ship?.gear || !ship.gearLevel) return '无装备 · 关内可捡';
+  const spec = GEAR[ship.gear];
+  const guard = ship.gearGuard ? ' · 可替挡' : ' · 替挡已用';
+  return `${spec.code} ${spec.name} ×${ship.gearLevel}${guard}`;
+};
+
+/** 编队格的说明：满编队与还能合流是两种状态。 */
+export const gearMeterLabel = (ship) => {
+  if (!ship?.gear) return '第二槽空着';
+  const left = MAX_FORMATION - Math.max(0, ship.gearLevel ?? 0);
+  return left > 0 ? `再捡同型号可合流 ${left} 架` : '编队已满';
+};
+
+/** 选翼面板上那句「可选」的说明：不新增一步弹窗，也不让人以为必须挑。 */
+export const gearPanelHint = (codes) =>
+  codes.length ? `可选 · 先带一架僚机（${codes.join(' / ')}）；不挑也能在关内捡到` : '';
 
 /** 面板里那句「再捡一个会怎样」，满阶改说过载，不让人以为到顶就没用了。 */
 export const nextTierLabel = (ship) => {

@@ -4,6 +4,7 @@ import { createInput, mergeInput } from './game/input.js';
 import { STEP, advance, chooseWing, createGame, retryChapter, startGame, step, togglePause } from './game/simulation.js';
 import { loadProgress, mergeProgress, resumeIndex, saveProgress } from './game/progress.js';
 import { WINGS } from './game/wings.js';
+import { GEAR, GEAR_CODES } from './game/gear.js';
 import { bossAt, briefing, canSelect, levelAt } from './game/levels.js';
 import { createRenderer } from './scene/render.js';
 import { VIBRATION, createAudio, vibrate, vibrationFor, winSound } from './scene/audio.js';
@@ -17,6 +18,9 @@ import {
   formatScore,
   formatTime,
   gateLabel,
+  gearLabel,
+  gearMeterLabel,
+  gearPanelHint,
   jettisonKey,
   labLabel,
   levelLabel,
@@ -47,7 +51,7 @@ import {
 } from './scene/readout.js';
 import { wingIcon } from './scene/wingIcon.js';
 import { createLoop } from './scene/loop.js';
-import { HAZARD, TIER_COLOR } from './scene/palette.js';
+import { HAZARD, TIER_COLOR, gearSkin } from './scene/palette.js';
 
 const BEST_KEY = 'huanyi-s-jihua:best';
 const MUTE_KEY = 'huanyi-s-jihua:muted';
@@ -163,6 +167,36 @@ function WingIcon({ code }) {
   );
 }
 
+/**
+ * 装备卡的小图：六边形收纳舱 + 一型一件识别件。
+ * 形状与机翼卡的菱形翼面完全不同，扫一眼就知道这是第二槽而不是又一只翅膀。
+ */
+function GearIcon({ code }) {
+  const spec = GEAR[code];
+  const skin = gearSkin(code);
+  return (
+    <svg className="gear-art" viewBox="0 0 48 48" role="img" aria-label={`${code} 装备外形`}>
+      <polygon points="24,3 42,13 42,35 24,45 6,35 6,13" fill={skin.body} stroke={skin.lead} strokeWidth="1.4" />
+      <polygon points="24,9 37,16 37,32 24,39 11,32 11,16" fill="none" stroke={skin.edge} strokeWidth="1" />
+      {spec.shape === 'swept' && (
+        <>
+          <path d="M24 14 L11 30 M24 14 L37 30" stroke={skin.chrome} strokeWidth="2" strokeLinecap="round" />
+          <circle cx="24" cy="14" r="2.4" fill={skin.lead} />
+        </>
+      )}
+      {spec.shape === 'needle' && (
+        <path d="M24 9 L24 39 M18 18 L30 18 M18 34 L30 34" stroke={skin.chrome} strokeWidth="2" strokeLinecap="round" />
+      )}
+      {spec.shape === 'ring' && (
+        <>
+          <ellipse cx="24" cy="24" rx="12" ry="7" fill="none" stroke={skin.lead} strokeWidth="2" />
+          <circle cx="24" cy="24" r="3" fill={skin.chrome} />
+        </>
+      )}
+    </svg>
+  );
+}
+
 const readBest = () => {
   try {
     return Number(localStorage.getItem(BEST_KEY)) || 0;
@@ -210,6 +244,9 @@ export default function App() {
   // 复制战绩的三态：idle / ok / fail。fail 时把文案摆出来让人手动复制。
   const [copyState, setCopyState] = useState('idle');
   const [banner, setBanner] = useState('');
+  // 选翼面板上「先带哪一型僚机」的预选。它只是这一屏的 UI 状态，
+  // 不进 game state、不进存档；按出击时才随 chooseWing 一起生效。
+  const [presetGear, setPresetGear] = useState(null);
   // 表现层挂掉时的提示。黑屏本身不说话，这行字替它说。
   const [fault, setFault] = useState('');
   // 触屏和键盘是两套母语：提示、快捷键都按「这只手是什么」切换。
@@ -234,6 +271,7 @@ export default function App() {
     bestAtStartRef.current = best;
     // 第 1 关是选翼关，所以重开一局就落在选翼界面上。
     push(startGame(0));
+    setPresetGear(null);
     setBanner('');
     setCopyState('idle');
     // 面板上的按钮是本局第一个用户手势，正好拿它把 AudioContext 解锁。
@@ -275,9 +313,9 @@ export default function App() {
   }, []);
 
   const pick = useCallback((code) => {
-    push(chooseWing(gameRef.current, code));
+    push(chooseWing(gameRef.current, code, presetGear));
     sound('catch');
-  }, [push, sound]);
+  }, [presetGear, push, sound]);
 
   const next = useCallback(() => {
     setCopyState('idle');
@@ -539,7 +577,10 @@ export default function App() {
         </header>
 
         {/* 共鸣条：三格就是三阶，过载时整条换白青并脉动。
-            阶级跟着机翼走，裸机时它必须一起灭，否则 HUD 会在骗人。 */}
+            阶级跟着机翼走，裸机时它必须一起灭，否则 HUD 会在骗人。
+            面板打开时两条 meter 一起收起来：它们会透出半透明遮罩，
+            和「选择机翼」的标题挤成一团糊字。 */}
+        {!overlay && (<>
         <div className={`sync-meter${surge ? ' sync-meter-surge' : ''}`} aria-label={syncLabel(view.ship) || '无机翼'}>
           <span className="sync-meter-name">
             {view.ship.wing ? syncLabel(view.ship) : '无机翼 · 无相位场'}
@@ -557,6 +598,29 @@ export default function App() {
             ))}
           </span>
         </div>
+
+        {/* 第二槽：编队数与这一关还剩的替挡机会。空槽也写一句「关内可捡」，
+            别让这一行凭空消失——玩家得知道还有个槽没用上。 */}
+        <div
+          className={`gear-meter${view.ship.gear ? '' : ' gear-meter-empty'}`}
+          aria-label={`${gearLabel(view.ship)} · ${gearMeterLabel(view.ship)}`}
+        >
+          <span className="gear-meter-name">{gearLabel(view.ship)}</span>
+          <span className="gear-meter-pips" aria-hidden="true">
+            {[1, 2, 3].map((step) => {
+              const skin = gearSkin(view.ship.gear);
+              const on = Boolean(view.ship.gear) && view.ship.gearLevel >= step;
+              return (
+                <i
+                  key={step}
+                  className={on ? 'pip-on' : ''}
+                  style={{ borderColor: skin.lead, background: on ? skin.lead : 'transparent' }}
+                />
+              );
+            })}
+          </span>
+        </div>
+        </>)}
 
         {fault && <p className="fault">表现层没起来：{fault}　·　刷新页面重试</p>}
         {banner && <p className="banner">{banner}</p>}
@@ -639,6 +703,7 @@ export default function App() {
                     <li>叠翼瞬间放一圈相位冲击震碎附近敌弹；满阶再叠触发限时「相位过载」</li>
                     <li>机翼会随阶级展开成能量翼；换型号编码不兼容，从 Mk.I 重来</li>
                     <li>敌弹可以被打掉，连消越多分越高、音越亮</li>
+                    <li><b>僚机编队</b>：关内打掉运载火箭能捡到装备，同型号合流到 3 架；裸机挨致命一击时会替你挡一下（消耗一架）</li>
                     <li>打不进弱点的那一声又钝又闷，听到它就说明这只翅膀选错了</li>
                     <li>第 9 关起解锁实验机翼：引力井、链弧炮、相位激光、反物质弹、量子分身</li>
                     {!coarse && <li>Esc / P 暂停 · R 重开 · M 静音</li>}
@@ -666,6 +731,38 @@ export default function App() {
                   <Play size={18} aria-hidden="true" />
                   带 {brief.pick} {WINGS[brief.pick].name} 出击
                 </button>
+
+                {/* 装备仍在同一屏、不新增一步弹窗：手机上多一次点击就是一次流失。
+                    摆在出击键正下方而不是机翼列表之后——那里要滚一屏才看得到，
+                    等于把「还能带僚机」藏了起来。它是可选的，默认空槽；关内照样能捡到。 */}
+                <div className="gear-row">
+                  <p className="panel-detail">{gearPanelHint(GEAR_CODES)}</p>
+                  <div className="gear-grid">
+                    <button
+                      type="button"
+                      className={`gear-card${presetGear === null ? ' gear-card-on' : ''}`}
+                      aria-pressed={presetGear === null}
+                      onClick={() => setPresetGear(null)}
+                    >
+                      <span className="gear-card-blank">＋</span>
+                      <b>空槽</b>
+                      <span>关内再捡</span>
+                    </button>
+                    {GEAR_CODES.map((code) => (
+                      <button
+                        type="button"
+                        key={code}
+                        className={`gear-card${presetGear === code ? ' gear-card-on' : ''}`}
+                        aria-pressed={presetGear === code}
+                        onClick={() => setPresetGear(code)}
+                      >
+                        <GearIcon code={code} />
+                        <b>{code} {GEAR[code].name}</b>
+                        <span>{GEAR[code].title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <p className="panel-detail panel-lab">{labLabel(brief.lab)}</p>
                 <p className="panel-detail">或者自己挑一只（{brief.codes.length} 种可选，往下滑看全部）</p>
                 <div className="wing-grid">
@@ -687,12 +784,13 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+
                 <p className="panel-detail">
                   <Sparkles size={13} aria-hidden="true" /> {loreLine()}
                 </p>
                 <p className="panel-detail">
                   <Target size={13} aria-hidden="true" /> 这一关的运载火箭里装着 {brief.drops.join(' / ')}
-                  ；同型号叠上去就升阶，翼面会真的展开
+                  ；同型号叠上去就升阶，翼面会真的展开。装备主题 {brief.gearCodes.join(' / ')}
                 </p>
               </>
             )}
