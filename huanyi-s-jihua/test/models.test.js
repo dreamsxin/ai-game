@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { makeDrop, makeShip, makeWing, shadeWing } from '../src/scene/models.js';
 import { WING_HALF_W } from '../src/game/rules.js';
 import { WINGS } from '../src/game/wings.js';
-import { wingProfile } from '../src/scene/wingIcon.js';
+import { wingProfile, wingTrim } from '../src/scene/wingIcon.js';
 
 const RAD = Math.PI / 180;
 
@@ -146,14 +146,27 @@ test('前后炮真有一根朝后的管子，对地机翼真把炸弹挂在翼�
   for (const bomb of bombs) assert.ok(bomb.mesh.position.y < 0, '炸弹挂在翼下，不是摆在翼面上');
 });
 
-test('三条出身三种皮：常规、实验、秘密一眼分得开', () => {
+test('21 型 21 种皮：换翼连颜色都不一样', () => {
+  // 玩家报过两次「机翼都一样」。上一版按出身只分三色，常规十五型在场上全是同一片蓝。
   const skin = (code) => makeWing(code).userData.mats[0].color.getHexString();
-  const plain = skin('C');
-  const lab = skin('G');
-  const secret = skin('SS');
-  assert.notEqual(plain, lab, '实验机翼不能和常规机翼同色');
-  assert.notEqual(plain, secret, '秘密机翼不能和常规机翼同色');
-  assert.notEqual(lab, secret, '秘密机翼不能和实验机翼同色');
+  const all = Object.keys(WINGS).map((code) => [code, skin(code)]);
+  for (const [code, hex] of all) assert.equal(hex.length, 6, `${code} 的翼面颜色取不到`);
+  const unique = new Set(all.map(([, hex]) => hex));
+  assert.equal(unique.size, all.length, `有 ${all.length - unique.size} 型机翼撞了色：${all.map(([, hex]) => hex).join('/')}`);
+});
+
+test('翼尖装置按型号挂上去，而且长在翼尖而不是翼根', () => {
+  for (const code of Object.keys(WINGS)) {
+    const wing = makeWing(code);
+    assert.equal(wing.userData.tip, wingTrim(WINGS[code]).tip, `${code} 的翼尖装置没挂上`);
+  }
+  // C 的翼尖小翼是立起来的一片：轮廓之外唯一高过 1.4 格的东西。
+  const tall = [];
+  makeWing('C').traverse((node) => {
+    if (node.isMesh && node.position.y > 1.4) tall.push(Math.abs(node.position.x));
+  });
+  assert.ok(tall.length >= 2, 'C 的翼尖小翼该立起来');
+  for (const x of tall) assert.ok(x > 5.6, `小翼该长在翼尖，现在在 ${x.toFixed(1)} 格`);
 });
 
 test('招牌零件真的挂在翼上：引力井的环、链弧的线圈、量子分身的棱镜', () => {
@@ -182,19 +195,32 @@ test('招牌零件真的挂在翼上：引力井的环、链弧的线圈、量�
   assert.ok(!shapes('C').includes('TorusGeometry'), '加农炮没有招牌零件，别乱加');
 });
 
-test('八种翼型画出来真的不一样：翼面几何体各是一份', () => {
+test('21 型机翼的翼面几何体各不相同：连轮廓都在说话', () => {
   // 玩家两次报的都是「机翼都一样」，所以这条守的是轮廓本身，而不是炮管数。
-  const outline = (code) => {
+  // 比对的是真正送进渲染器的顶点：轮廓差一点点也算换了一型。
+  const fingerprint = (code) => {
     const wing = makeWing(code);
     let panel = null;
     wing.traverse((node) => {
       if (node.isMesh && node.material.side === THREE.DoubleSide && !panel) panel = node;
     });
-    const box = new THREE.Box3().setFromBufferAttribute(panel.geometry.attributes.position);
-    return `${box.min.z.toFixed(2)}..${box.max.z.toFixed(2)}|${panel.geometry.attributes.position.count}`;
+    assert.ok(panel, `${code} 找不到翼面`);
+    return Array.from(panel.geometry.attributes.position.array, (value) => value.toFixed(3)).join(',');
   };
-  const sampled = ['C', 'W', 'M', 'N', 'J', 'D', 'A', 'O'].map(outline);
-  assert.equal(new Set(sampled).size, sampled.length, `有两种机翼的翼面一模一样：${sampled.join(' / ')}`);
+  const prints = Object.keys(WINGS).map((code) => [code, fingerprint(code)]);
+  const unique = new Set(prints.map(([, print]) => print));
+  assert.equal(unique.size, prints.length, `有两种机翼的翼面一模一样：${prints.map(([code]) => code).join('/')}`);
+});
+
+test('形状仍然跟着火力走：针翼比扇翼薄，挂架翼后缘开了口', () => {
+  const bandAt = (code, x) => {
+    const profile = wingProfile(WINGS[code]);
+    const zs = profile.filter(([px]) => Math.abs(px - x) < 0.01).map(([, z]) => z);
+    return zs.length > 1 ? Math.max(...zs) - Math.min(...zs) : 0;
+  };
+  assert.ok(bandAt('J', 6.4) < bandAt('W', 6.4) * 0.5, '穿甲的针翼在翼尖该薄成一柄刀');
+  const trailing = (code) => Math.max(...wingProfile(WINGS[code]).map(([, z]) => z));
+  assert.ok(trailing('D') > trailing('C'), '对地机翼的挂架该往后探出去');
 });
 
 test('压暗能还原：同一副翼会在场上被反复压暗和点亮', () => {

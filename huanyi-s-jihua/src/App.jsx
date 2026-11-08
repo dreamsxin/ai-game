@@ -99,6 +99,23 @@ function WingIcon({ code }) {
       {art.leads.map((lead, index) => (
         <line key={index} {...lead} stroke={skin.lead} strokeWidth="1.4" strokeLinecap="round" />
       ))}
+      {/* 翼尖装置：和场上那件是同一份数据（wingTrim），所以卡片上就能看出「这一型翼尖上多了什么」。 */}
+      {art.fins.map((fin, index) => (
+        <line
+          key={index}
+          x1={fin.x1}
+          y1={fin.y1}
+          x2={fin.x2}
+          y2={fin.y2}
+          stroke={skin.chrome}
+          strokeWidth={fin.w}
+          strokeLinecap="round"
+          opacity="0.9"
+        />
+      ))}
+      {art.pods.map((pod, index) => (
+        <circle key={index} cx={pod.x} cy={pod.y} r={pod.r} fill={skin.chrome} stroke={skin.lead} strokeWidth="1" />
+      ))}
       {art.tips.map((tip, index) => (
         <rect key={index} x={tip.x} y={tip.y} width={tip.w} height={tip.h} rx="1" fill={TIER_COLOR[0]} />
       ))}
@@ -109,7 +126,7 @@ function WingIcon({ code }) {
           y1={barrel.y1}
           x2={barrel.x2}
           y2={barrel.y2}
-          stroke="#eaf2ff"
+          stroke={skin.chrome}
           strokeWidth={barrel.width}
           strokeLinecap="round"
         />

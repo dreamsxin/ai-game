@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { WINGS } from '../game/wings.js';
 import { HAZARD, TIER_COLOR, PHASE_COLOR, wingSkin } from './palette.js';
 import { TILT } from './view.js';
-import { wingProfile, wingSeats, wingTraits, boltAim, boltBarrel, WING_TIP_X } from './wingIcon.js';
+import { wingProfile, wingSeats, wingTraits, wingTrim, boltAim, boltBarrel, WING_TIP_X } from './wingIcon.js';
 
 const RAD = Math.PI / 180;
 
@@ -78,7 +78,14 @@ const textureCache = new Map();
  */
 export function glowTexture() {
   const hit = textureCache.get('#glow');
-  if (hit) return hit;
+  if (hit !== undefined) return hit;
+  // Node（models.test 直接在进程里造模型量尺寸）没有 DOM。这里退成 null，
+  // SpriteMaterial 允许没有贴图，只是画出来会是方块——测试不渲染，浏览器里永远走下面这条。
+  // 不这么写的话，机身与机翼一加精灵，整份模型测试就会变成 'document is not defined'。
+  if (typeof document === 'undefined') {
+    textureCache.set('#glow', null);
+    return null;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = 64;
   canvas.height = 64;
@@ -249,6 +256,7 @@ export function makeShip({ ghost = false } = {}) {
     group.add(ring);
     mats.push(shade, outline);
     group.userData = { wingSlot, wings: new Map(), flame: plume, ring, mats, ghost: true };
+    for (const mat of mats) mat.userData.baseOpacity = mat.opacity;
     return group;
   }
 
@@ -279,6 +287,66 @@ export function makeShip({ ghost = false } = {}) {
   intake.position.set(0, -0.82, 0.6);
   group.add(intake);
 
+  // 背脊：从座舱盖一直拉到尾喷口的一道隆起。斜俯视下机身本来是一块扁板，
+  // 有了这条脊线才有厚度；脊上再嵌一条冷光缝，读起来就是一根能量导管。
+  // 这两件都压在 |x| ≤ 0.35 的中线上，动不到「裸机有多宽」。
+  const spineMat = flat('#4b5c93', { emissive: '#33509f', glow: 0.95, metalness: 0.62, roughness: 0.28, opacity: 1 });
+  mats.push(spineMat);
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.46, 4.8), spineMat);
+  spine.position.set(0, 1.46, 1.6);
+  group.add(spine);
+  const seamMat = glowMat('#a9f0ff', 0.9);
+  mats.push(seamMat);
+  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 4.4), seamMat);
+  seam.position.set(0, 1.74, 1.6);
+  group.add(seam);
+
+  // 肩部装甲板：沿脊背两侧铺两块薄板，比机身亮一档并各带一条描边。
+  // 作用只有一个——让机身在二十来像素时仍有「拼装」的层次，不再是一整块纯色。
+  const plateMat = flat('#55679e', { emissive: '#37509f', glow: 0.75, metalness: 0.5, roughness: 0.36, opacity: 1 });
+  const plateEdgeMat = glowMat('#8fd6ff', 0.5);
+  mats.push(plateMat, plateEdgeMat);
+  for (const side of [-1, 1]) {
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.16, 3.4), plateMat);
+    plate.position.set(side * 1.05, 1.12, 0.4);
+    plate.rotation.z = side * -0.34;
+    group.add(plate);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 3.5), plateEdgeMat);
+    lip.position.set(side * 1.62, 1.34, 0.4);
+    lip.rotation.z = side * -0.34;
+    group.add(lip);
+  }
+
+  // 翼根进气缝：两侧各一道向内收的光缝，暗示「这副翼从这儿接进机体」。
+  for (const side of [-1, 1]) {
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.16, 1.9), intakeMat);
+    slot.position.set(side * 1.72, 0.72, -0.7);
+    group.add(slot);
+  }
+
+  // 机首传感器：一枚发亮的小棱体加一团光晕。玄鸟的机头本来就尖，
+  // 加这一个亮点之后「哪头是前」在缩到十几像素时也不会有歧义。
+  const sensorMat = glowMat('#d8fbff', 0.95);
+  mats.push(sensorMat);
+  const sensor = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), sensorMat);
+  sensor.position.set(0, 0.28, -6.1);
+  group.add(sensor);
+  const sensorHalo = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: glowTexture(),
+      color: new THREE.Color('#8fe6ff'),
+      transparent: true,
+      opacity: 0.55,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  sensorHalo.scale.setScalar(2.4);
+  sensorHalo.position.copy(sensor.position);
+  sensorHalo.material.userData.driven = true;
+  mats.push(sensorHalo.material);
+  group.add(sensorHalo);
+
   // 双外倾垂尾：弃翼之后它们还在，所以「裸机」仍然是一架飞机而不是一块砖。
   for (const side of [-1, 1]) {
     const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.3, 2.4), hullMat);
@@ -295,9 +363,13 @@ export function makeShip({ ghost = false } = {}) {
   }
 
   // 组合循环发动机：三个喷口，中间那个抬在背脊上。
+  // 每个喷口配三件东西：喇叭口、一圈会随推力脉动的辉光环、两层火焰（外柔内硬）。
+  // 上一版只有一层锥火焰，缩到手机上是一条静止的蓝线——发动机「没在工作」。
   const nozzleMat = flat('#2a3350', { glow: 0.3, metalness: 0.8, opacity: 1 });
   mats.push(nozzleMat);
   const plume = new THREE.Group();
+  const nozzleRings = [];
+  const plumeFires = [];
   const plumeSpots = [
     [-0.95, -0.05, 0],
     [0.95, -0.05, 0],
@@ -308,6 +380,21 @@ export function makeShip({ ghost = false } = {}) {
     nozzle.rotation.x = Math.PI / 2;
     nozzle.position.set(x, y, 4.1 + z);
     group.add(nozzle);
+
+    // 辉光环的轴正对 +Z（Torus 默认躺在 XY 平面，不用转），
+    // 三枚环一起呼吸，比三团火更像「反应堆在推」。
+    const ringMat = glowMat('#9fe4ff', 0.7);
+    ringMat.userData.driven = true;
+    mats.push(ringMat);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.1, 6, 22), ringMat);
+    halo.position.set(x, y, 4.62 + z);
+    group.add(halo);
+    nozzleRings.push({ mesh: halo, base: 1 });
+
+    const soft = new THREE.Mesh(new THREE.ConeGeometry(0.95, 4.6, 8), glowMat('#4f9bff', 0.3));
+    soft.rotation.x = Math.PI / 2;
+    soft.position.set(x, y, 0.6);
+    plume.add(soft);
     const fire = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 8), glowMat('#8fd4ff', 0.9));
     fire.rotation.x = Math.PI / 2;
     fire.position.set(x, y, 1.7);
@@ -316,6 +403,7 @@ export function makeShip({ ghost = false } = {}) {
     core.rotation.x = Math.PI / 2;
     core.position.set(x, y, 1);
     plume.add(core);
+    plumeFires.push({ fire, core, soft });
   }
   plume.position.z = 4.6;
   group.add(plume);
@@ -329,7 +417,10 @@ export function makeShip({ ghost = false } = {}) {
   ring.rotation.x = -Math.PI / 2;
   group.add(ring);
 
-  group.userData = { wingSlot, wings: new Map(), flame: plume, ring, mats };
+  group.userData = { wingSlot, wings: new Map(), flame: plume, ring, mats, nozzleRings, plumeFires, sensorHalo };
+  // 记下每个材质的基准不透明度：无敌闪烁要按「这一件本来多亮」去淡，否则
+  // 每闪一次都把 0.3 的柔和羽流拉成 1，越挨打飞机越亮。
+  for (const mat of mats) mat.userData.baseOpacity = mat.opacity;
   return group;
 }
 
@@ -350,6 +441,8 @@ export function makeWing(code) {
   // 三路出身三种配色：常规钢蓝、实验紫、秘密金。选翼界面的小图共用这一份（palette.js）。
   // 翼面压得比机身暗、炮管给得比机身亮——「几路火力、朝哪打」全靠这层对比读出来，
   // 第一版翼面和炮管都亮成一片白，五路和两路画出来一模一样。
+  // **这一版一型一色**：21 型 21 个色相（见 palette.js 的 WING_HUES），
+  // 否则常规那十五型在场上全是同一片蓝，换了翼只有炮管数变了。
   const skin = wingSkin(spec);
 
   const panelMat = flat(skin.body, { emissive: skin.edge, glow: 0.45, metalness: 0.5, opacity: 1 });
@@ -358,19 +451,33 @@ export function makeWing(code) {
   mats.push(panelMat);
   const leadMat = glowMat(skin.lead, 0.75);
   mats.push(leadMat);
+  // 后缘灯带比前缘暗一档：前缘是「朝哪儿走」，后缘只是「到哪儿为止」。
+  // 两个一样亮的话整片翼会读成一圈光圈，反而看不出后掠角。
+  const rimMat = glowMat(skin.lead, 0.42);
+  mats.push(rimMat);
   // 炮管自己会发光：翼展被判定钉死在 12.8 格，所以「换了哪一套火力」全靠这几根管子读出来。
-  const barrelMat = flat('#eaf2ff', { emissive: skin.lead, glow: 1.3, metalness: 0.75, opacity: 1 });
+  // 管身带一点本型的色相（chrome），不再是一律纯白——五根白管子会把翼面的颜色整个盖住。
+  const barrelMat = flat(skin.chrome, { emissive: skin.lead, glow: 1.3, metalness: 0.75, opacity: 1 });
   mats.push(barrelMat);
+  // 翼尖装置的金属件：比翼面亮、比炮管暗，读起来是「装上去的零件」而不是「又一根枪」。
+  const trimMat = flat(skin.chrome, { emissive: skin.edge, glow: 0.55, metalness: 0.65, roughness: 0.3, opacity: 1 });
+  mats.push(trimMat);
+  const trimEdgeMat = glowMat(skin.lead, 0.62);
+  mats.push(trimEdgeMat);
 
-  // 翼型从机制里长出来（八种轮廓，见 wingIcon.js 的 WING_OUTLINES）：
+  // 翼型一型一条（21 条轮廓，见 wingIcon.js 的 WING_OUTLINES）：
   // 带环的、挂炸弹的、前后都有火力的、只有一根穿甲管的、超短程的，各是一种形状。
   // 翼弦倍率只拉纵深，翼展永远是判定用的 12.8 格。
   const profile = wingProfile(spec);
   const geometry = wingGeometry(profile);
   const noseZ = Math.min(...profile.map(([, z]) => z));
   const tailZ = Math.max(...profile.map(([, z]) => z));
+  const midZ = (noseZ + tailZ) / 2;
+  // 翼尖装置：一型一件（见 wingIcon.js 的 WING_TRIM）。
+  const trim = wingTrim(spec);
 
   const tips = [];
+  const beacons = [];
   for (const side of [-1, 1]) {
     const panel = new THREE.Mesh(geometry, panelMat);
     panel.scale.x = side;
@@ -388,11 +495,113 @@ export function makeWing(code) {
     group.add(lead);
 
     const tipLen = Math.max(1.6, tailZ - noseZ - 1.2);
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, tipLen), flat(TIER_COLOR[0], { glow: 1.6, opacity: 1 }));
+    // 0.34 的截面：0.5 那一版在手机上是一块 3 像素见方的实心块，
+    // 自发光一叠上去就烧成一团白斑，把翼尖的形状盖掉。细一点才像「灯条」。
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, tipLen), flat(TIER_COLOR[0], { glow: 1.6, opacity: 1 }));
     tip.position.set(side * 6.15, 0.3, (tipZ + profile[2][1]) / 2);
     mats.push(tip.material);
     group.add(tip);
     tips.push(tip);
+
+    // 翼尖航灯：一枚只会呼吸的小光点。翼尖灯条是「这根梁一直亮到这儿」，
+    // 航灯是「它还活着」——两者的节奏不同，一眼就能分开。
+    const beacon = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture(),
+        color: new THREE.Color(skin.lead),
+        transparent: true,
+        opacity: 0.5,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    // 位置不能真顶到 6.4：Sprite 是有一块平面几何体的，`Box3` 会把它算进翼展，
+    // 而现在这条翼展被测试和判定一起钉死。放在 5.35、光晕半径 1 格，
+    // 看上去正好贴在翼尖上，量出来却仍在 12.8 之内。
+    beacon.position.set(side * 5.35, 0.75, (tipZ + profile[2][1]) / 2);
+    beacon.scale.setScalar(2.0);
+    beacon.material.userData.driven = true;
+    mats.push(beacon.material);
+    group.add(beacon);
+    beacons.push(beacon);
+
+    // 后缘灯带：逐段贴着轮廓画，所以扇形翼的缺口、挂架翼的两块挂架都跟得出来。
+    // 只画 profile[2] 之后那几段——前两段就是前缘，已经有 lead 了，重画会亮成一片。
+    for (let i = 2; i < profile.length - 1; i += 1) {
+      const [ax, az] = profile[i];
+      const [bx, bz] = profile[i + 1];
+      const seg = Math.hypot(bx - ax, bz - az);
+      if (seg < 0.4) continue;
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, seg), rimMat);
+      rim.position.set(side * ((ax + bx) / 2), 0.88, (az + bz) / 2);
+      rim.rotation.y = side * Math.atan2(bx - ax, bz - az);
+      group.add(rim);
+    }
+
+    // 翼尖装置：轮廓之外再加一层「只属于这一型」的识别点。斜俯视下翼面是一块扁板，
+    // 翼尖是轮廓上最容易被眼睛抓住的地方——在那儿立一片小翼、吊一只舱、接一根撞角，
+    // 缩到手机上也能一眼分出「这是另一副翼」。全部钉在 |x| ≤ 6.45 之内：
+    // 判定翼展 12.8 不能因为好看就被画宽。
+    if (trim.tip === 'winglet') {
+      // 立起来的翼尖小翼：俯视时几乎看不出，斜俯视下却是轮廓上最高的一笔。
+      const depth = Math.min(1.9, Math.max(0.8, (tailZ - noseZ) * 0.55));
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.1, depth), trimMat);
+      fin.position.set(side * 6.02, 1.3, midZ);
+      fin.rotation.y = side * 0.1;
+      group.add(fin);
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, depth), trimEdgeMat);
+      lip.position.set(side * 6.02, 1.88, midZ);
+      lip.rotation.y = side * 0.1;
+      group.add(lip);
+    } else if (trim.tip === 'blade') {
+      // 斜切的翼尖刀片：平着伸出去一点，翼展的量法把它算在 6.15 之内。
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 2.1), trimMat);
+      blade.position.set(side * 5.5, 1.02, midZ - 0.4);
+      blade.rotation.y = side * 0.2;
+      blade.rotation.z = side * 0.16;
+      group.add(blade);
+    } else if (trim.tip === 'pod') {
+      // 翼尖吊舱：一整只舱体加一圈亮环，远看是翼尖上多了一颗「眼睛」。
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.5, 1.9, 8), trimMat);
+      pod.rotation.x = Math.PI / 2;
+      pod.position.set(side * 5.92, 0.78, midZ + 0.3);
+      group.add(pod);
+      const lens = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), trimEdgeMat);
+      lens.position.set(side * 5.92, 0.78, midZ - 0.65);
+      group.add(lens);
+    } else if (trim.tip === 'canard') {
+      // 翼根鸭翼：两片小小的前翼，摆在主翼之前——「贴脸作战」在形状上的说法。
+      const canard = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.14, 0.95), trimMat);
+      canard.position.set(side * 2.1, 1.0, noseZ - 0.85);
+      canard.rotation.y = side * -0.5;
+      group.add(canard);
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.14), trimEdgeMat);
+      edge.position.set(side * 2.1, 1.0, noseZ - 1.28);
+      edge.rotation.y = side * -0.5;
+      group.add(edge);
+    } else if (trim.tip === 'fin') {
+      // 后缘立尾：一对向外倾的小尾翼，和前面那对翼尖灯一起把轮廓收住。
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.05, 1.05), trimMat);
+      fin.position.set(side * 5.5, 1.28, tailZ - 0.55);
+      fin.rotation.z = side * 0.3;
+      fin.rotation.x = -0.1;
+      group.add(fin);
+    } else if (trim.tip === 'spike') {
+      // 翼根撞角：一根指向前方的细针，是「这一型只有一根重管」在形状上的注脚。
+      const spike = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.17, 2.6, 6), trimMat);
+      spike.rotation.x = Math.PI / 2;
+      spike.position.set(side * 1.9, 0.9, noseZ - 1.15);
+      group.add(spike);
+      const point = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5), trimEdgeMat);
+      point.position.set(side * 1.9, 0.9, noseZ - 2.45);
+      group.add(point);
+    }
+    if (trim.strake) {
+      // 边条：从翼根前缘往后拉的一道细条，把「机翼和机身是连着的」这条线画出来。
+      const strake = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, Math.max(1.4, (tailZ - noseZ) * 0.9)), trimEdgeMat);
+      strake.position.set(side * 1.72, 0.95, midZ);
+      group.add(strake);
+    }
   }
 
   // 炮口：一发一个，朝向照 volley 抄；横向位置由 wingIcon.js 的 `wingSeats` 算
@@ -420,7 +629,30 @@ export function makeWing(code) {
       barrel.position.set(seat, 0.58, noseZ + 0.6 - 1.2 * Math.cos(dir) - Math.abs(seat) * 0.18);
     }
     group.add(barrel);
-    muzzles.push({ mesh: barrel, dir, kind: bomb ? 'bomb' : (bolt.kind ?? 'bolt') });
+
+    // 炮口闪光：每一根管子一枚，**材质各自一份**——共用一份就只能整副翼一起闪，
+    // 那就退回「开了火但看不出是哪一路在打」。炸弹没有枪口，给 null。
+    // 位置在本地 -Y：圆柱的轴转平之后 +Y 指向机尾，所以朝向机首的那一端是 -Y。
+    let flash = null;
+    if (!bomb) {
+      flash = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: glowTexture(),
+          color: new THREE.Color(skin.lead),
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      flash.position.set(0, -long / 2 - 0.25, 0);
+      flash.scale.setScalar(3.2);
+      flash.visible = false;
+      // 不进 mats：闪光只在开火那一瞬间亮，压暗／无敌闪烁不该去动它，
+      // 否则每次淡出都会把刚刚点起来的火压成 0。
+      barrel.add(flash);
+    }
+    muzzles.push({ mesh: barrel, dir, kind: bomb ? 'bomb' : (bolt.kind ?? 'bolt'), flash });
   }
 
   // 铁球吊篮：**挂在翼尖**。原作（B-WINGS 的 H-WING）机翼本身的设计就是两翼端各带一枚铁球，
@@ -461,25 +693,28 @@ export function makeWing(code) {
     }
   }
 
-  group.userData = { tips, pips: [], spines: [], mats, muzzles, code };
+  group.userData = { tips, beacons, pips: [], spines: [], mats, muzzles, code, tip: trim.tip };
 
   // 共鸣导线：升阶后从翼面里透出来的三条相位纹路。Mk.II 亮一条，Mk.III 三条全亮。
   // **只长在翼面内侧**（|x| ≤ 5.7），绝不外扩：翼展 12.8 是判定用的数，
   // 外形再科幻也不能把「看到的宽度」变成另一个数，否则玩家会按错的宽度躲弹。
-  // 默认全灭，由 render.js 按阶级点亮并染色；材质进 mats，脱手的道具压暗时它们一起暗。
+  // 高度抬到 0.92：翼面实体占 0.28～0.83，上一版埋在 0.5 等于埋在铁皮里，一条都看不见。
   const spines = [];
   for (const side of [-1, 1]) {
     for (let lane = 0; lane < 3; lane += 1) {
       const z = noseZ + (tailZ - noseZ) * (0.3 + lane * 0.2);
       const strip = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.16, 0.3), glowMat(TIER_COLOR[1], 0.75));
-      strip.position.set(side * 3.6, 0.5, z);
+      strip.position.set(side * 3.6, 0.92, z);
       strip.visible = false;
+      strip.material.userData.driven = true;
       mats.push(strip.material);
       group.add(strip);
       spines.push({ mesh: strip, lane });
     }
   }
   group.userData.spines = spines;
+
+  for (const mat of mats) mat.userData.baseOpacity = mat.opacity;
 
   // 阶级灯珠挂在翼根后缘：亮几颗就是第几阶。跟着翼型的后缘走，不会翘在翼外。
   for (let i = 0; i < 3; i += 1) {
@@ -718,23 +953,44 @@ export function makeOrb() {
   return group;
 }
 
-/** 曳光弹：一根细芯加一团光晕。光晕让它在发光的地面上也看得见，而细芯保证它不像车道线。 */
-function tracer(color, length, width = 0.5) {
-  const group = new THREE.Group();
-  const core = new THREE.Mesh(new THREE.BoxGeometry(width, width, length), glowMat(color, 1));
-  group.add(core);
-  const halo = new THREE.Sprite(
+/**
+ * 一层加色光壳。比芯更宽更淡，叠起来才是「光」——单层实体盒子在加色混合下
+ * 只是一根颜色略亮的塑料棒，边缘还是硬的。
+ */
+function glowLayer(color, width, length, opacity) {
+  return new THREE.Mesh(new THREE.BoxGeometry(width, width, length), glowMat(color, opacity));
+}
+
+/** 弹头闪光：顶在最前面的一团光。玩家在满屏弹幕里找的就是它。 */
+function headFlare(color, scale, opacity = 0.75) {
+  const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: glowTexture(),
       color: new THREE.Color(color),
       transparent: true,
-      opacity: 0.55,
+      opacity,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     }),
   );
-  halo.scale.setScalar(length * 0.9);
-  group.add(halo);
+  sprite.scale.setScalar(scale);
+  return sprite;
+}
+
+/**
+ * 曳光弹：细白芯 + 中层色壳 + 外圈淡晕 + 头部闪光。
+ * 四层是有原因的——单芯在深色地面上只是一道细线，只有晕才让它「发亮」；
+ * 而头部那团光决定了玩家能不能一眼跟住这一发飞到哪儿。
+ */
+function tracer(color, length, width = 0.46) {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.BoxGeometry(width * 0.55, width * 0.55, length), glowMat('#ffffff', 1));
+  const mid = new THREE.Mesh(new THREE.BoxGeometry(width, width, length * 0.94), glowMat(color, 0.85));
+  const halo = glowLayer(color, width * 1.9, length * 0.82, 0.24);
+  const head = headFlare(color, length * 0.62, 0.6);
+  head.position.z = -length / 2;
+  group.add(mid, core, halo, head);
+  group.userData = { head };
   return group;
 }
 
@@ -747,34 +1003,92 @@ export function makeShot(kind) {
     const inner = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.1, 8, 32), glowMat('#ffffff', 0.5));
     inner.rotation.x = -Math.PI / 2;
     const core = new THREE.Mesh(new THREE.SphereGeometry(1.6, 12, 10), glowMat('#e0d0ff', 0.95));
+    // 井口再罩一层淡晕：它在吸弹，得看起来「有引力」而不是一只发光的呼啦圈。
+    const haze = headFlare(HAZARD.lab, 7.5, 0.22);
     group.add(ring);
     group.add(inner);
     group.add(core);
-    group.userData = { ring, inner, core };
+    group.add(haze);
+    group.userData = { ring, inner, core, haze };
     return group;
   }
   if (kind === 'beam') {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 14), glowMat('#8cfff0', 0.95));
-    return mesh;
+    // 相位激光。三段同轴的加色长条：外晕、中层、白芯。
+    // 长度给到 30：L 的冷却 0.05、速度 190，相邻两发只隔 9.5 格——
+    // 于是十几条首尾相接，屏幕上就是**一束连续的激光**，而不是一串竖着的短杠。
+    // 这一条是这一版最要紧的改动：激光看起来像激光，靠的是重叠，不是贴图。
+    const group = new THREE.Group();
+    const outer = glowLayer('#2ff7d0', 1.9, 30, 0.16);
+    const mid = glowLayer('#8cfff0', 0.82, 30, 0.5);
+    const core = glowLayer('#ffffff', 0.3, 30, 0.95);
+    const head = headFlare('#c8fff8', 4.6, 0.85);
+    head.position.z = -15;
+    group.add(outer, mid, core, head);
+    group.userData = { outer, mid, core, head };
+    return group;
   }
   if (kind === 'flame') {
-    return new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 0), glowMat('#ff9c40', 0.8));
+    // 火焰：三团大小不一的多面体叠在一起，外层偏红、内层偏白，转起来才有「在烧」的抖动。
+    const group = new THREE.Group();
+    const outer = new THREE.Mesh(new THREE.IcosahedronGeometry(3.0, 0), glowMat('#ff5a1f', 0.34));
+    const body = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2, 0), glowMat('#ff9c40', 0.72));
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.15, 0), glowMat('#fff2b0', 0.88));
+    const halo = headFlare('#ffb066', 6.5, 0.4);
+    group.add(outer, body, core, halo);
+    group.userData = { outer, body, core };
+    return group;
   }
   if (kind === 'anti') {
-    return new THREE.Mesh(new THREE.IcosahedronGeometry(2.8, 0), glowMat(HAZARD.lab, 0.95));
+    // 反物质：暗核外面箍一圈亮环，读起来是「装在一个容器里的东西」，
+    // 和普通发光球区分开——它是全场最慢最重的一发。
+    const group = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(2.3, 0), glowMat(HAZARD.lab, 0.9));
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(2.9, 0.26, 6, 24), glowMat('#f0e2ff', 0.9));
+    const halo = headFlare(HAZARD.lab, 8.5, 0.5);
+    group.add(core, rim, halo);
+    group.userData = { core, rim, halo };
+    return group;
   }
   if (kind === 'shard') {
-    return new THREE.Mesh(new THREE.TetrahedronGeometry(1.8), glowMat(HAZARD.lab, 0.9));
+    // 反物质炸出来的碎片：外壳紫、芯是白的，外面再顶一团光。
+    // 三片同时飞出来，越小的那一块越靠白芯，读起来才有「炸开」的层次。
+    const group = new THREE.Group();
+    const shell = new THREE.Mesh(new THREE.TetrahedronGeometry(1.9), glowMat(HAZARD.lab, 0.55));
+    const core = new THREE.Mesh(new THREE.TetrahedronGeometry(1.0), glowMat('#ffffff', 0.95));
+    const halo = headFlare(HAZARD.lab, 4.6, 0.45);
+    group.add(shell, core, halo);
+    group.userData = { shell, core, halo };
+    return group;
   }
   if (kind === 'pierce') {
-    return tracer(HAZARD.pierce, 6.4, 0.7);
+    // 穿甲弹：一根又长又细的硬芯，外面裹两层绿光。
+    // 它要看起来「能扎穿东西」，所以比普通弹长一截、尾部收窄。
+    const group = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 9.2), glowMat('#ffffff', 1));
+    const mid = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 8.4), glowMat(HAZARD.pierce, 0.85));
+    const halo = glowLayer(HAZARD.pierce, 1.5, 7.0, 0.22);
+    const head = headFlare(HAZARD.pierce, 3.6, 0.8);
+    head.position.z = -4.6;
+    group.add(mid, core, halo, head);
+    group.userData = { head };
+    return group;
   }
   if (kind === 'bomb') {
-    return new THREE.Mesh(new THREE.SphereGeometry(1.9, 10, 8), glowMat(HAZARD.ground, 0.95));
+    // 炸弹：弹体外面箍一道稳定环，斜俯视下能看出它「在翻着往下掉」，
+    // 而不是一颗飘过去的橙色球。
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.SphereGeometry(1.9, 10, 8), glowMat(HAZARD.ground, 0.95));
+    const band = new THREE.Mesh(new THREE.TorusGeometry(2.15, 0.18, 5, 16), glowMat('#ffe6a8', 0.8));
+    band.rotation.x = -Math.PI / 2;
+    band.position.y = 0.2;
+    const halo = headFlare(HAZARD.ground, 6.0, 0.5);
+    group.add(body, band, halo);
+    group.userData = { body, band, halo };
+    return group;
   }
-  // 普通曳光弹拉长到 5.2：3.2 那一版在屏幕上是两列间距均匀的小点，
+  // 普通曳光弹拉长到 5.6：3.2 那一版在屏幕上是两列间距均匀的小点，
   // 斜俯视下读起来像给跑道刷了两条车道虚线，而不是一股火力（自审截图里最扎眼的一条）。
-  return tracer(HAZARD.shot, 5.2, 0.46);
+  return tracer(HAZARD.shot, 5.6, 0.46);
 }
 
 /**

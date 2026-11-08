@@ -12,16 +12,17 @@ import assert from 'node:assert/strict';
 import {
   ICON,
   SEAT_EDGE,
+  WING_FAMILY,
   WING_OUTLINES,
   WING_TIP_X,
   wingChord,
   wingIcon,
   wingSeats,
-  wingShape,
   wingTraits,
+  wingTrim,
 } from '../src/scene/wingIcon.js';
 import { WINGS } from '../src/game/wings.js';
-import { WING_SKIN } from '../src/scene/palette.js';
+import { WING_SKINS } from '../src/scene/palette.js';
 
 const numbers = (icon) => {
   const list = [];
@@ -37,6 +38,8 @@ const numbers = (icon) => {
   for (const tip of icon.tips) list.push({ x: tip.x, y: tip.y }, { x: tip.x + tip.w, y: tip.y + tip.h });
   for (const bomb of icon.bombs) list.push({ x: bomb.x - bomb.r, y: bomb.y - bomb.r }, { x: bomb.x + bomb.r, y: bomb.y + bomb.r });
   for (const part of icon.parts) list.push({ x: part.x - part.r, y: part.y - part.r }, { x: part.x + part.r, y: part.y + part.r });
+  for (const fin of icon.fins) list.push({ x: fin.x1, y: fin.y1 }, { x: fin.x2, y: fin.y2 });
+  for (const pod of icon.pods) list.push({ x: pod.x - pod.r, y: pod.y - pod.r }, { x: pod.x + pod.r, y: pod.y + pod.r });
   if (icon.ring) {
     list.push(
       { x: icon.ring.cx - icon.ring.rx - icon.ring.r, y: icon.ring.cy - icon.ring.ry - icon.ring.r },
@@ -98,10 +101,12 @@ test('路数越多翼弦越深，冷却越长越钝', () => {
   }
 });
 
-test('三条出身三种皮，而且用的是全局那一份', () => {
-  assert.equal(wingIcon('C').skin, WING_SKIN.plain);
-  assert.equal(wingIcon('G').skin, WING_SKIN.lab);
-  assert.equal(wingIcon('SS').skin, WING_SKIN.secret);
+test('每一型用自己的那身皮：21 型 21 个色，卡片和场上同源', () => {
+  for (const code of Object.keys(WINGS)) {
+    assert.equal(wingIcon(code).skin, WING_SKINS[code], `${code} 的小图没有用它自己的皮`);
+  }
+  const leads = Object.keys(WINGS).map((code) => WING_SKINS[code].lead);
+  assert.equal(new Set(leads).size, leads.length, '有两型机翼的识别色是同一个');
 });
 
 test('招牌零件也画出来：引力井有发射环、量子分身有棱镜、反物质有弹舱', () => {
@@ -124,41 +129,78 @@ test('环形护翼把那一圈真的画出来：几枚球、环多大都照判�
   assert.equal(wingIcon('C').ring, null, '没铁球的机翼不该凭空长出一个环');
 });
 
-test('翼型从机制里长出来：八种轮廓，机翼不再长得都一样', () => {
-  const shapes = new Map();
-  for (const code of Object.keys(WINGS)) {
-    const shape = wingShape(WINGS[code]);
-    assert.ok(WING_OUTLINES[shape], `${code} 落到了一个不存在的翼型 ${shape}`);
-    shapes.set(shape, [...(shapes.get(shape) ?? []), code]);
-  }
-  // 八种轮廓都得有人用，否则「翼型跟着机制走」只是句空话。
-  assert.equal(shapes.size, Object.keys(WING_OUTLINES).length, `有翼型没人用：${[...shapes.keys()].join('/')}`);
-  // 几条一眼能验的对应关系。
-  assert.equal(wingShape(WINGS.O), 'ring', '环形护翼是环形翼');
-  assert.equal(wingShape(WINGS.D), 'pylon', '对地机翼是挂架翼');
-  assert.equal(wingShape(WINGS.A), 'twin', '前后炮是前后对称的菱形翼');
-  assert.equal(wingShape(WINGS.J), 'needle', '穿甲弹是细长针翼');
-  assert.equal(wingShape(WINGS.N), 'swept', '超短程的霰弹是前掠短翼');
-  assert.equal(wingShape(WINGS.W), 'fan', '五路扇形是大后掠扇形翼');
-  assert.equal(wingShape(WINGS.M), 'straight', '三路平行是平直长翼');
-  assert.equal(wingShape(WINGS.C), 'delta', '没有特别机制的走标准后掠三角');
-});
-
-test('每一种翼型的翼尖都钉在半翼展上：画出来的宽度就是判定用的宽度', () => {
-  for (const [shape, outline] of Object.entries(WING_OUTLINES)) {
-    const widest = Math.max(...outline.map(([x]) => x));
-    assert.equal(widest, WING_TIP_X, `${shape} 的翼尖没有探到 ${WING_TIP_X} 格`);
-    assert.ok(outline.length >= 4, `${shape} 的轮廓点太少，画不出形状`);
-  }
-});
-
-test('翼型真的不一样：两两之间的轮廓不能重复', () => {
+test('翼型一型一条：21 条轮廓，两两不重复，翼尖都钉在半翼展上', () => {
+  const codes = Object.keys(WINGS);
+  assert.equal(Object.keys(WING_OUTLINES).length, codes.length, '轮廓数量该和机翼数量一致');
   const seen = new Map();
-  for (const [shape, outline] of Object.entries(WING_OUTLINES)) {
+  for (const code of codes) {
+    const outline = WING_OUTLINES[code];
+    assert.ok(outline, `${code} 没有自己的轮廓`);
+    assert.ok(outline.length >= 4, `${code} 的轮廓点太少，画不出形状`);
+    assert.equal(Math.max(...outline.map(([x]) => x)), WING_TIP_X, `${code} 的翼尖没有探到 ${WING_TIP_X} 格`);
     const key = outline.map((point) => point.join(',')).join('|');
-    assert.ok(!seen.has(key), `${shape} 和 ${seen.get(key)} 是同一条轮廓`);
-    seen.set(key, shape);
+    assert.ok(!seen.has(key), `${code} 和 ${seen.get(key)} 是同一条轮廓`);
+    seen.set(key, code);
+    assert.equal(wingIcon(code).panels.length, 2, `${code} 该画出左右两片翼面`);
   }
+});
+
+test('轮廓都不自交：翼面不能打结或翻面', () => {
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const proper = (p1, p2, p3, p4) => {
+    const d1 = cross(p3, p4, p1);
+    const d2 = cross(p3, p4, p2);
+    const d3 = cross(p1, p2, p3);
+    const d4 = cross(p1, p2, p4);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  };
+  for (const [code, outline] of Object.entries(WING_OUTLINES)) {
+    const n = outline.length;
+    for (let i = 0; i < n; i += 1) {
+      for (let j = i + 2; j < n; j += 1) {
+        if (i === 0 && j === n - 1) continue;
+        assert.ok(
+          !proper(outline[i], outline[(i + 1) % n], outline[j], outline[(j + 1) % n]),
+          `${code} 的轮廓在第 ${i} 段和第 ${j} 段自己穿过了自己`,
+        );
+      }
+    }
+  }
+});
+
+test('族名和火力对得上：形状不是随手画的', () => {
+  const aimOf = (bolt) => Math.abs(Math.atan2(bolt.vx ?? 0, -(bolt.vy ?? -1)));
+  const reachOf = (bolt) => Math.hypot(bolt.vx ?? 0, bolt.vy ?? 0) * (bolt.life ?? 1);
+  for (const [code, spec] of Object.entries(WINGS)) {
+    const family = WING_FAMILY[code];
+    assert.ok(family, `${code} 没有归属的族`);
+    const aims = spec.volley.map(aimOf);
+    if (family === 'ring') assert.ok((spec.orbs ?? 0) > 0, `${code} 是环族却不带铁球`);
+    if (family === 'pylon') assert.ok(spec.volley.some((bolt) => bolt.ground), `${code} 是挂架族却没挂炸弹`);
+    if (family === 'needle') {
+      assert.equal(spec.volley.length, 1, `${code} 是针翼却不止一根管子`);
+      const [bolt] = spec.volley;
+      assert.ok(bolt.pierce === 'armor' || bolt.kind === 'beam' || bolt.well, `${code} 的针翼没有一根重管`);
+    }
+    if (family === 'swept') assert.ok(Math.max(...spec.volley.map(reachOf)) < 24, `${code} 是贴脸族却射得很远`);
+    if (family === 'twin') assert.ok(Math.max(...aims) > (2 * Math.PI) / 3, `${code} 是前后族却没有向后的火力`);
+    if (family === 'fan') assert.ok(spec.volley.length >= 3 && Math.max(...aims) >= Math.PI / 6, `${code} 是扇族却不散开`);
+    if (family === 'straight') assert.ok(spec.volley.length >= 3 && Math.max(...aims) < Math.PI / 6, `${code} 是平直族却带角度`);
+  }
+});
+
+test('翼尖装置一型一件：图上和场上用的是同一份数据', () => {
+  const kinds = new Set(['none', 'winglet', 'blade', 'pod', 'canard', 'fin', 'spike']);
+  for (const code of Object.keys(WINGS)) {
+    const trim = wingTrim(WINGS[code]);
+    assert.ok(kinds.has(trim.tip), `${code} 的翼尖装置 ${trim.tip} 不存在`);
+    const icon = wingIcon(code);
+    assert.deepEqual(icon.trim, trim, `${code} 的小图和模型用的不是同一件装置`);
+    const drawn = icon.fins.length + icon.pods.length;
+    assert.ok(drawn >= (trim.tip === 'none' ? 0 : 2), `${code} 的翼尖装置没有画在两片翼上`);
+  }
+  assert.equal(wingTrim(WINGS.C).tip, 'winglet', '加农的翼尖小翼丢了');
+  assert.ok(wingIcon('C').fins.length >= 2, 'C 的翼尖小翼该画成翼尖上的短线');
 });
 
 test('每一型都画在框里：越界就是被卡片裁掉', () => {

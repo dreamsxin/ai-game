@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import { BOSS_DEATH_TIME, FIELD_W, WING_DRIFT } from '../game/rules.js';
-import { WEAKNESS, WINGS, tierOf } from '../game/wings.js';
+import { WEAKNESS, WINGS, tierOf, wingAtTier } from '../game/wings.js';
 import { orbsOf } from '../game/simulation.js';
 import { weakSpots } from '../game/boss.js';
 import { ALT, pixelScale, worldX, worldZ } from './view.js';
@@ -57,6 +57,13 @@ const wingFor = (holder, slot, code) => {
       active.userData.tips = [];
       active.userData.pips = [];
       active.userData.spines = [];
+      // 航灯与炮口闪光是 Sprite，不是 Mesh——上面那圈 traverse 换不掉它们的材质，
+      // 所以直接藏起来：一具「只剩轮廓」的分身不该带着几点刺眼的白光。
+      active.traverse((node) => {
+        if (node.isSprite) node.visible = false;
+      });
+      active.userData.beacons = [];
+      for (const muzzle of active.userData.muzzles ?? []) muzzle.flash = null;
     }
     cache.set(code, active);
     slot.add(active);
@@ -499,7 +506,10 @@ export function createRenderer(host) {
         for (const tip of active.userData.tips) {
           tip.material.color.set(trim);
           tip.material.emissive.set(trim);
-          tip.material.emissiveIntensity = 0.8 + tier * 0.9;
+          // 上限压在 1.9：这是**不透明**的实体材质，3.5 的自发光在屏幕上是一根纯白的灯条，
+          // 两翼各一根，看上去像两团白斑糊住了翼根（实测查出来的）。
+          // 亮度靠「细而亮」而不是「整坨发白」，所以宁可低一点。
+          tip.material.emissiveIntensity = 0.5 + tier * 0.3;
         }
         // 阶级 = 亮着的灯珠数。Mk.III 三颗全亮，脱手飞出去的翼也标着同一套阶级。
         for (const [i, pip] of active.userData.pips.entries()) {
@@ -508,10 +518,12 @@ export function createRenderer(host) {
           pip.material.emissive.set(trim);
         }
         // 翼面共鸣导线：Mk.II 亮中间一条，Mk.III／过载三条全亮。
+        // 亮但不过曝：三条 3.8 格长的加色横条叠在翼面上，给 0.85 会直接糊成一片白金，
+        // 反而看不出「三条」这件事。
         for (const { mesh, lane } of active.userData.spines ?? []) {
           mesh.visible = (tier >= 2 || surge) && (lane === 1 || tier >= 3 || surge);
           mesh.material.color.set(glow);
-          mesh.material.opacity = tier >= 3 || surge ? 0.85 : 0.55;
+          mesh.material.opacity = tier >= 3 || surge ? 0.34 : 0.28;
         }
       }
       // 尾焰跟着下潜拉长：加速这件事得看得见。三个喷口是一组，拉的是它的纵向（z）。
@@ -528,7 +540,9 @@ export function createRenderer(host) {
       return active;
     };
 
-    ship.position.set(worldX(data.x), ALT.ship, worldZ(data.y));
+    // 一点悬浮起伏：机体在斜俯视下本来是完全刚性的，加一点点上下浮动
+    // 就不会像一张贴在栅格上的贴纸。幅度只有 0.12 格，判定层当然不知道这件事。
+    ship.position.set(worldX(data.x), ALT.ship + Math.sin(state.elapsed * 2.4) * 0.12, worldZ(data.y));
     // 侧倾：横向移动多快就压多少。判定层没有这个量，所以这里自己按位移算。
     const drift = data.x - lastX;
     lastX = data.x;
@@ -572,13 +586,16 @@ export function createRenderer(host) {
       crystal.rotation.y += dt * 2.4 * spin;
       crystal.rotation.x += dt * 1.1 * spin;
       crystal.position.y = 2.3 + Math.sin(state.elapsed * 3 + i * 2) * 0.28;
+      // 棱晶本体只给 0.5：1.6 格半径的白色八面体配 0.9 的加色不透明度，
+      // 在屏幕上就是一颗纯白的光球，把整片翼根糊掉（自审截图里查了三轮才定位到它）。
+      // 真正的「亮」交给下面那层 2.0 格的光晕球——亮芯 + 晕，才有棱晶的样子。
       crystal.material.color.set('#ffffff');
-      crystal.material.opacity = 0.9 + surgeFlash * 0.1;
+      crystal.material.opacity = 0.5 + surgeFlash * 0.2;
     }
     for (const conduit of f.conduits) {
       conduit.visible = showTier >= 2 || surge;
       conduit.material.color.set(frameGlow);
-      conduit.material.opacity = 0.45 + surgeFlash * 0.3;
+      conduit.material.opacity = 0.26 + surgeFlash * 0.24;
     }
     for (const [i, node] of f.nodes.entries()) {
       node.visible = full;
@@ -592,18 +609,20 @@ export function createRenderer(host) {
       f.core.rotation.y += dt * 1.8 * spin;
       f.core.scale.setScalar(1 + Math.sin(state.elapsed * (surge ? 14 : 7)) * 0.16 + surgeFlash * 0.2);
       f.core.material.color.set('#ffffff');
-      f.core.material.opacity = 0.9 + surgeFlash * 0.1;
+      f.core.material.opacity = 0.55 + surgeFlash * 0.25;
     }
 
     // 能量翼：Mk.II 只展开内半段，Mk.III／过载整片张开。缩的是「从翼根往外长」，
     // 不是把整片翼缩小一半——所以翼肋的位置也跟着往根部收。
+    // 透明度压得很低：加色混叠下，一片 0.16 的翼面叠上三根 0.68 的翼肋，
+    // 翼根那块会直接烧成白色，机体轮廓反而没了（这是自审截图里最严重的一条）。
     const span = full ? 1 : 0.55;
     for (const [i, sail] of f.sails.entries()) {
       const side = i === 0 ? -1 : 1;
       sail.visible = showTier >= 2 || surge;
       sail.scale.x = side * span;
       sail.material.color.set(frameGlow);
-      sail.material.opacity = (full ? 0.16 : 0.1) + surgeFlash * 0.1;
+      sail.material.opacity = (full ? 0.07 : 0.05) + surgeFlash * 0.08;
     }
     for (const [i, rib] of f.ribs.entries()) {
       const side = i < 3 ? -1 : 1;
@@ -611,17 +630,17 @@ export function createRenderer(host) {
       rib.position.x = side * (2.6 + 2.0 * span);
       rib.scale.x = span;
       rib.material.color.set(frameGlow);
-      rib.material.opacity = (full ? 0.68 : 0.4) + surgeFlash * 0.15;
+      rib.material.opacity = (full ? 0.2 : 0.14) + surgeFlash * 0.1;
     }
     for (const [i, halo] of f.halos.entries()) {
       halo.visible = showTier >= 2 || surge;
       halo.position.y = f.cores[i].position.y;
       halo.material.color.set(frameGlow);
-      halo.material.opacity = 0.07 + surgeFlash * 0.1;
+      halo.material.opacity = 0.1 + surgeFlash * 0.1;
     }
     f.coreHalo.visible = full;
     f.coreHalo.material.color.set(frameGlow);
-    f.coreHalo.material.opacity = 0.07 + surgeFlash * 0.12;
+    f.coreHalo.material.opacity = 0.06 + surgeFlash * 0.1;
     f.coreRing.visible = full;
     if (full) {
       f.coreRing.rotation.z += dt * 2.2 * spin;
@@ -630,11 +649,67 @@ export function createRenderer(host) {
     }
     const worn = paint(ship);
 
+    // 炮口闪光：data.cool 是「距离下一发还有多久」，刚开完火时它等于整段冷却，
+    // 于是 cool / wingCool 从 1 衰减到 0——正好是一记枪口焰该有的样子。
+    // 每一根管子的精灵材质是各自的，所以五路扇形能看出是哪一路在打。
+    const wingCool = data.wing ? wingAtTier(data.wing, tier, surge).cool : 0;
+    const heat = wingCool > 0 ? Math.min(1, Math.max(0, data.cool / wingCool)) : 0;
+    const canFire = state.status === 'playing' && data.dive <= 0 && ship.visible;
+    for (const muzzle of worn?.userData.muzzles ?? []) {
+      const flash = muzzle.flash;
+      if (!flash) continue;
+      flash.visible = canFire;
+      if (!canFire) continue;
+      // 激光与火焰是持续输出，枪口那团光本来就该更亮更稳。
+      const gain = muzzle.kind === 'beam' ? 1.5 : muzzle.kind === 'flame' ? 1.25 : 1;
+      // 三次方衰减：枪口焰是一下子亮起来再迅速收掉的，平方还是拖得太久。
+      const power = heat ** 3 * gain;
+      flash.material.opacity = Math.min(0.85, power);
+      flash.scale.setScalar(1.9 + power * 2.6);
+    }
+
+    // 翼尖航灯：两盏错相位地慢慢呼吸。「它还在飞」这件事靠这一点节奏读出来。
+    // 缩放上限压在 2.2：再大，光晕就会越过 12.8 格的判定翼展，变成「看起来更宽」。
+    for (const [i, beacon] of (worn?.userData.beacons ?? []).entries()) {
+      const beat = 0.5 + Math.sin(state.elapsed * 2.6 + i * Math.PI) * 0.5;
+      beacon.material.opacity = 0.16 + beat * 0.38;
+      beacon.scale.setScalar(1.5 + beat * 0.4);
+    }
+
+    // 发动机：三层羽流各抖一个频率，喷口环随推力一张一缩。
+    // 上一版三个锥体是静止的，缩到手机上就是三条死掉的蓝线。
+    const ud = ship.userData;
+    const throttle = (data.dive > 0 ? 1.35 : 1) * (1 + (tier - 1) * 0.08);
+    for (const [i, item] of (ud.plumeFires ?? []).entries()) {
+      const wobble = 0.88 + Math.sin(state.elapsed * 27 + i * 2.1) * 0.12;
+      item.fire.scale.set(wobble, wobble, 1);
+      item.core.scale.set(1.1 - wobble * 0.1, 1.1 - wobble * 0.1, 1);
+      item.soft.scale.set(wobble * throttle, wobble * throttle, throttle);
+      item.core.material.opacity = 0.7 + Math.sin(state.elapsed * 31 + i) * 0.16;
+    }
+    for (const [i, ring] of (ud.nozzleRings ?? []).entries()) {
+      const push = 1 + Math.sin(state.elapsed * 18 + i * 1.7) * 0.1 + heat * 0.12;
+      ring.mesh.scale.setScalar(push * (0.9 + throttle * 0.1));
+      ring.mesh.material.opacity = 0.45 + push * 0.25;
+    }
+    if (ud.sensorHalo) {
+      ud.sensorHalo.material.opacity = 0.4 + Math.sin(state.elapsed * 4.5) * 0.18;
+      ud.sensorHalo.scale.setScalar(2.2 + Math.sin(state.elapsed * 4.5) * 0.3);
+    }
+
     // 无敌期只闪机身，护盾环常亮——不然看不出还剩多久。
     // 当前那副机翼的材质也要跟着闪，否则机身半透明而翼还是实心的。
+    // 淡出按各自基准来：0.3 的柔和羽流闪成 1，会变成「越挨打飞机越亮」。
     const blink = data.invuln > 0 && data.dive <= 0 && Math.floor(data.invuln * 12) % 2 === 0;
-    for (const mat of ship.userData.mats) mat.opacity = blink ? 0.4 : 1;
-    if (worn) for (const mat of worn.userData.mats) mat.opacity = blink ? 0.4 : 1;
+    const fade = (mat) => {
+      // 每帧由下面那些循环自己写透明度的材质（航灯、共鸣导线、喷口环、传感器光晕），
+      // 这里一碰就会把它们的呼吸／阶级色抹平——所以它们带 driven 标记，跳过。
+      if (mat.userData.driven) return;
+      const base = mat.userData.baseOpacity ?? 1;
+      mat.opacity = blink ? base * 0.4 : base;
+    };
+    for (const mat of ship.userData.mats) fade(mat);
+    if (worn) for (const mat of worn.userData.mats) fade(mat);
     ship.visible = state.status !== 'dying';
 
     // 量子分身：镜像那一侧真的有一具半透明机身在开火。
@@ -844,6 +919,11 @@ export function createRenderer(host) {
       // 用绝对值覆盖而不是乘法：池子里的 mesh 会被反复复用，乘法会跨帧累积。
       const bulk = shot.well || shot.kind === 'anti' ? 1 : 1 + (((shot.tier ?? 1) - 1) * 0.3);
       mesh.scale.setScalar(bulk);
+      // 弹体跟着自己的速度转：扇形散射的每一发都朝自己飞的方向。
+      // 上一版所有曳光弹都笔直朝着屏幕上方，五路扇形打出来仍是五条竖杠。
+      // 取的是速度而不是「第几路」，所以炸弹、跳弹这些改了方向的也不用另写一份。
+      const speed = Math.hypot(shot.vx ?? 0, shot.vy ?? 0);
+      if (speed > 1) mesh.rotation.y = Math.atan2(-shot.vx, -shot.vy);
       const sheath = mesh.userData.sheath;
       if (sheath) {
         const shotTier = Math.min(3, Math.max(1, shot.tier ?? 1));
@@ -859,12 +939,30 @@ export function createRenderer(host) {
         ud.inner.scale.setScalar(shot.well);
         ud.ring.rotation.z = shot.age * 3;
         ud.inner.rotation.z = -shot.age * 5;
+        if (ud.haze) ud.haze.scale.setScalar(shot.well * 3.4);
       } else if (shot.kind === 'anti') {
         mesh.scale.setScalar(1 + Math.sin(shot.age * 18) * 0.2);
-        mesh.rotation.y += 0.2;
+        mesh.rotation.y = shot.age * 6;
+        if (mesh.userData.rim) mesh.userData.rim.rotation.z = -shot.age * 4;
       } else if (shot.kind === 'flame' || shot.kind === 'shard') {
         mesh.rotation.x += 0.3;
         mesh.rotation.y += 0.2;
+        // 越老越淡：火焰只活 0.34 秒，碎片也差不多——尾端要散掉，
+        // 否则看起来是「被推出来的实体」，而不是烧完／炸完就没了。
+        const die = Math.max(0.25, 1 - shot.age / (shot.life || 0.34));
+        const base = shot.kind === 'flame' ? { outer: 0.34, body: 0.72, core: 0.88 } : { shell: 0.55, core: 0.95 };
+        for (const [part, value] of Object.entries(base)) {
+          const node = mesh.userData[part];
+          if (node) node.material.opacity = value * die;
+        }
+      } else if (shot.kind === 'beam') {
+        // 激光：芯与中层按高频小幅呼吸，头部那团光一通猛闪。
+        // 十几发叠在同一列上，呼吸相位错开，看起来就是一根在「滋滋」响的光束。
+        const ud = mesh.userData;
+        const throb = 0.5 + Math.sin(shot.age * 90) * 0.5;
+        if (ud.core) ud.core.material.opacity = 0.82 + throb * 0.18;
+        if (ud.mid) ud.mid.material.opacity = 0.4 + throb * 0.2;
+        if (ud.head) ud.head.scale.setScalar(4.0 + throb * 1.6);
       }
     }
     for (const pool of shotPools.values()) pool.end();

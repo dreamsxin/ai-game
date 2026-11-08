@@ -2,7 +2,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHAPTER_ART, HAZARD, TIER_COLOR, chapterArt, hsl, hueGap } from '../src/scene/palette.js';
+import { CHAPTER_ART, HAZARD, TIER_COLOR, WING_HUES, WING_SKINS, chapterArt, hsl, hslHex, hueGap } from '../src/scene/palette.js';
+import { WINGS } from '../src/game/wings.js';
 
 test('四章各一套色，取不到的章号会被夹住', () => {
   assert.equal(CHAPTER_ART.length, 4);
@@ -52,4 +53,42 @@ test('阶级色一路变暖：蓝 → 青绿 → 金，扫一眼就知道攒到�
   assert.ok(tiers[1].h > 120 && tiers[1].h < 180, 'Mk.II 应该是青绿');
   assert.ok(tiers[2].h > 30 && tiers[2].h < 70, 'Mk.III 应该是暖金');
   for (const hex of TIER_COLOR) assert.ok(hsl(hex).s > 0.6, `${hex} 不够饱和`);
+});
+
+test('21 型机翼 21 个色相：两两拉开，而且谁都别掉进敌弹的红区', () => {
+  const entries = Object.entries(WING_HUES);
+  assert.equal(entries.length, Object.keys(WINGS).length, '每一型机翼都该有自己的色相');
+  const foe = hsl(HAZARD.foe).h;
+  for (const [code, hue] of entries) {
+    const gap = hueGap(hue, foe);
+    assert.ok(gap > 18, `${code} 的色相 ${hue}° 离敌弹的红（${foe.toFixed(0)}°）只有 ${gap.toFixed(0)}°`);
+  }
+  const sorted = entries.map(([, hue]) => hue).sort((a, b) => a - b);
+  for (let i = 0; i < sorted.length; i += 1) {
+    const next = i + 1 < sorted.length ? sorted[i + 1] : sorted[0] + 360;
+    assert.ok(next - sorted[i] >= 11, `色相 ${sorted[i]}° 和 ${next}° 挨得太近，缩到手机上会看成同一个颜色`);
+  }
+});
+
+test('每一身皮都读得出：翼面够暗、识别色够亮够饱和', () => {
+  for (const code of Object.keys(WINGS)) {
+    const skin = WING_SKINS[code];
+    assert.ok(skin, `${code} 没有配皮`);
+    for (const key of ['body', 'edge', 'lead', 'chrome']) {
+      assert.match(skin[key], /^#[0-9a-f]{6}$/, `${code} 的 ${key} 不是十六进制色`);
+    }
+    assert.ok(hsl(skin.body).l < 0.32, `${code} 的翼面压不住，会盖过机身`);
+    const lead = hsl(skin.lead);
+    assert.ok(lead.l > 0.55, `${code} 的识别色太暗，夜里看不见`);
+    assert.ok(lead.s > 0.6, `${code} 的识别色太灰，和别的型号分不开`);
+    assert.ok(hsl(skin.chrome).l > 0.7, `${code} 的炮管色太深，会看不出是金属件`);
+  }
+});
+
+test('色相换算能走往返：HSL → 十六进制 → HSL', () => {
+  for (const hue of [0, 45, 120, 206, 300, 359]) {
+    const back = hsl(hslHex(hue, 0.8, 0.5));
+    assert.ok(hueGap(back.h, hue) < 2, `${hue}° 换算回来变成了 ${back.h.toFixed(1)}°`);
+    assert.ok(Math.abs(back.l - 0.5) < 0.02, `${hue}° 的亮度走样了`);
+  }
 });

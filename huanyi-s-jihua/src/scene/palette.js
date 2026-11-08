@@ -31,19 +31,94 @@ export const OVERDRIVE_COLOR = '#e6ffff';
 export const PHASE_COLOR = '#b9f2ff';
 
 /**
- * 机翼的三条出身三种皮：常规钢蓝、实验紫、秘密金。
- * 场上的三维机翼（models.js）和选翼界面的小图（wingIcon.js）共用这一份，
- * 否则「选的时候是紫的、飞起来是蓝的」——那是两套说法。
- * 翼面比机身暗、前缘灯比机身亮：几路火力全靠这层对比读出来。
+ * 21 型机翼，21 种色。
+ *
+ * 上一版只按「出身」分三色（常规钢蓝 / 实验紫 / 秘密金），于是常规那 15 种在场上
+ * 全是同一片蓝——换了翼只有炮管数变了，玩家第二次报的还是「机翼都一样」。
+ * 现在每一型一个色相，色相按「怎么打」排成一圈：暖橙是对地／火焰，黄绿是穿甲，
+ * 青绿是护环，天蓝是直射，靛紫是实验系。
+ *
+ * **一头一尾都要留白**：0° 附近是敌弹的红（#ff2f5e ≈ 344°），绕过去；
+ * 330°～18° 这一段不安排任何机翼，否则「自己的翼」和「碰到就掉翼的东西」会撞色。
+ * palette.test.js 守着「两两色相差 ≥ 11°」和「谁都别掉进红区」。
+ */
+export const WING_HUES = {
+  F: 18, // 火焰：橙红
+  K: 32, // 破地：琥珀
+  D: 46, // 对地：金
+  SS: 62, // 秘密：金黄
+  J: 82, // 穿甲：黄绿
+  O: 100, // 护环：草绿
+  V: 118, // 防卫：青绿
+  N: 138, // 霰弹：松绿
+  E: 158, // 远环：湖绿
+  W: 176, // 宽幅：青
+  S: 192, // 三向：天青
+  C: 206, // 加农：冰蓝
+  H: 220, // 铁球：钢蓝
+  M: 234, // 排炮：靛蓝
+  A: 246, // 前后：蓝紫
+  T: 260, // 交叉：紫
+  L: 272, // 激光：青紫
+  G: 284, // 引力井：紫罗兰
+  Z: 296, // 链弧：洋红紫
+  X: 308, // 反物质：品红
+  Q: 320, // 量子：粉紫
+};
+
+/** HSL → #rrggbb。色相表在运行时算出十六进制，SVG 与 three 用的是同一个字符串。 */
+export function hslHex(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const seg = Math.floor(((h % 360) + 360) % 360 / 60) % 6;
+  const [r, g, b] = [
+    [c, x, 0],
+    [x, c, 0],
+    [0, c, x],
+    [0, x, c],
+    [x, 0, c],
+    [c, 0, x],
+  ][seg];
+  const hex = (value) =>
+    Math.round(Math.min(1, Math.max(0, value + m)) * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+/**
+ * 一型一身皮。三个位置各司其职，不是同一桶色兑出来的三个亮度：
+ * - body：翼面本体的暗色，负责「这是哪一型」的第一眼。
+ * - edge：自发光与描边，在暗地面上把翼面从背景里托起来。
+ * - lead：前缘灯、翼尖航灯、炮口闪光、护环的亮色——**识别这一型靠的就是它**。
+ * - chrome：炮管与翼尖装置这类金属件的浅色，带一点本型的色相，白得不再一片死白。
+ */
+const skinAt = (hue) => ({
+  body: hslHex(hue, 0.52, 0.24),
+  edge: hslHex(hue, 0.74, 0.44),
+  lead: hslHex(hue, 0.96, 0.67),
+  chrome: hslHex(hue, 0.32, 0.86),
+});
+
+/** 按型号取皮。未知型号退回常规钢蓝，绝不返回 undefined（渲染层会当场崩）。 */
+export const WING_SKINS = Object.fromEntries(
+  Object.entries(WING_HUES).map(([code, hue]) => [code, skinAt(hue)]),
+);
+
+/**
+ * 三条出身的兜底色。现在只给「没有 code 的记录」兜底用——
+ * 正常路径一律走 WING_SKINS，那一份才是玩家在场上看到的那身皮。
  */
 export const WING_SKIN = {
-  plain: { body: '#22326b', edge: '#2b47b5', lead: '#7fe3ff' },
-  lab: { body: '#3a2a7a', edge: '#6f4ad0', lead: HAZARD.lab },
-  secret: { body: '#6a5216', edge: '#c79a1e', lead: HAZARD.gold },
+  plain: { body: '#22326b', edge: '#2b47b5', lead: '#7fe3ff', chrome: '#dfe9ff' },
+  lab: { body: '#3a2a7a', edge: '#6f4ad0', lead: HAZARD.lab, chrome: '#efe6ff' },
+  secret: { body: '#6a5216', edge: '#c79a1e', lead: HAZARD.gold, chrome: '#fff4cf' },
 };
 
 /** 这只机翼该穿哪身皮。参数是 wings.js 里那条记录。 */
-export const wingSkin = (spec = {}) => (spec.secret ? WING_SKIN.secret : spec.lab ? WING_SKIN.lab : WING_SKIN.plain);
+export const wingSkin = (spec = {}) =>
+  WING_SKINS[spec.code] ?? (spec.secret ? WING_SKIN.secret : spec.lab ? WING_SKIN.lab : WING_SKIN.plain);
 
 export const CHAPTER_ART = [
   {
