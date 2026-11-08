@@ -13,7 +13,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { makeDrop, makeEscort, makeGearDrop, makeShip, makeShot, makeWing, shadeWing } from '../src/scene/models.js';
+import {
+  FLEET_FORMATIONS, makeBoss, makeDrop, makeEscort, makeGearDrop,
+  makeShip, makeShot, makeWing, shadeWing,
+} from '../src/scene/models.js';
 import { WING_HALF_W } from '../src/game/rules.js';
 import { WINGS } from '../src/game/wings.js';
 import { ESCORT_HALF_W, GEAR_CODES } from '../src/game/gear.js';
@@ -291,10 +294,64 @@ test('装备道具是六边形收纳舱，不是那枚会翻滚的菱形机翼',
   assert.ok(gear.userData.halo.isSprite, '装备道具带一圈柔光，远处才认得出');
 });
 
-test('僚机弹细一档、短一截：两路火力叠在同一列也分得开', () => {
+test('僚机弹是看得见的双股离子矢，形状和主机弹完全不同', () => {
   const escort = makeShot('escort', '#7fe3ff');
   const plain = makeShot('pellet');
-  assert.ok(spanOf(escort).z < spanOf(plain).z, '僚机弹不该和主机弹一样长');
-  assert.ok(spanOf(escort).x < spanOf(plain).x, '僚机弹该更细');
-  assert.ok(escort.userData.head, '照样要有弹头闪光');
+  const ud = escort.userData;
+  // 上一版守的是「比主机弹更细更短」，实拍证明那条契约把它缩成了一根单像素线，
+  // 玩家因此报「僚机没有子弹」。现在改守「醒目 + 形状不同」：两路火力不会认混，
+  // 但谁都别再被压到看不见。
+  assert.equal(ud.rails.length, 2, '两根平行光条夹一根白芯');
+  assert.ok(ud.tip && ud.head && ud.core, '菱形弹尖、弹头光团、白芯一样不能少');
+  assert.ok(ud.head.material.opacity >= 0.9, '弹头得够亮，不然又会被主机尾焰吃掉');
+  const tint = new THREE.Color('#7fe3ff').getHexString();
+  assert.ok(ud.rails.every((rail) => rail.material.color.getHexString() === tint),
+    '双股走本型识别色，三型僚机打出三种颜色');
+  assert.notEqual(spanOf(escort).z.toFixed(2), spanOf(plain).z.toFixed(2),
+    '两路火力不能长得一模一样');
+  assert.ok(spanOf(escort).z > 6, '缩太短在斜俯视下就只剩一个点');
+});
+
+test('巡航导弹有箭体、分叉尾翼与双股尾焰，和离子矢不是同一种弹', () => {
+  const cruise = makeShot('cruise', '#ff9be8');
+  const escort = makeShot('escort', '#ff9be8');
+  const ud = cruise.userData;
+  assert.equal(ud.fins.length, 2, '两片分叉尾翼：光条读不出转向，实体读得出');
+  assert.equal(ud.jets.length, 2, '两股尾焰，渲染层会错相喷');
+  assert.ok(ud.head && ud.spine && ud.haze, '弹头光团、箭体色芯、外晕一样不能少');
+  assert.ok(!ud.rails, '不该复用离子矢那套双股光条结构');
+  const tint = new THREE.Color('#ff9be8').getHexString();
+  assert.ok(ud.fins.every((fin) => fin.material.color.getHexString() === tint),
+    '尾翼走本型识别色，和离子矢同色但不同形');
+  assert.ok(spanOf(cruise).z > 7, '箭体得够长，拐弯才看得出来');
+  assert.notEqual(spanOf(cruise).z.toFixed(2), spanOf(escort).z.toFixed(2),
+    '两路装备火力不能长得一模一样');
+});
+
+test('Boss 是一支舰队：母舰带轮廓、子舰按走位变阵且不越判定盒', () => {
+  const ud = makeBoss().userData;
+  assert.equal(ud.fleet.length, 4, '最多四艘护卫子舰');
+  assert.ok(ud.shellEdge.isLineSegments, '母舰要有发光轮廓，不然暗色舰体融进网格');
+  assert.ok(ud.edgeMats.length >= 10, '母舰、侧翼、舰艏、每艘子舰都要描边');
+  assert.equal(ud.engines.length, 3, '尾部三枚引擎');
+  assert.equal(ud.spine.length, 5, '龙骨五枚能量节点');
+  assert.ok(ud.spots.every((spot) => spot.userData.ring.material.depthTest === false),
+    '弱点环永远压在舰体上面');
+  for (const escort of ud.fleet) {
+    assert.equal(escort.visible, false, '开局都藏着，由 syncBoss 按阵型点亮');
+    let edges = 0;
+    escort.traverse((node) => { if (node.isLineSegments) edges += 1; });
+    assert.ok(edges >= 4, `每艘子舰的机身、尖艏、两片翼都要描边，量到 ${edges}`);
+  }
+  // 体量契约：子舰半宽约 0.056w、半长约 0.28h（最坏 w/h = 44/18），
+  // 连同阵型偏移都必须落在 ±0.5 的判定盒里。
+  for (const [pattern, form] of Object.entries(FLEET_FORMATIONS)) {
+    assert.equal(form.slots.length, 4, `${pattern} 要给四艘都留槽位`);
+    assert.ok(form.count >= 2 && form.count <= 4, `${pattern} 编队数不合法`);
+    for (let i = 0; i < form.count; i += 1) {
+      const [rx, rz] = form.slots[i];
+      assert.ok(Math.abs(rx) + 0.07 <= 0.5, `${pattern} 第 ${i} 艘横向越出判定盒`);
+      assert.ok(Math.abs(rz) + 0.3 <= 0.5, `${pattern} 第 ${i} 艘纵向越出判定盒`);
+    }
+  }
 });

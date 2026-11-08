@@ -1,5 +1,5 @@
 // 装备槽的测试。守的全是「会骗人」的部分：
-// 1. 僚机挂在后侧、整体不越出 12.8 格判定翼展（和机翼那条视觉契约同源）；
+// 1. 停机位挂在后侧、不越出 12.8 格判定翼展；索敌位可前出，但不出场地与活动半径；
 // 2. 装备火力永远按 chip 结算，不能把「选错机翼要磨很久」稀释掉；
 // 3. 挡弹与掉命的两档惩罚、跨关 carry、重试清零，都按设定走；
 // 4. 新 kind 不能把旧的机翼拾取循环弄坏（同频共振 14 条回归另在 resonance.test.js）。
@@ -8,9 +8,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ESCORT_HALF_W,
+  ESCORT_ORBIT_R,
+  ESCORT_SORTIE_PERIOD,
+  ESCORT_SORTIE_REACH,
+  HOMING_TURN,
   GEAR,
   GEAR_CODES,
   MAX_FORMATION,
+  escortSortie,
+  escortWithinField,
+  escortWorld,
   escortsOf,
   escortWithinSpan,
   gearAfterBlock,
@@ -20,8 +27,10 @@ import {
   gearPick,
   gearSpec,
   gearVolley,
+  steerHoming,
 } from '../src/game/gear.js';
 import { WING_HALF_W } from '../src/game/rules.js';
+import { makeEnemy } from '../src/game/enemies.js';
 import { WEAKNESS, reachesWeakness } from '../src/game/wings.js';
 import { briefing, LEVELS } from '../src/game/levels.js';
 import {
@@ -75,6 +84,21 @@ const stateWithFoe = (ship) => ({
   shots: [],
   drops: [],
   effects: [],
+});
+
+test('单架僚机站在斜后方：弹道不和主机直射弹重叠', () => {
+  for (const code of GEAR_CODES) {
+    const ship = shipWith(code, 1);
+    const [escort] = escortsOf(ship);
+    // 站在正后方（dx = 0）时僚机弹与主机加农炮的弹列完全重合，加色叠成一列白光，
+    // 实机截图里就是「僚机没有子弹」。偏出去两格以上才有自己那条轨道。
+    assert.ok(Math.abs(escort.x - ship.x) >= 2,
+      `${code} 单架又回到正后方，弹道会被主机弹列淹没`);
+    assert.ok(escort.y > ship.y, `${code} 仍要挂在后侧`);
+    assert.ok(escortWithinSpan(ship), `${code} 偏移后仍要守住判定翼展`);
+    const [shot] = gearVolley(ship, 1).shots;
+    assert.equal(shot.x, escort.x, '子弹得从僚机自己那条轨道上出来');
+  }
 });
 
 test('三型装备一型一形一色，编队后置且整体不越出判定翼展', () => {
@@ -366,4 +390,242 @@ test('装备的每个事件都在音效与震动里登记了：不会闷声合�
   assert.deepEqual(vibrationFor([{ type: 'gearBlock' }]), VIBRATION.gearBlock, '替挡要震得出来');
   assert.deepEqual(vibrationFor([{ type: 'gearSync' }]), VIBRATION.gearSync);
   assert.deepEqual(vibrationFor([{ type: 'gearCatch' }]), VIBRATION.gearCatch);
+});
+
+// ——— 自主索敌走位：僚机不是钉在尾巴上的固定炮台 ———
+
+const worldWith = (time, targets) => ({ time, targets });
+
+test('escortWorld：Boss 优先、只认主机上方的目标、近的排前面', () => {
+  const ship = shipWith('E1', 3);
+  const state = {
+    ship,
+    elapsed: 7.2,
+    boss: null,
+    enemies: [
+      { x: 20, y: 40, hp: 1, kind: 'zako' },
+      { x: 70, y: 95, hp: 1, kind: 'diver' },   // 离玩家最近
+      { x: 40, y: 130, hp: 1, kind: 'zako' },   // 在主机身后，排除
+      { x: 60, y: 60, hp: 0, kind: 'carrier' }, // 已死，排除
+    ],
+  };
+  const world = escortWorld(state);
+  assert.equal(world.time, 7.2);
+  assert.deepEqual(world.targets.map((t) => t.kind), ['diver', 'zako']);
+  assert.ok(world.targets.every((t) => t.y < ship.y - 6));
+
+  const withBoss = escortWorld({ ...state, boss: { x: 50, y: 28, entering: false, dying: false } });
+  assert.equal(withBoss.targets[0].kind, 'boss', 'Boss 在场就先集火 Boss');
+  assert.deepEqual(escortWorld({ ...state, enemies: [], boss: null }).targets, []);
+  assert.deepEqual(
+    escortWorld({ ...state, boss: { x: 50, y: 28, entering: true, dying: false } })
+      .targets.map((t) => t.kind),
+    ['diver', 'zako'],
+    '入场中 / 死亡过载的 Boss 还不算目标',
+  );
+});
+
+test('走位相位连续、每架错相：位置不会整队一起瞬移', () => {
+  for (let i = 0; i <= 200; i += 1) {
+    const t = (i / 200) * ESCORT_SORTIE_PERIOD;
+    const a = escortSortie(t, 0, 3);
+    const b = escortSortie(t + STEP, 0, 3);
+    assert.ok(a >= 0 && a <= 1, `${t.toFixed(2)}s 相位越界`);
+    assert.ok(Math.abs(b - a) < 0.06, `${t.toFixed(2)}s 相位跳变了`);
+  }
+  assert.ok(escortSortie(ESCORT_SORTIE_PERIOD * 0.35, 0, 3) > 0.9, '周期中段该在前出');
+  assert.ok(escortSortie(0, 0, 3) < 0.01, '周期开头该回到护卫位');
+  assert.notEqual(
+    escortSortie(ESCORT_SORTIE_PERIOD * 0.1, 0, 3),
+    escortSortie(ESCORT_SORTIE_PERIOD * 0.1, 1, 3),
+    '两架要错开相位，轮流散开',
+  );
+});
+
+test('E2 游猎：周期性前出到主机前方、横向对齐敌舰，相位为 0 时回防', () => {
+  const ship = shipWith('E2', 1);
+  const target = { x: 22, y: 38, kind: 'carrier' };
+  const world = worldWith(ESCORT_SORTIE_PERIOD * 0.35, [target]);
+  const [escort] = escortsOf(ship, world);
+  assert.equal(escort.formation, 'sortie');
+  assert.ok(escort.y < ship.y - 8, '索敌位必须在主机前方，不能还钉在正后方');
+  assert.ok(escort.y >= ship.y - ESCORT_SORTIE_REACH - 2, '也不许前出到看不见的地方');
+  assert.ok(Math.abs(escort.x - target.x) < Math.abs(ship.x - target.x), '要朝目标那一列靠过去');
+  assert.ok(escort.sortie > 0.9);
+  assert.deepEqual(escort.target, target);
+  assert.ok(escortWithinField(ship, world));
+
+  // 相位回到 0 / 没有目标，位置与改动前逐字段一致。旧调用方一律不受影响。
+  assert.deepEqual(escortsOf(ship, worldWith(0, [target])), escortsOf(ship));
+  assert.deepEqual(escortsOf(ship, worldWith(10, [])), escortsOf(ship));
+  assert.ok(escortWithinSpan(ship), '停机位仍守住 12.8 格判定翼展');
+});
+
+test('三型各走各的伴飞阵型：左右侧翼 / 前方游猎 / 环绕', () => {
+  const target = { x: 22, y: 38, kind: 'carrier' };
+  const time = ESCORT_SORTIE_PERIOD * 0.35;
+  const at = (code, level, t = time) =>
+    escortsOf(shipWith(code, level), worldWith(t, [target]));
+
+  // E1：分列主机两侧，明显跑到机翼之外，但纵向仍贴着主机（不前出几十格）。
+  const flank = at('E1', 3);
+  assert.ok(flank.some((e) => e.x < 50 - WING_HALF_W), '得有左翼');
+  assert.ok(flank.some((e) => e.x > 50 + WING_HALF_W), '得有右翼');
+  assert.ok(flank.every((e) => Math.abs(e.y - 124) < 10), '侧翼只是左右，不远离主机');
+
+  // E2：整队往主机前方压过去，是唯一真正「前出」的一型。
+  assert.ok(at('E2', 3).some((e) => e.y < 124 - ESCORT_SORTIE_REACH * 0.6), '至少一架明显前出');
+  assert.ok(at('E1', 3).every((e) => e.y > 124 - ESCORT_SORTIE_REACH * 0.6), '侧翼不该跟着前出');
+
+  // E3：绕圈，不同时刻会依次经过主机的左 / 右 / 前 / 后。
+  const samples = [0, 0.6, 1.2, 1.8, 2.4, 3.0].map((t) => at('E3', 1, t)[0]);
+  assert.ok(samples.some((e) => e.x < 50), '环绕得经过左侧');
+  assert.ok(samples.some((e) => e.x > 50), '环绕得经过右侧');
+  assert.ok(samples.some((e) => e.y < 124), '环绕得经过前方');
+  assert.ok(samples.some((e) => e.y > 124), '环绕得经过后方');
+  assert.ok(samples.every((e) => {
+    const r = Math.hypot(e.x - 50, e.y - 124);
+    return r > 3 && r < ESCORT_ORBIT_R + 4;
+  }), '环绕别甩出主机那一屏，也别缩成一点');
+
+  // 同一时刻、同一目标，三型的伴飞位不能重合——换装备得换站位。
+  const same = GEAR_CODES.map((code) => at(code, 1)[0]);
+  assert.equal(new Set(same.map((e) => `${e.x.toFixed(2)}/${e.y.toFixed(2)}`)).size, 3);
+  assert.deepEqual(same.map((e) => e.formation), ['flank', 'sortie', 'orbit']);
+  // 没有目标时三型一起回后侧停机位，这就是第四种站位「后方」。
+  for (const code of GEAR_CODES) {
+    const ship = shipWith(code, 3);
+    assert.deepEqual(escortsOf(ship, worldWith(10, [])), escortsOf(ship));
+    assert.ok(escortWithinSpan(ship), `${code} 停机位仍守住判定翼展`);
+  }
+});
+
+test('三型各级、各相位走位都不飞出场地、不甩出主机那一屏', () => {
+  const targets = [
+    { x: 4, y: 10, kind: 'zako' },
+    { x: 96, y: 118, kind: 'diver' },
+    { x: 50, y: 26, kind: 'boss' },
+  ];
+  for (const code of GEAR_CODES) {
+    for (let level = 1; level <= MAX_FORMATION; level += 1) {
+      for (let i = 0; i <= 60; i += 1) {
+        const ship = {
+          ...shipWith(code, level),
+          x: 50 + ((i % 3) - 1) * 30,
+          y: 100 + (i % 5) * 9,
+        };
+        const world = worldWith((i / 60) * ESCORT_SORTIE_PERIOD * 2, targets);
+        assert.equal(escortsOf(ship, world).length, level);
+        assert.ok(escortWithinField(ship, world), `${code} ×${level} 第 ${i} 帧飞出了活动半径`);
+      }
+    }
+  }
+});
+
+test('索敌瞄准只改弹道方向，火力契约一条都没松', () => {
+  const ship = shipWith('E2', 3);
+  const world = worldWith(ESCORT_SORTIE_PERIOD * 0.35, [
+    { x: 18, y: 40, kind: 'carrier' },
+    { x: 84, y: 60, kind: 'zako' },
+  ]);
+  const escorts = escortsOf(ship, world);
+  const { shots } = gearVolley(ship, 10, world);
+  assert.equal(shots.length, 3, '弹数仍恒等于编队数');
+  for (const [i, shot] of shots.entries()) {
+    assert.equal(shot.x, escorts[i].x, '弹得从僚机自己那条轨道上出来');
+    assert.equal(shot.chipOnly, true);
+    assert.ok(Math.abs(shot.vx) < 40, '瞄准修正不能碰巧打进 side 弱点');
+    assert.equal(bossShotMultiplier('side', shot), WEAKNESS.side.chip);
+    assert.equal(reachesWeakness('side', shot), false);
+    assert.ok(shot.dmg < 1, '伤害仍比主机弹低一档');
+  }
+  assert.ok(shots.some((shot) => ![18, -18].includes(shot.vx)), '弹道里要有朝目标收拢的分量');
+});
+
+test('simulation 真的把战况接进开火：有从主机前方索敌位打出去的弹', () => {
+  // 一架打不死的运载舰，保证整段窗口里 targets 一直非空。
+  const foe = {
+    ...makeEnemy('carrier', 9001, 24, 44, { tune: { hp: 1, fire: 0, speed: 1 } }),
+    hp: 1e6,
+  };
+  let state = startGame(0, 'C', 'E1');
+  state = { ...state, ship: { ...state.ship, gearLevel: 3 }, enemies: [foe] };
+  // 前出窗口是周期 4.4s 的 0.88~2.55s；跑 2.2s 正好覆盖一轮咬住目标。
+  // 不能只看最后一帧：从前方发出的弹更快飞出屏幕上边界，快照里只剩停机位的弹。
+  const births = [];
+  const seen = new Set();
+  for (let i = 0; i < 132; i += 1) {
+    state = step(state, EMPTY_INPUT, STEP);
+    for (const shot of state.shots) {
+      if (shot.source !== 'gear' || seen.has(shot.id)) continue;
+      seen.add(shot.id);
+      births.push({ x: shot.x - shot.vx * shot.age, y: shot.y - shot.vy * shot.age });
+    }
+  }
+  assert.ok(births.length >= 9, `僚机得连续打了好几轮，实际 ${births.length} 发`);
+  assert.ok(
+    births.some((birth) => birth.y < state.ship.y - 4),
+    '得有从主机前方发出的，不是全钉在尾巴上',
+  );
+  assert.ok(
+    births.some((birth) => Math.abs(birth.x - state.ship.x) > 6.5),
+    '也得有一发横向跑出了停机位的翼展',
+  );
+});
+
+test('只有游猎僚机发巡航导弹：追踪标记、chipOnly 与生成横速都不破例', () => {
+  const world = worldWith(ESCORT_SORTIE_PERIOD * 0.35, [{ x: 22, y: 38, kind: 'carrier' }]);
+  const flags = GEAR_CODES.map((code) => gearVolley(shipWith(code, 1), 1, world).shots[0].homing);
+  assert.deepEqual(flags, [false, true, false], '只有 E2 带追踪');
+  const missile = gearVolley(shipWith('E2', 3), 1, world).shots;
+  assert.equal(missile.length, 3, '追踪不改弹数');
+  for (const shot of missile) {
+    assert.equal(shot.chipOnly, true, '追踪弹打 Boss 仍只按 chip');
+    assert.ok(Math.abs(shot.vx) < 40, '生成时仍不能碰巧打进侧面弱点');
+    assert.equal(bossShotMultiplier('side', shot), WEAKNESS.side.chip);
+  }
+});
+
+test('巡航导弹朝目标转向：速度大小不变、单帧转角封顶、角度收敛', () => {
+  const world = worldWith(ESCORT_SORTIE_PERIOD * 0.35, [{ x: 20, y: 40, kind: 'carrier' }]);
+  const shot = gearVolley(shipWith('E2', 1), 1, world).shots[0];
+  const target = { x: 86, y: 34 }; // 故意放在侧上方，逼它掉头
+  const speed = Math.hypot(shot.vx, shot.vy);
+  const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const miss = (s) => Math.abs(wrap(
+    Math.atan2(target.y - s.y, target.x - s.x) - Math.atan2(s.vy, s.vx),
+  ));
+  const before = miss(shot);
+  let cur = { ...shot };
+  let maxTurn = 0;
+  for (let i = 0; i < 30; i += 1) {
+    const v = steerHoming(cur, target, STEP);
+    maxTurn = Math.max(maxTurn, Math.abs(wrap(Math.atan2(v.vy, v.vx) - Math.atan2(cur.vy, cur.vx))));
+    cur = { ...cur, ...v, x: cur.x + v.vx * STEP, y: cur.y + v.vy * STEP };
+  }
+  assert.ok(Math.abs(Math.hypot(cur.vx, cur.vy) - speed) < 1e-6, '转向不改速度大小');
+  assert.ok(maxTurn <= HOMING_TURN * STEP + 1e-6, '单帧转角不许超过上限，得是「追」不是瞬移');
+  assert.ok(miss(cur) < before, '方向要朝目标收敛');
+});
+
+test('simulation 把巡航导弹接进了飞行：同一发弹的横速会随目标变', () => {
+  const foe = {
+    ...makeEnemy('carrier', 9002, 84, 40, { tune: { hp: 1, fire: 0, speed: 1 } }),
+    hp: 1e6,
+  };
+  let state = startGame(0, 'C', 'E2');
+  state = { ...state, ship: { ...state.ship, gearLevel: 1 }, enemies: [foe] };
+  const track = new Map();
+  let changed = 0;
+  for (let i = 0; i < 90; i += 1) {
+    state = step(state, EMPTY_INPUT, STEP);
+    for (const shot of state.shots) {
+      if (!shot.homing) continue;
+      const prev = track.get(shot.id);
+      if (prev !== undefined && Math.abs(shot.vx - prev) > 0.5) changed += 1;
+      track.set(shot.id, shot.vx);
+    }
+  }
+  assert.ok(track.size > 0, '得打出巡航导弹');
+  assert.ok(changed > 0, '导弹得真的在逐帧拐弯，不是一条直线');
 });

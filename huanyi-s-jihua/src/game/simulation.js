@@ -67,7 +67,9 @@ import {
   gearPick,
   gearSpec,
   gearVolley,
+  escortWorld,
   escortsOf,
+  steerHoming,
 } from './gear.js';
 import { offField, spawnWave, stepEnemy, stepShot } from './enemies.js';
 import { makeBoss, stepBoss } from './boss.js';
@@ -318,7 +320,7 @@ function moveShip(ship, input, dt) {
  * 开火。带翼时用机翼的 volley（已经按阶级放大过，过载中再乘一层），没翼时只剩主机小炮——
  * 这一行就是「舍弃机翼＝输出窗口消失」的全部实现。
  */
-function fireShip(ship, dt, nextId) {
+function fireShip(ship, dt, nextId, escortView = null) {
   const wing = ship.wing ? wingAtTier(ship.wing, ship.tier, ship.overdrive > 0) : null;
   const cool = wing ? wing.cool : HULL_GUN.cool;
   let timer = ship.cool - dt;
@@ -375,7 +377,7 @@ function fireShip(ship, dt, nextId) {
     gearCool -= dt;
     while (gearCool <= 0) {
       gearCool += gear.fire.cool;
-      const volley = gearVolley(ship, id);
+      const volley = gearVolley(ship, id, escortView);
       shots.push(...volley.shots);
       id = volley.nextId;
     }
@@ -572,16 +574,30 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   }
 
   ship = moveShip(ship, input, dt);
-  const fired = fireShip(ship, dt, nextId);
+  // 僚机索敌：开火与近身消弹必须读同一份战况，否则弹从一个位置出、护圈却在另一个位置。
+  // 这是纯函数（时间 + 目标表），不往 state 里存「僚机在哪」，复活/跨关/重试都不用搬运。
+  const escortView = escortWorld({ ...next, ship, enemies, boss });
+  const fired = fireShip(ship, dt, nextId, escortView);
   ship = fired.ship;
   nextId = fired.nextId;
 
-  let shots = [...state.shots, ...fired.shots].map((item) => ({
-    ...item,
-    x: item.x + item.vx * dt,
-    y: item.y + item.vy * dt,
-    age: item.age + dt,
-  }));
+  // 巡航导弹只在带 homing 标记的装备弹上转向，目标表与僚机索敌共用一份（各追各的）。
+  // 转向会改 vx，但 chipOnly 让 Boss 命中在 bossShotMultiplier 里直接短路到 chip，
+  // 不会因为「碰巧侧着飞」就打进侧面弱点。
+  const homingTargets = escortView.targets;
+  let shots = [...state.shots, ...fired.shots].map((item) => {
+    const v = item.homing && homingTargets.length
+      ? steerHoming(item, homingTargets[(item.escort ?? 0) % homingTargets.length], dt)
+      : { vx: item.vx, vy: item.vy };
+    return {
+      ...item,
+      vx: v.vx,
+      vy: v.vy,
+      x: item.x + v.vx * dt,
+      y: item.y + v.vy * dt,
+      age: item.age + dt,
+    };
+  });
   // 反物质弹耗尽的那一刻要炸开，所以过滤时得把它拦下来，不能一删了之。
   const spent = [];
   shots = shots.filter((item) => {
@@ -736,7 +752,7 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   // 僚机的近身消弹圈：照铁球那套范式，蹭掉的敌弹走 pop()，
   // 所以照样算连消、照样给分、照样出声。只对敌弹生效，
   // 不碰杂兵也不碰 Boss —— 装备不进火力配平，只把「活下来」这件事做厚。
-  for (const escort of escortsOf(ship)) {
+  for (const escort of escortsOf(ship, escortView)) {
     for (let i = 0; i < foes.length; i += 1) {
       const foe = foes[i];
       if (foe && Math.abs(escort.x - foe.x) <= escort.r + 1.4 && Math.abs(escort.y - foe.y) <= escort.r + 1.4) pop(i);

@@ -9,6 +9,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { STEP, advance, chooseWing, createGame, startGame, step } from '../src/game/simulation.js';
 import { EMPTY_INPUT, createInput, mergeInput } from '../src/game/input.js';
 import { canSelect } from '../src/game/levels.js';
@@ -119,4 +120,30 @@ test('选翼面板预带装备：出击之后僚机真的在场上开火', () =>
   }
   assert.ok(sawEscortShot, '带出去的僚机不能只是 HUD 上的一行字');
   assert.equal(game.status, 'playing');
+});
+
+test('僚机不靠一根连线绑在主机上：渲染层没有指挥线对象', () => {
+  const source = readFileSync(new URL('../src/scene/render.js', import.meta.url), 'utf8');
+  assert.ok(!source.includes('linkMesh') && !source.includes('linkGeo'),
+    '三型各自散开之后，连线会把它们重新绑成挂件');
+  assert.ok(!source.includes('主机到每架僚机的连线'), '注释里也不该留着旧设计');
+  assert.ok(source.includes("shot.homing ? 'cruise' : 'escort'"), '巡航导弹要单独分池');
+});
+
+test('暂停面板底部按钮栏随面板宽度收缩，不再向右溢出', () => {
+  // 真浏览器里量过：旧写法让「重开本章」吃满整行且不许收缩，320/390/1280 三种宽度
+  // 一律溢出面板 66px，「继续」被压到 77px。这类纯 CSS 回归判定层测试盖不到，
+  // 只能对着样式表守住那四个关键声明。
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  const bar = css.match(/\.panel-actions \{([\s\S]*?)\}/)?.[1] ?? '';
+  assert.ok(bar.includes('flex-wrap: wrap'), '放不下要能换行，不能硬挤一行');
+  assert.ok(/\.panel-actions \.panel-action \{[^}]*width: auto/s.test(css),
+    '按钮不能带着 width:100% 进 flex 容器，那会同时成为次键的 flex-basis');
+  assert.ok(/flex:\s*2\s+1\s+140px/.test(css) && /flex:\s*1\s+1\s+110px/.test(css),
+    '主键与次键都要有可伸缩的弹性基准');
+  assert.ok(!/flex:\s*0\s+0\s+auto/.test(css),
+    '不许有「不收缩」的动作键把整行撑破面板');
+  assert.ok(/\.panel-action \{[^}]*width: 100%/s.test(css),
+    '结算面板里那枚独立的「继续推进」仍要吃满宽');
 });

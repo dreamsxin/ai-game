@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { WINGS } from '../game/wings.js';
 import { GEAR } from '../game/gear.js';
-import { HAZARD, TIER_COLOR, PHASE_COLOR, gearSkin, wingSkin } from './palette.js';
+import { FLEET, HAZARD, TIER_COLOR, PHASE_COLOR, gearSkin, wingSkin } from './palette.js';
 import { TILT } from './view.js';
 import { wingProfile, wingSeats, wingTraits, wingTrim, boltAim, boltBarrel, WING_TIP_X } from './wingIcon.js';
 
@@ -843,27 +843,196 @@ export function makeEnemy(kind) {
  * Boss。弱点环是这一具模型上最重要的零件：它是关卡简报里那句话的画面形态。
  * 环按 weakSpots() 给的位置摆，所以「弱点在哪」永远和判定一致。
  */
+/**
+ * 舰队变阵表。坐标是相对 Boss 判定盒 (w, h) 的比例，不是世界格：
+ * 每套走位一种阵型，Boss 因此真的是「一支舰队」而不是同一块砖换个大小。
+ *
+ * **宽度契约**：最外侧 |rx| = 0.40，子舰自身半宽约 0.056，合计 0.456 < 0.5。
+ * 纵向同理：|rz| 最大 0.14，子舰半长约 0.31（最坏的 w/h = 44/18），合计 0.45 < 0.5。
+ * 看到的体量必须等于判定盒，否则玩家对着护卫舰打却不掉血，等于画面在说谎。
+ * models.test.js 直接对着这张表断言，撑破判定盒的阵型加不进来。
+ */
+export const FLEET_FORMATIONS = {
+  sweep: { count: 2, slots: [[-0.38, 0.1], [0.38, 0.1], [0, 0], [0, 0]] },
+  twin: { count: 2, slots: [[-0.4, 0.02], [0.4, 0.02], [0, 0], [0, 0]] },
+  ring: { count: 4, slots: [[-0.38, 0], [0.38, 0], [0, 0.14], [0, -0.14]] },
+  // 后排两艘往中间收，俯视才是一支雁形编队，而不是四个对称挂件。
+  fortress: { count: 4, slots: [[-0.4, 0.12], [0.4, 0.12], [-0.3, -0.14], [0.3, -0.14]] },
+  centipede: { count: 4, slots: [[-0.38, 0.14], [0.38, 0.14], [-0.38, -0.1], [0.38, -0.1]] },
+  fortressCore: { count: 4, slots: [[-0.4, 0.12], [0.4, 0.12], [-0.3, -0.14], [0.3, -0.14]] },
+};
+
+/**
+ * 外星舰队：一艘母舰 + 最多四艘独立护卫子舰。
+ *
+ * 上一版是一块 Box + 两块侧板 + 两道光边，自审注释里自己都写着「方砖」。
+ * 这一版把「舰队」拆成会各自运动的东西：V 字楔形舰艏、分层舰桥、尾部三枚引擎、
+ * 沿龙骨流动的能量脊、平躺的护盾环，以及按 pattern 变阵、缓慢巡航的子舰。
+ *
+ * **所有顶层部件都造在归一化尺寸上**，由 syncBoss 按 data.w / data.h 摆位缩放：
+ * 一是 16 关体型不同（w 从 24 到 44），二是判定盒绝不能被表现层撑破。
+ * 被 syncBoss 直接缩放的部件一律不绕 X 轴旋转——不然 scale.y 的语义会变成「舰身长度」，
+ * 摆出来的体型和判定盒对不上。只有子舰 group 内部可以自由旋转，因为整队只做等比缩放。
+ */
 export function makeBoss() {
   const group = new THREE.Group();
-  const shellMat = flat('#2f4fb0', { glow: 0.42, metalness: 0.55 });
-  const shell = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shellMat);
-  group.add(shell);
+  const hullMats = [];
+  const energyMats = [];
+  const edgeMats = [];
+  /**
+   * 发光轮廓线。舰体再怎么提亮，在深蓝网格上仍是一整片相近的蓝紫；
+   * 只有把每块装甲、每艘子舰的棱边勾出来，才读得出「一支舰队」而不是一坨色块。
+   * toneMapped:false 是给 ACES 留的：不然亮青会被压成灰绿。
+   */
+  const edge = (geometry, opacity = 0.8) => {
+    const mat = new THREE.LineBasicMaterial({
+      color: new THREE.Color(FLEET.energy),
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    edgeMats.push(mat);
+    return new THREE.LineSegments(new THREE.EdgesGeometry(geometry), mat);
+  };
+  const hull = (color, emissive, glow = 0.42) => {
+    const mat = flat(color, { emissive, glow, metalness: 0.68 });
+    hullMats.push(mat);
+    return mat;
+  };
+  const energy = (color, opacity = 0.85) => {
+    const mat = glowMat(color, opacity);
+    energyMats.push(mat);
+    return mat;
+  };
+
+  // ---- 母舰：低矮的中央龙骨 + V 字楔形舰艏 + 两片外倾侧翼 ----
+  const shellMat = hull(FLEET.hull, FLEET.hullLit, 0.62);
+  const shellGeo = new THREE.BoxGeometry(1, 1, 1);
+  const shell = new THREE.Mesh(shellGeo, shellMat);
+  const shellEdge = edge(shellGeo, 0.92);
+  group.add(shell, shellEdge);
+
+  const prowMat = hull(FLEET.plate, FLEET.hullLit, 0.62);
+  const prow = new THREE.Group();
+  for (const side of [-1, 1]) {
+    const cheek = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), prowMat);
+    // 两片各自往外挪一点再斜过来，俯视才是一个 V 字舰艏；
+    // 都留在原点的话会叠成一个 X 形交叉，读不出「船头」。
+    cheek.position.x = side * 0.28;
+    cheek.scale.set(0.62, 1, 1);
+    cheek.rotation.y = side * 0.52;
+    cheek.add(edge(new THREE.BoxGeometry(1, 1, 1), 0.8));
+    prow.add(cheek);
+  }
+  group.add(prow);
 
   const plates = [];
   for (const side of [-1, 1]) {
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), flat('#8fa6d8', { glow: 0.4, metalness: 0.7 }));
+    const plateGeo = new THREE.BoxGeometry(1, 1, 1);
+    const plate = new THREE.Mesh(plateGeo, hull(FLEET.plate, FLEET.hullLit, 0.55));
+    plate.rotation.z = side * -0.16;
+    plate.add(edge(plateGeo, 0.78));
     plates.push(plate);
     group.add(plate);
   }
-  const crown = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), flat('#c3d2ff', { glow: 0.5 }));
+  const crownGeo = new THREE.BoxGeometry(1, 1, 1);
+  const crown = new THREE.Mesh(crownGeo, hull(FLEET.bridge, FLEET.hullLit, 0.75));
+  crown.add(edge(crownGeo, 0.85));
   group.add(crown);
-  // 正面那道光边：Boss 体型大、颜色又暗，没有这道边它在夜色地面上就是一块方砖。
-  // 上缘再补一道同色的边——一块砖加两道边才有「舰体」的量级，自审截图里少的就是这一层。
-  const rimMat = glowMat(HAZARD.cool, 0.85);
+  // 舰桥顶的菱形指挥核：舰队自己最亮的一点，但不能抢弱点金环。
+  const bridgeCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), energy(FLEET.engine, 0.9));
+  group.add(bridgeCore);
+  const bridgeFlare = headFlare(FLEET.engine, 3.2, 0.42);
+  group.add(bridgeFlare);
+
+  // 正面与上缘两道能量边：舰体压得越暗，越要靠这两道边读出体量。
+  const rimMat = energy(FLEET.energy, 0.85);
   const rim = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), rimMat);
   group.add(rim);
   const brow = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), rimMat);
   group.add(brow);
+
+  // ---- 尾部三枚引擎：共用一份材质做整体脉动，朝 -Z 喷 ----
+  const engineMat = energy(FLEET.engine, 0.8);
+  const engineFlareMat = new THREE.SpriteMaterial({
+    map: glowTexture(),
+    color: new THREE.Color(FLEET.engine),
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const engines = [];
+  for (let i = 0; i < 3; i += 1) {
+    const node = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.1, 6, 16), engineMat);
+    ring.rotation.x = BILLBOARD_X;
+    const flare = new THREE.Sprite(engineFlareMat);
+    flare.scale.setScalar(3.4);
+    node.add(ring, flare);
+    group.add(node);
+    engines.push(node);
+  }
+
+  // ---- 龙骨能量脊：五枚节点沿 z 排队，按帧错相流动 ----
+  const spine = [];
+  for (let i = 0; i < 5; i += 1) {
+    const mat = energy(FLEET.energy, 0.5);
+    const node = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), mat);
+    node.userData.mat = mat;
+    group.add(node);
+    spine.push(node);
+  }
+
+  // 平躺的护盾环：半径压在判定半宽里，绕着整支舰队慢慢转。
+  const shieldMat = energy(FLEET.energy, 0.26);
+  const shield = new THREE.Mesh(new THREE.TorusGeometry(1, 0.016, 6, 64), shieldMat);
+  shield.rotation.x = -Math.PI / 2;
+  group.add(shield);
+
+  // ---- 护卫子舰：楔形舰体 + 两片掠翼 + 引擎光 + 识别灯 ----
+  const fleet = [];
+  for (let i = 0; i < 4; i += 1) {
+    const escort = new THREE.Group();
+    const bodyMat = hull(FLEET.plate, FLEET.hullLit, 0.68);
+    const bodyGeo = new THREE.BoxGeometry(1.2, 0.34, 2.4);
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.add(edge(bodyGeo, 0.95));
+    escort.add(body);
+    // 尖艏：四棱锥转过来指 +Z，再压扁厚度。这个 scale 只作用在子舰内部，
+    // syncBoss 只等比缩放整个 escort，所以不会被覆盖。
+    const noseGeo = new THREE.ConeGeometry(0.6, 1.1, 4);
+    const nose = new THREE.Mesh(noseGeo, bodyMat);
+    nose.rotation.x = Math.PI / 2;
+    nose.rotation.y = Math.PI / 4;
+    nose.scale.z = 0.34;
+    nose.position.z = 1.55;
+    nose.add(edge(noseGeo, 0.9));
+    escort.add(nose);
+    for (const side of [-1, 1]) {
+      const wingGeo = new THREE.BoxGeometry(1.1, 0.12, 0.85);
+      const wing = new THREE.Mesh(wingGeo, bodyMat);
+      wing.position.set(side * 0.68, 0, 0.18);
+      wing.rotation.z = side * 0.26;
+      wing.add(edge(wingGeo, 0.8));
+      escort.add(wing);
+    }
+    // 一道横向识别光带：小舰在屏幕上只有几十像素，靠它一眼分出「这是另一艘舰」。
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.1, 0.18), energy(FLEET.engine, 0.9));
+    stripe.position.set(0, 0.2, 0.55);
+    escort.add(stripe);
+    const lamp = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), energy(FLEET.energy, 0.95));
+    lamp.position.set(0, 0.34, -0.55);
+    escort.add(lamp);
+    const jet = new THREE.Sprite(engineFlareMat);
+    jet.scale.setScalar(2.4);
+    jet.position.set(0, 0, -1.3);
+    escort.add(jet);
+    escort.visible = false;
+    group.add(escort);
+    fleet.push(escort);
+  }
 
   const spots = [];
   for (let i = 0; i < 2; i += 1) {
@@ -887,7 +1056,6 @@ export function makeBoss() {
     spot.add(ring);
     spot.add(core);
     // **弱点永远画在壳外面**：它标的是「往这儿打」，被自己的装甲挡住就等于没标。
-    // 所以这三件都关掉深度测试并排在最后画。
     for (const part of [halo, ring, core]) {
       part.material.depthTest = false;
       part.renderOrder = 4;
@@ -898,7 +1066,11 @@ export function makeBoss() {
     spots.push(spot);
   }
 
-  group.userData = { shell, shellMat, plates, crown, rim, rimMat, brow, spots };
+  group.userData = {
+    shell, shellMat, shellEdge, prow, plates, crown, bridgeCore, bridgeFlare,
+    rim, rimMat, brow, engines, engineMat, engineFlareMat, spine,
+    shield, shieldMat, fleet, spots, hullMats, energyMats, edgeMats,
+  };
   return group;
 }
 
@@ -1121,9 +1293,65 @@ function tracer(color, length, width = 0.46) {
 
 /** 我方子弹。每种火力一种形状加一种颜色，屏幕上同时飞十几种也认得出来。 */
 export function makeShot(kind, color) {
+  if (kind === 'cruise') {
+    // 巡航导弹：细长箭体 + 分叉尾翼 + 双股尾焰。整枚跟着速度转（syncShots 里按 vx/vy 定向），
+    // 所以拐弯这件事在画面上读得出来；双股离子矢是光条，光条再怎么转也只像一根斜线。
+    // 识别色随装备型号走，和离子矢同色但不同形，两路火力不会认混。
+    const tint = color ?? '#ff9be8';
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.36, 4.0, 6), glowMat('#ffffff', 0.92));
+    body.rotation.x = -Math.PI / 2;
+    body.position.z = -0.8;
+    // 比离子矢长一截：巡航导弹是「细长实体」，转向时整个剪影才转得出来。
+    const spine = glowLayer(tint, 0.34, 7.6, 0.85);
+    const haze = glowLayer(tint, 1.0, 8.0, 0.2);
+    group.add(body, spine, haze);
+    const fins = [];
+    for (const side of [-1, 1]) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, 0.72), glowMat(tint, 0.8));
+      fin.position.set(side * 0.52, 0, 1.9);
+      fin.rotation.z = side * 0.32;
+      group.add(fin);
+      fins.push(fin);
+    }
+    const jets = [];
+    for (const side of [-1, 1]) {
+      const jet = headFlare(tint, 2.2, 0.6);
+      jet.position.set(side * 0.3, 0, 3.4);
+      group.add(jet);
+      jets.push(jet);
+    }
+    const head = headFlare(tint, 3.8, 0.95);
+    head.position.z = -3.6;
+    group.add(head);
+    group.userData = { head, jets, fins, spine, haze };
+    return group;
+  }
   if (kind === 'escort') {
-    // 僚机弹细一档、短一截、走本型的识别色：两路火力叠在同一列也分得开是谁打的。
-    return tracer(color ?? '#bfe9ff', 3.6, 0.3);
+    // 双股离子矢：两根平行光条夹一根白芯，前端一枚菱形弹尖 + 亮头光团。
+    // 上一版只是把 tracer 缩到 3.6×0.3，在深色地面上等于一根会被主机尾焰吃掉的
+    // 单像素线，玩家因此以为「僚机没有子弹」。这一版刻意做得比主机弹更醒目，
+    // 但形状完全不同（双股 + 菱形尖 + 呼吸脉动），两路火力叠在同一列也分得开。
+    // 加色叠层的 alpha 有意压住：三股实体再叠一层外晕，超过 1 就烧成一整条白杠。
+    const tint = color ?? '#bfe9ff';
+    const group = new THREE.Group();
+    const rails = [];
+    for (const side of [-1, 1]) {
+      const rail = glowLayer(tint, 0.3, 5.6, 0.82);
+      rail.position.x = side * 0.28;
+      group.add(rail);
+      rails.push(rail);
+    }
+    const core = glowLayer('#ffffff', 0.2, 5.0, 0.92);
+    const haze = glowLayer(tint, 1.1, 5.2, 0.18);
+    const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.52, 0), glowMat('#ffffff', 0.95));
+    tip.scale.set(1, 0.55, 1.5);
+    tip.position.z = -2.8;
+    const head = headFlare(tint, 4.6, 0.95);
+    head.position.z = -2.9;
+    group.add(core, haze, tip, head);
+    group.userData = { head, tip, rails, core, haze };
+    return group;
   }
   if (kind === 'well') {
     const group = new THREE.Group();

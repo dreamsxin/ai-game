@@ -2,9 +2,20 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHAPTER_ART, GEAR_HUES, GEAR_SKINS, HAZARD, TIER_COLOR, WING_HUES, WING_SKINS, chapterArt, gearSkin, hsl, hslHex, hueGap } from '../src/scene/palette.js';
+import { CHAPTER_ART, FLEET, GEAR_HUES, GEAR_SKINS, HAZARD, TIER_COLOR, WING_HUES, WING_SKINS, chapterArt, gearSkin, hsl, hslHex, hueGap } from '../src/scene/palette.js';
 import { WINGS } from '../src/game/wings.js';
 import { GEAR, GEAR_CODES } from '../src/game/gear.js';
+
+test('外星舰队的能量色不撞敌弹红，也不撞弱点金', () => {
+  assert.ok(hueGap(hsl(FLEET.energy).h, hsl(HAZARD.foe).h) > 40, '能量色不能长得像敌弹');
+  assert.ok(hueGap(hsl(FLEET.energy).h, hsl(HAZARD.gold).h) > 40, '能量色不能抢弱点金环');
+  // 实拍教训：舰体压成近黑（l < 0.2）在深蓝网格地面上整支舰队会消失，
+  // 只剩护盾环和几个引擎光点。所以这里守下限，也守「别亮过轮廓」的上限。
+  assert.ok(hsl(FLEET.hull).l > 0.2, '舰体不能压成近黑');
+  assert.ok(hsl(FLEET.hull).l < 0.5, '舰体不能亮过能量轮廓');
+  assert.ok(hsl(FLEET.energy).s > 0.6, '轮廓与能量脊要够饱和');
+  assert.notEqual(FLEET.energy, FLEET.rageEnergy, '半血换色得看得出来');
+});
 
 test('四章各一套色，取不到的章号会被夹住', () => {
   assert.equal(CHAPTER_ART.length, 4);

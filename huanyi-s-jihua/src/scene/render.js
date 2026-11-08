@@ -9,14 +9,15 @@
 import * as THREE from 'three';
 import { BOSS_DEATH_TIME, FIELD_W, WING_DRIFT } from '../game/rules.js';
 import { WEAKNESS, WINGS, tierOf, wingAtTier } from '../game/wings.js';
-import { GEAR, MAX_FORMATION, escortsOf, gearSpec } from '../game/gear.js';
+import { GEAR, MAX_FORMATION, escortWorld, escortsOf, gearSpec } from '../game/gear.js';
 import { orbsOf } from '../game/simulation.js';
 import { weakSpots } from '../game/boss.js';
 import { ALT, pixelScale, worldX, worldZ } from './view.js';
-import { HAZARD, TIER_COLOR, OVERDRIVE_COLOR, PHASE_COLOR, gearSkin } from './palette.js';
+import { FLEET, HAZARD, TIER_COLOR, OVERDRIVE_COLOR, PHASE_COLOR, gearSkin } from './palette.js';
 import { tierGainLabel } from './readout.js';
 import { createStage } from './stage.js';
 import {
+  FLEET_FORMATIONS,
   createPool,
   glowTexture,
   makeBoss,
@@ -78,7 +79,11 @@ const wingFor = (holder, slot, code) => {
 /** 每种火力对应一种模型。同型号的子弹共用一个池子，回声（量子分身）的另开一个。 */
 const shotKey = (shot) => {
   // 僚机弹按型号分池：三型的识别色不同，共用一个池子会串色。
-  if (shot.source === 'gear') return `escort:${shot.gearCode ?? 'E1'}`;
+  // 巡航导弹再单独分一池：它有箭体与尾翼，和双股离子矢不是同一种东西。
+  if (shot.source === 'gear') {
+    const family = shot.homing ? 'cruise' : 'escort';
+    return `${family}:${shot.gearCode ?? 'E1'}`;
+  }
   if (shot.well) return 'well';
   const kind = ['flame', 'beam', 'anti', 'shard', 'pierce', 'bomb'].includes(shot.kind) ? shot.kind : 'pellet';
   return shot.echo ? `${kind}:echo` : kind;
@@ -155,23 +160,9 @@ export function createRenderer(host) {
     }
     return pool;
   };
-  // 主机到每架僚机的连线：合流那一刻它把「这是一支编队」说清楚。
-  // 最多三架，所以固定 6 个顶点，用不到的挪到镜头外，不做动态扩容。
-  const linkGeo = new THREE.BufferGeometry();
-  const linkPos = new Float32Array(MAX_FORMATION * 2 * 3);
-  linkGeo.setAttribute('position', new THREE.BufferAttribute(linkPos, 3));
-  const linkMesh = new THREE.LineSegments(
-    linkGeo,
-    new THREE.LineBasicMaterial({
-      color: new THREE.Color('#bfe9ff'),
-      transparent: true,
-      opacity: 0.42,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
-  );
-  stage.world.add(linkMesh);
   // 僚机的插值位置（场地格）。判定层的 escortsOf 是目标，这一份是「正在飞过去」。
+  // 不再拉主机到僚机的连线：三种阵型各自散开之后，一根线会把它们又「绑」回挂件，
+  // 环绕那一路尤其会被这条线切成一团。识别靠各自的形状、识别色与炮口闪光。
   let escortPos = new Map();
   const boss = makeBoss();
   boss.visible = false;
@@ -196,7 +187,8 @@ export function createRenderer(host) {
     if (!pool) {
       const [kind, tag] = key.split(':');
       pool = createPool(stage.world, () => {
-        const made = kind === 'escort' ? makeShot(kind, gearSkin(tag).lead) : makeShot(kind);
+        const colored = kind === 'escort' || kind === 'cruise';
+        const made = colored ? makeShot(kind, gearSkin(tag).lead) : makeShot(kind);
         if (tag === 'echo') {
           const dim = (mesh) => {
             if (mesh.material) mesh.material = mesh.material.clone();
@@ -812,21 +804,24 @@ export function createRenderer(host) {
 
   /**
    * 僚机编队。目标坐标直接读判定层的 escortsOf（纯函数），这一层只做插值与演出：
-   * 延迟跟随像有惯性、新僚机从屏幕下方俯冲入列、主机与编队之间拉一道连线光弧、
-   * 每架有独立的炮口闪光与拖尾。判定层完全不知道这些。
+   * 延迟跟随像有惯性、新僚机从屏幕下方俯冲入列、每架有独立的炮口闪光与拖尾。
+   * 判定层完全不知道这些。
+   *
+   * 刻意不画主机到僚机的连线：三型各自散开（侧翼 / 前出 / 环绕）之后，
+   * 一根线会把它们重新「绑」成挂件，环绕那一路还会被切成一团。
+   * 编队关系靠形状、识别色与入列光弧说出来就够了。
    *
    * 位置一律用绝对值覆盖，池子复用不会把 scale / opacity 累乘；僚机不进 hitBoxes，
    * 也不参与无敌闪烁——它是一支跟着飞的小队，不是机身的另一块装甲。
    */
   const syncEscorts = (state, dt = 0) => {
-    const targets = escortsOf(state.ship);
+    const world = escortWorld(state);
+    const targets = escortsOf(state.ship, world);
     const visible = ship.visible && state.status !== 'dying';
     for (const pool of escortPools.values()) pool.begin();
     const next = new Map();
-    const link = linkGeo.getAttribute('position');
     const cool = (state.ship.gear ? gearSpec(state.ship.gear)?.fire.cool : 0) ?? 0.5;
     const heat = cool > 0 ? Math.min(1, Math.max(0, (state.ship.gearCool ?? 0) / cool)) : 0;
-    let cursor = 0;
     for (const escort of targets) {
       const key = `${escort.code}:${escort.index}`;
       const seen = escortPos.get(key);
@@ -839,38 +834,42 @@ export function createRenderer(host) {
       const skin = gearSkin(escort.code);
       const ud = mesh.userData;
       mesh.visible = visible;
-      // 抬高 1.35 格：僚机挂在主机正后方（判定位置不变），但表现层要把它从
+      // 抬高 1.35 格：僚机停机时贴在主机后方（判定位置不变），但表现层要把它从
       // 三层发动机羽流里拎出来，否则单架编队在屏幕上就是尾焰末端的一团青光。
+      // 前出索敌后它离开尾焰，这一层高度照样让它和地面网格分得开。
+      // 前出 / 环绕时僚机离主机几十格，斜俯视里只剩几个像素，容易被弹列和尾焰淹没。
+      // 按距离等比放大一点点、把识别光晕提亮：只改剪影，判定坐标仍由 escortsOf 给，
+      // 僚机也不进 hitBoxes，所以不碰「看到的宽度 = 判定宽度」那条契约。
+      const dist = Math.hypot(px - state.ship.x, py - state.ship.y);
+      mesh.scale.setScalar(1 + Math.min(0.55, dist / 60));
       mesh.position.set(worldX(px), ALT.ship + 1.35, worldZ(py));
       mesh.rotation.z = Math.max(-0.4, Math.min(0.4, -(escort.x - from.x) * 0.4));
       mesh.rotation.y = Math.sin(state.elapsed * 1.5 + escort.index) * 0.06;
       if (ud.ring) ud.ring.rotation.z += dt * 1.5;
       ud.flash.visible = visible && state.status === 'playing';
+      const power = heat ** 3;
       if (ud.flash.visible) {
-        const power = heat ** 3;
         ud.flash.material.color.set(skin.lead);
-        ud.flash.material.opacity = Math.min(0.7, power);
-        ud.flash.scale.setScalar(1.8 + power * 1.3);
+        ud.flash.material.opacity = Math.min(0.95, 0.12 + power * 0.85);
+        ud.flash.scale.setScalar(2.2 + power * 2.0);
       }
       ud.halo.material.color.set(skin.halo);
-      ud.halo.material.opacity = 0.34 + Math.sin(state.elapsed * 3 + escort.index) * 0.1;
+      ud.halo.material.opacity =
+        0.42 + Math.sin(state.elapsed * 3 + escort.index) * 0.1 + Math.min(0.26, dist / 100);
       if (!seen && visible) {
         spark(escort.x, escort.y, skin.lead, 12, 26);
         shockwave(escort.x, escort.y, skin.lead, 6, 0.42);
       }
-      // 拖尾只给一粒淡星火：加色混合下多叠几层又会烧成白斑（上一轮的教训）。
-      if (visible && state.status === 'playing') spark(px, py + 1.4, skin.lead, 1, 5);
-      link.setXYZ(cursor, worldX(state.ship.x), ALT.ship + 0.55, worldZ(state.ship.y));
-      link.setXYZ(cursor + 1, worldX(px), ALT.ship + 1.2, worldZ(py));
-      cursor += 2;
+      // 拖尾只给几粒淡星火：加色混合下多叠几层又会烧成白斑（上一轮的教训）。
+      // 离得越远多给一两粒，帮眼睛跟上「它跑到哪去了」，但绝不放成一条亮线。
+      if (visible && state.status === 'playing') {
+        spark(px, py + 1.4, skin.lead, 1 + Math.min(2, Math.floor(dist / 22)), 5);
+        // 开火那一两帧在机首补一小簇火花，把「发射」这件事说出来。
+        if (power > 0.86) spark(px, py - 2.2, skin.lead, 2, 9);
+      }
     }
     escortPos = next;
     for (const pool of escortPools.values()) pool.end();
-    for (let i = cursor; i < MAX_FORMATION * 2; i += 1) link.setXYZ(i, 0, -400, 0);
-    link.needsUpdate = true;
-    linkMesh.visible = visible && targets.length > 0;
-    linkMesh.material.color.set(gearSkin(state.ship.gear).lead);
-    linkMesh.material.opacity = 0.5 + Math.sin(state.elapsed * 4) * 0.12;
   };
 
   const syncEnemies = (state) => {
@@ -905,52 +904,115 @@ export function createRenderer(host) {
     const ud = boss.userData;
     boss.position.set(worldX(data.x), ALT.boss, worldZ(data.y));
     const tall = Math.max(6, data.h * 0.55);
-    ud.shell.scale.set(data.w, tall, data.h);
-    ud.shellMat.color.set(data.rage ? '#8c2038' : '#2f4fb0');
-    ud.shellMat.emissive.set(data.rage ? '#ff2f5e' : '#4f74d8');
-    ud.shellMat.emissiveIntensity = data.rage ? 0.7 : 0.45;
-    ud.rim.scale.set(data.w * 0.92, 1.4, 1.4);
-    ud.rim.position.set(0, -tall * 0.3, data.h / 2);
-    ud.rimMat.color.set(data.rage ? HAZARD.warm : HAZARD.cool);
-    // 上缘那道边：和正面那道同色，一块砖加两道边才读得出体量。
-    ud.brow.scale.set(data.w * 0.72, 1.1, 1.1);
-    ud.brow.position.set(0, tall * 0.52, data.h * 0.2);
+    const w = data.w;
+    const h = data.h;
+    const rage = Boolean(data.rage);
+    const dying = Boolean(data.dying);
+    const progress = dying ? 1 - Math.max(0, data.deathTimer) / BOSS_DEATH_TIME : 0;
+
+    // ---- 母舰：中央龙骨、V 字舰艏、外倾侧翼、分层舰桥 ----
+    // 母舰刻意只占判定盒中间那一段：两侧必须留出真空，四艘子舰才读得出「分离的舰」，
+    // 而不是粘在母舰边缘的装饰片。这是首轮实拍最扎眼的问题。
+    ud.shell.scale.set(w * 0.34, tall * 0.5, h * 0.82);
+    // 轮廓线跟着龙骨一起缩放：它是 Boss 在深蓝网格上唯一稳定的「这是一艘舰」的线索。
+    ud.shellEdge.scale.copy(ud.shell.scale);
+    ud.prow.scale.set(w * 0.26, tall * 0.44, h * 0.4);
+    ud.prow.position.set(0, 0, h * 0.46);
+    ud.prow.rotation.y = Math.sin(data.age * 0.6) * 0.04;
     for (const [i, plate] of ud.plates.entries()) {
       const side = i === 0 ? -1 : 1;
-      plate.scale.set(data.w * 0.16, tall * 1.15, data.h * 0.7);
-      plate.position.set((side * data.w) / 2, 0, 0);
+      plate.scale.set(w * 0.1, tall * 0.72, h * 0.62);
+      plate.position.set(side * w * 0.2, 0, 0);
     }
-    ud.crown.scale.set(data.w * 0.4, tall * 0.4, data.h * 0.45);
-    ud.crown.position.set(0, tall * 0.7, -data.h * 0.1);
-    // 半血换姿态：怒了之后整具壳往前倾，配色也换掉。
-    boss.rotation.x = data.rage ? Math.sin(data.age * 8) * 0.03 : 0;
-    // 死亡过载：外壳烧白、整体发抖、缓缓下沉——它已经撑不住了，画面要说出这句话。
-    if (data.dying) {
-      const progress = 1 - Math.max(0, data.deathTimer) / BOSS_DEATH_TIME;
-      ud.shellMat.color.set('#e8d0c0');
-      ud.shellMat.emissive.set('#ff9a5e');
-      ud.shellMat.emissiveIntensity = 0.85 + Math.sin(data.age * 42) * 0.3;
-      boss.rotation.z = (Math.random() - 0.5) * 0.08;
-      boss.position.y = ALT.boss - progress * 2.6;
-    } else {
-      boss.rotation.z = 0;
+    ud.crown.scale.set(w * 0.16, tall * 0.5, h * 0.28);
+    ud.crown.position.set(0, tall * 0.5, -h * 0.12);
+    ud.bridgeCore.scale.setScalar(w * 0.05);
+    ud.bridgeCore.position.set(0, tall * 0.82, -h * 0.12);
+    ud.bridgeCore.rotation.y = data.age * 1.4;
+    ud.bridgeFlare.position.copy(ud.bridgeCore.position);
+    ud.bridgeFlare.material.opacity = 0.35 + Math.sin(data.age * 4) * 0.12;
+
+    // 两道光边只勾母舰自己的正面，别横贯整支舰队：0.86w 那一版把四艘子舰
+    // 全压在同一条亮杠底下，看起来又变回「一整块」。
+    ud.rim.scale.set(w * 0.36, 1.4, 1.4);
+    ud.rim.position.set(0, -tall * 0.3, h * 0.44);
+    ud.brow.scale.set(w * 0.26, 1.1, 1.1);
+    ud.brow.position.set(0, tall * 0.42, h * 0.18);
+
+    // ---- 引擎阵列：三枚喷口沿舰尾排开，共用的两份材质整体脉动 ----
+    const beat = 0.6 + Math.sin(data.age * (rage ? 15 : 8)) * 0.25;
+    ud.engineMat.opacity = beat;
+    ud.engineFlareMat.opacity = beat * 0.82;
+    for (const [i, engine] of ud.engines.entries()) {
+      engine.position.set((i - 1) * w * 0.14, 0, -h * 0.44);
+      engine.scale.setScalar(w * 0.052);
+      engine.children[1].scale.setScalar(2.4 + beat * 1.4);
     }
+
+    // ---- 龙骨能量脊：五枚节点错相流动，像能量在往舰艏送 ----
+    for (const [i, node] of ud.spine.entries()) {
+      node.position.set(0, tall * 0.3, (i - 2) * h * 0.16);
+      node.scale.setScalar(w * 0.026);
+      node.userData.mat.opacity = 0.18 + 0.62 * Math.max(0, Math.sin(data.age * 3.4 - i * 0.85));
+    }
+
+    // 护盾环：半径压在判定半宽里，转起来给整支舰队一个「同一阵营」的轮廓。
+    ud.shield.scale.setScalar(w * 0.46);
+    ud.shield.position.y = -tall * 0.2;
+    ud.shield.rotation.z = data.age * (rage ? 0.9 : 0.35);
+    ud.shieldMat.opacity = rage ? 0.4 : 0.24;
+
+    // ---- 护卫子舰：按走位变阵、缓慢巡航；死亡过载时整队向外散开 ----
+    // 位置每帧用绝对值重算，所以 multiplyScalar 不会跨帧累积。
+    const form = FLEET_FORMATIONS[data.pattern] ?? FLEET_FORMATIONS.sweep;
+    for (const [i, escort] of ud.fleet.entries()) {
+      escort.visible = i < form.count;
+      if (!escort.visible) continue;
+      const [rx, rz] = form.slots[i];
+      const phase = data.age * (rage ? 1.7 : 0.8) + i * 1.7;
+      escort.position.set(
+        rx * w + Math.sin(phase) * w * 0.012,
+        tall * 0.1 + Math.sin(phase * 1.3) * tall * 0.12,
+        rz * h + Math.cos(phase * 0.8) * h * 0.02,
+      );
+      if (dying) escort.position.multiplyScalar(1 + progress * 0.42);
+      escort.rotation.z = Math.sin(phase) * 0.08 + (dying ? progress * (i % 2 ? 0.5 : -0.5) : 0);
+      escort.rotation.y = Math.sin(phase * 0.6) * 0.16;
+      escort.scale.setScalar(w * 0.05);
+    }
+
+    // ---- 配色：半血换姿态，死亡过载烧白 ----
+    const hullColor = dying ? '#e8d0c0' : rage ? FLEET.rage : FLEET.hull;
+    const emissive = dying ? '#ff9a5e' : rage ? '#ff2f5e' : FLEET.hullLit;
+    for (const mat of ud.hullMats) {
+      mat.color.set(hullColor);
+      mat.emissive.set(emissive);
+      mat.emissiveIntensity = dying ? 0.95 + Math.sin(data.age * 42) * 0.3 : rage ? 0.9 : 0.7;
+    }
+    const energyColor = rage && !dying ? FLEET.rageEnergy : FLEET.energy;
+    for (const mat of ud.energyMats) mat.color.set(energyColor);
+    // 所有舰体棱边是独立的 LineBasicMaterial，不跟着 hull/energy 两族走。
+    for (const mat of ud.edgeMats) mat.color.set(rage && !dying ? FLEET.rageEnergy : FLEET.energy);
+    // 引擎与舰桥光晕是独立 Sprite 材质，不在 energyMats 里，手动跟上同一套色。
+    ud.engineMat.color.set(rage && !dying ? FLEET.rageEnergy : FLEET.engine);
+    ud.engineFlareMat.color.set(rage && !dying ? FLEET.rageEnergy : FLEET.engine);
+    ud.bridgeFlare.material.color.set(rage && !dying ? FLEET.rageEnergy : FLEET.engine);
+    boss.rotation.x = rage ? Math.sin(data.age * 8) * 0.03 : 0;
+    boss.rotation.z = dying ? (Math.random() - 0.5) * 0.08 : 0;
+    boss.position.y = ALT.boss - (dying ? progress * 2.6 : 0);
 
     // 弱点环照 weakSpots() 摆，所以「该往哪打」永远和判定一致。
     const spots = weakSpots(data);
     const pulse = 0.78 + Math.sin(data.age * 6) * 0.22;
     for (const [i, spot] of ud.spots.entries()) {
       const src = spots[i];
-      spot.visible = Boolean(src) && !data.dying;
+      spot.visible = Boolean(src) && !dying;
       if (!src) continue;
-      // 壳内那个核贴在壳体中部，不该飘在 Boss 头顶——飘高了看着像另一个目标。
       // **弱点环是 boss 这一层的子物体**，所以位置要写成相对量。
-      // 之前照世界坐标写，等于把 Boss 自己的位移又加了一遍：环因此飘在 Boss 头顶两倍高的地方，
-      // 「壳内正中」和「贴在地面」这两种弱点都指错了位置。
+      // 之前照世界坐标写，等于把 Boss 自己的位移又加了一遍：环因此飘在 Boss 头顶两倍高的地方。
       const alt = data.weak === 'low' ? ALT.low : ALT.boss + tall * 0.02;
-      // 再往前挪到壳的正面：写在中心的话它埋在壳里，只能靠关掉深度测试硬透出来，
-      // 看着像一枚贴在贴图上的点；挪到正面才像「这块装甲下面就是核」。
-      const forward = data.weak === 'low' ? 1.2 : data.h * 0.45;
+      // 新舰艏比旧方砖更靠前，光环也跟着贴到舰队正面，别埋进舰体里。
+      const forward = data.weak === 'low' ? 1.2 : h * 0.62;
       spot.position.set(
         worldX(src.x) - worldX(data.x),
         alt - ALT.boss,
@@ -1069,7 +1131,10 @@ export function createRenderer(host) {
     for (const shot of state.shots) {
       const key = shotKey(shot);
       const mesh = shotPool(key).take();
-      mesh.position.set(worldX(shot.x), shot.ground ? ALT.low : ALT.shot, worldZ(shot.y));
+      // 僚机实体抬在 ALT.ship + 1.35，弹也画在同一层，才像「从僚机嘴里喷出来」。
+      // 之前统一用 ALT.shot，弹从僚机脚下冒出来又被主机尾焰盖住，看着像没开火。
+      const alt = shot.source === 'gear' ? ALT.ship + 1.35 : shot.ground ? ALT.low : ALT.shot;
+      mesh.position.set(worldX(shot.x), alt, worldZ(shot.y));
       // 阶级看得见：Mk.II/III 的弹就是更大一号（引力井自己管比例，反物质弹有自己的脉动）。
       // 用绝对值覆盖而不是乘法：池子里的 mesh 会被反复复用，乘法会跨帧累积。
       const bulk = shot.well || shot.kind === 'anti' ? 1 : 1 + (((shot.tier ?? 1) - 1) * 0.3);
@@ -1118,6 +1183,22 @@ export function createRenderer(host) {
         if (ud.core) ud.core.material.opacity = 0.82 + throb * 0.18;
         if (ud.mid) ud.mid.material.opacity = 0.4 + throb * 0.2;
         if (ud.head) ud.head.scale.setScalar(4.0 + throb * 1.6);
+      } else if (shot.homing) {
+        // 巡航导弹：两股尾焰错相喷，转向时整枚已经按速度旋转，尾焰跟着一跳一跳，
+        // 于是「它在追」这件事不用看轨迹也能读出来。opacity 绝对值覆盖，池子复用不累积。
+        const ud = mesh.userData;
+        for (const [i, jet] of (ud.jets ?? []).entries()) {
+          jet.material.opacity = 0.4 + Math.sin(shot.age * 26 + i * 1.9) * 0.22;
+        }
+        if (ud.head) ud.head.material.opacity = 0.82 + Math.sin(shot.age * 18) * 0.12;
+      } else if (shot.kind === 'escort') {
+        // 双股离子矢自己会呼吸：每架相位错开，三架编队打出来是三股不同节奏的光，
+        // 而不是三根一模一样的静态竖杠。池子复用，opacity / scale 一律绝对值覆盖。
+        const ud = mesh.userData;
+        const pulse = 0.72 + Math.sin(shot.age * 34 + (shot.escort ?? 0) * 1.7) * 0.28;
+        if (ud.head) ud.head.material.opacity = 0.72 + pulse * 0.26;
+        if (ud.tip) ud.tip.scale.set(1, 0.55, 1.2 + pulse * 0.5);
+        for (const rail of ud.rails ?? []) rail.material.opacity = 0.55 + pulse * 0.35;
       }
     }
     for (const pool of shotPools.values()) pool.end();
@@ -1376,9 +1457,6 @@ export function createRenderer(host) {
       dropPool.dispose();
       gearDropPool.dispose();
       for (const pool of escortPools.values()) pool.dispose();
-      stage.world.remove(linkMesh);
-      linkGeo.dispose();
-      linkMesh.material.dispose();
       ringPool.dispose();
       for (const pool of enemyPools.values()) pool.dispose();
       for (const pool of shotPools.values()) pool.dispose();

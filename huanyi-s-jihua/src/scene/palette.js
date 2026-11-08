@@ -21,6 +21,24 @@ export const HAZARD = {
   warm: '#ff5470', // 掉翼、裸机
 };
 
+/**
+ * 外星舰队的识别色。Boss 从「一块蓝色方砖」重做成母舰 + 护卫子舰编队后，
+ * 舰体不能压成近黑：这一版的地面就是深蓝网格，#171d3a 那种「高级暗色」实拍下来
+ * 整支舰队会直接消失，只剩护盾环和几个引擎光点。所以走中明度紫合金 + 高亮轮廓线，
+ * 靠描边而不是靠色块把「一艘母舰带四艘子舰」读出来。
+ * 两条硬约束（palette.test.js 守着）：能量色不能撞敌弹红，也不能撞弱点金。
+ */
+export const FLEET = {
+  hull: '#39406f',
+  hullLit: '#7b78d8',
+  plate: '#4b5396',
+  bridge: '#9a94ec',
+  energy: '#6affe0',
+  engine: '#d2fff6',
+  rage: '#8e2044',
+  rageEnergy: '#ff7a94',
+};
+
 /** 阶级色：Mk.I / II / III。越往上越暖越亮。 */
 export const TIER_COLOR = ['#9fc2ff', '#6effc4', '#ffd447'];
 

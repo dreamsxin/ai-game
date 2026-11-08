@@ -698,19 +698,34 @@ body {
   font-weight: 700;
 }
 
-/* 两个并排的动作键（继续 / 重新开始）：主键吃满剩余宽度，次键只占内容那么宽。 */
+/* 两个并排的动作键（继续 / 重开本章）：宽度必须跟着面板收缩，放不下就上下两行。
+   不能让 .panel-action 的 width:100% 直接进 flex 容器——它会同时成为 ghost 的
+   flex-basis，再叠加 flex:0 0 auto（不许收缩），次键就独占整行宽，主键被挤到
+   min-content，整行向右溢出面板 66px（320/390/1280 三种宽度实测都是这个数）。
+   这里统一改成弹性基准 + 可换行：宽屏主键占大头，窄屏两键各占满一行。 */
 .panel-actions {
   margin-top: 12px;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+  width: 100%;
 }
 
 .panel-actions .panel-action {
   margin-top: 0;
+  /* 只有这一栏里的按钮改掉 width:100%；结算面板里那枚独立的「继续推进」仍吃满宽。 */
+  width: auto;
+  min-width: 0;
+  flex: 2 1 140px;
+}
+
+.panel-actions .panel-action-ghost {
+  flex: 1 1 110px;
 }
 
 .panel-action-ghost {
-  flex: 0 0 auto;
+  /* flex 基准由 .panel-actions 那段统一给，别在这里写 flex:0 0 auto：
+     它会越过面板宽度把「重开本章」撑成整行。 */
   background: transparent;
   color: var(--muted);
   border: 1px solid rgba(148, 163, 199, 0.4);
