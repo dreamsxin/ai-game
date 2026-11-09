@@ -16,7 +16,7 @@
 | 本地预览 | `http://127.0.0.1:4205/`（当前服务的是 `dist/`，不是 dev） |
 | 线上 | `https://wing-swap-s.app.workbuddy.host/?sharecode=WAR5MAZJ5P` |
 | 发布参数 | 从 `huanyi-s-jihua/dist` 发布，`appName=换翼S计划`、`domainPrefix=wing-swap-s`（换目录会换分享链） |
-| 本游戏最后提交 | `c4e1f44`（Boss 舰队 / 三型僚机走位 / 巡航导弹 / 按钮栏自适应）；**升级信标与关卡编排仍只在本地，未提交、未发布** |
+| 本游戏最后提交 | `498b4a0`（升级信标 + 关卡编排 / 赏金编队，已推送并重新上线；`docs:` 状态同步另有一笔小提交） |
 | 当前构建 | `dist/assets/index-B6ymnKu_.js` / `index-CbEPGw61.css`（4205 preview 已指向这一版） |
 | 当前测试 | `npm test` **317 条**，全绿（见 §9） |
 
@@ -431,15 +431,16 @@ JS/CSS 同源正常加载。发布目录固定 `huanyi-s-jihua/dist`，换目录
 
 ## 10. 接续清单（下次从哪儿改）
 
-**当前状态（2026-11-09）**：`c4e1f44` 已提交并推送、线上同版本。
-之后两轮改动——**同型掉落的升级信标**与**关卡编排 / 赏金编队**——**都只在本地，未提交、未发布**；
-`npm test` 317/317，`dist/` 已重建（`index-B6ymnKu_.js` / `index-CbEPGw61.css`），
-4205 preview 已指向新构建，刷新即见。仓库里 `yushan-ink/project.godot` 的改动属另一个项目，
-提交时按 `huanyi-s-jihua/` 路径逐个 add，不要 `git add -A`。
+**当前状态（2026-11-09）**：`498b4a0` 已提交并推送到 `origin/main`，**线上已重新发布为同一版本**，
+分享链保持 `https://wing-swap-s.app.workbuddy.host/?sharecode=WAR5MAZJ5P`，线上首页资源哈希与
+本地 `dist/` 一致（`index-B6ymnKu_.js` / `index-CbEPGw61.css`）。本轮包含
+**同型掉落的升级信标**与**关卡编排 / 赏金编队**，`npm test` 317/317。
+仓库里 `yushan-ink/project.godot` 的改动属另一个项目，提交时按 `huanyi-s-jihua/` 路径
+逐个 add，不要 `git add -A`。
 
 | 优先级 | 待办 | 说明 |
 | --- | --- | --- |
-| 立刻 | 审 diff → 提交 → 推 `origin/main` → 从 `dist/` 重新发布 | 用户试玩确认后再做，分享链保持不变 |
+| 已完成 | ~~审 diff → 提交 → 推 `origin/main` → 从 `dist/` 重新发布~~ | `498b4a0` 已推送、线上已重发，分享链不变 |
 | P2 | **擦弹（Graze）** | 贴身掠过敌弹给连消充能 / 小额分，补上「主动贴近风险」这一环；接现有 `chain` / `popScore`，不动配平 |
 | P2 | **Boss 分形态 / 部件破坏** | 参考打击者 1945 的变身与 Gradius 的「打穿防御层才露核心」。建议只做视觉 + 开火节奏分段，**不改 hp / ttk** |
 | P3 | **第二件非僚机装备**（护盾 / 雷达） | 规划稿主动留的后续项。框架口子已备好：`GEAR[code].kind`、`drops.kind`、按 kind 分池、`gearFields()`。当前三型都是 `kind: 'escort'` |
