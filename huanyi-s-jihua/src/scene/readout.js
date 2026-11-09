@@ -1,7 +1,7 @@
 import { chapterNumber, isChapterEnd, levelCount } from '../game/levels.js';
 import { LAB_CHAPTER, MAX_TIER, SURGE, WEAKNESS, WINGS, clampTier, tierOf } from '../game/wings.js';
 import { GEAR, MAX_FORMATION, gearLine } from '../game/gear.js';
-import { CHAPTER_LIFE_BONUS, FIELD_H } from '../game/rules.js';
+import { CHAPTER_LIFE_BONUS, FIELD_H, FLASH_SCORE } from '../game/rules.js';
 import { maxStars, resumeIndex, totalStars } from '../game/progress.js';
 
 // 表现层只读状态，把数字和状态翻成 HUD 上的文案。中文全部集中在这里，App.jsx 里不硬编码字符串。
@@ -59,6 +59,27 @@ export const evolveLabel = (ship) => {
   if (!ship.wing) return '';
   if (clampTier(ship.tier) >= MAX_TIER) return '已满阶';
   return `再捡一个 ${ship.wing} 可升 ${tierOf(ship.tier + 1).name}`;
+};
+
+/**
+ * 场上那枚「同型」道具头顶的短提示（`dropUpgrade()` 的返回值 → 文案）。
+ *
+ * 刻意压在 6 个字以内：这一行画在 11px 上、跟着道具飘，长了会盖住邻座的道具。
+ * 它说的是「捡了会怎样」，不复述道具本身——型号已经写在上一行。
+ */
+export const upgradeMark = (kind, ship = {}) => {
+  switch (kind) {
+    case 'tier':
+      return `可升 ${tierOf(clampTier((ship.tier ?? 1) + 1)).name}`;
+    case 'overdrive':
+      return '满阶 · 转过载';
+    case 'merge':
+      return `合流 ×${Math.min(MAX_FORMATION, (ship.gearLevel ?? 0) + 1)}`;
+    case 'full':
+      return '已满编 · 加分';
+    default:
+      return null;
+  }
 };
 
 // ——— 同频共振：设定层的文案 ———
@@ -170,6 +191,28 @@ export const progressRatio = (state, bossTime) => {
 
 /** 连消敌弹的提示。只在真连上了才报，连 1 发不值得占屏幕。 */
 export const chainLabel = (chain) => (chain >= 3 ? `连消 ${chain}` : '');
+
+// ——— 赏金编队 ———
+// 关内目标与关末结算。文案要回答三件事：这关要打几波、现在攒了几枚、结算凭什么给这么多。
+
+/** HUD 上的勋章格。没攒到就不占位置。 */
+export const medalLabel = (medals) => (medals > 0 ? `勋章 ×${medals}` : '');
+
+/** 选翼面板的版面情报：这一关有几波全歼目标。 */
+export const bountyLabel = (bounties) =>
+  bounties > 0 ? `赏金编队 ${bounties} 波 · 一波不漏全歼才给勋章` : '';
+
+/** 全歼那一瞬的飘字。速歼是另一条更快更亮的奖励，两种说法别混。 */
+export const medalMark = (medals, flash) =>
+  flash ? `速歼 · 勋章 ×${medals} +${FLASH_SCORE}` : `编队全歼 · 勋章 ×${medals}`;
+
+/** 没拿到的那一波也要给个说法，别让玩家盯着 HUD 猜。 */
+export const bountyLostLabel = (reason) =>
+  reason === 'boss' ? 'Boss 出场 · 赏金编队撤离' : '有敌机脱逃 · 本波无勋章';
+
+/** 关末结算：把「勋章 × 阶级」这条公式明写出来，玩家才知道下次该保什么。 */
+export const medalBonusLabel = (medals, tier, points) =>
+  `勋章 ${medals} 枚 × ${tierOf(tier).name} → +${points}`;
 
 export const resultTitle = (status) => (status === 'won' ? '全线夺回' : '任务失败');
 

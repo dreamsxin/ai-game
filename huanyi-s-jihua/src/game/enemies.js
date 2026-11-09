@@ -17,14 +17,54 @@ const KINDS = {
 
 export const enemyKinds = Object.keys(KINDS);
 
+/**
+ * 出场队形。经典纵版射击靠「背版面」制造第二层深度：同一批敌机排成雁形、两翼包抄
+ * 还是单纵队，决定了这一波该往哪儿钻、先打哪一架。这里只改初始站位，
+ * **不动数量、血量、射速和弹速**——版面是记忆点，不是难度旋钮。
+ *
+ * 默认 line 就是老样子，关卡表不写 formation 时行为逐字段不变。
+ * pincer 刻意把中路空出来：中间那条缝就是这一波的解法，和 wall 留缺口一个道理。
+ */
+export const FORMATIONS = ['line', 'wedge', 'pincer', 'column', 'wave'];
+
+const formationPoint = (formation, i, count, spread, from) => {
+  const ratio = count === 1 ? 0.5 : i / (count - 1);
+  const s = ratio * 2 - 1;
+  let x = FIELD_W / 2 + s * spread;
+  let drop = i * (from === 'side' ? 3 : 7);
+  if (formation === 'wedge') {
+    // 两翼先压下来、中路拖后 5 格：从中间穿过去有半秒余裕，硬钻两翼则没有。
+    x = FIELD_W / 2 + s * spread * 0.92;
+    drop += (1 - Math.abs(s)) * 5;
+  } else if (formation === 'pincer') {
+    const side = i % 2 === 0 ? -1 : 1;
+    const rank = Math.floor(i / 2);
+    x = FIELD_W / 2 + side * (18 + Math.min(rank, 3) * 7);
+  } else if (formation === 'column') {
+    // 单纵队：一小段左右摆，纵向拉得更开，逼玩家一路点名而不是一梭子扫掉。
+    x = FIELD_W / 2 + Math.sin(i * 1.1) * Math.min(8, spread * 0.2);
+    drop = i * 9;
+  } else if (formation === 'wave') {
+    x = FIELD_W / 2 + Math.sin(i * 0.85) * spread * 0.85;
+  }
+  return { x: clamp(x, 8, FIELD_W - 8), y: -8 - drop };
+};
+
 // 炮台在原地开火的时长（含下落那两秒），到点就继续往下滑走。
 const TURRET_HOLD = 9;
+
+// 赏金编队的「中场盘旋」：下到这个高度停住，整体缓移，给玩家一个横扫全歼的窗口。
+// 到点就加速撤离——一波不会无限期挂着，Boss 出场前一定结算得完。
+// 比炮台自己的停留线（FIELD_H * 0.3 = 45）略高一点：赏金波里若混进炮台，
+// 盘旋逻辑必须能接管它，否则它会按自己的 9 秒节奏赖着，一路悬到 Boss 出场。
+const BOUNTY_HOLD_Y = 44;
+const BOUNTY_EXIT_BOOST = 2.6;
 
 /**
  * 生成一波敌人。站位由 seed 决定，所以同一关每次跑出来是同一张图。
  * wall 这一种特殊：它铺一整排并留一个缺口，缺口位置就是这一波的解法。
  */
-export function spawnWave(item, { tune, rng, nextId }) {
+export function spawnWave(item, { tune, rng, nextId, waveId = null }) {
   const base = KINDS[item.kind];
   if (!base) return { enemies: [], nextId };
   const enemies = [];
@@ -34,19 +74,19 @@ export function spawnWave(item, { tune, rng, nextId }) {
     for (let i = 0; i < item.count; i += 1) {
       if (i === gap) continue;
       const step = FIELD_W / item.count;
-      enemies.push(makeEnemy('wall', id, step * (i + 0.5), -8 - Math.floor(i / 4) * 9, { tune }));
+      const enemy = makeEnemy('wall', id, step * (i + 0.5), -8 - Math.floor(i / 4) * 9, { tune });
+      enemies.push(waveId === null ? enemy : { ...enemy, waveId });
       id += 1;
     }
     return { enemies, nextId: id };
   }
   const spread = item.spread ?? 40;
   for (let i = 0; i < item.count; i += 1) {
-    const ratio = item.count === 1 ? 0.5 : i / (item.count - 1);
-    const x = clamp(FIELD_W / 2 + (ratio - 0.5) * spread * 2, 8, FIELD_W - 8);
-    const y = -8 - i * (item.from === 'side' ? 3 : 7);
-    const enemy = makeEnemy(item.kind, id, x, y, { tune, wing: item.wing, gear: i === 0 ? item.gear : undefined });
+    const spot = formationPoint(item.formation ?? 'line', i, item.count, spread, item.from);
+    const y = item.kind === 'ground' ? -8 - i * 12 : spot.y;
+    const enemy = makeEnemy(item.kind, id, spot.x, y, { tune, wing: item.wing, gear: i === 0 ? item.gear : undefined });
+    if (waveId !== null) enemy.waveId = waveId;
     if (item.from === 'side') enemy.vx = i % 2 === 0 ? 22 : -22;
-    if (item.kind === 'ground') enemy.y = -8 - i * 12;
     enemies.push(enemy);
     id += 1;
   }
@@ -119,6 +159,18 @@ export function stepEnemy(enemy, dt, { ship, tune, nextId }) {
     next.y = enemy.y + enemy.vy * dt;
   }
 
+  // 赏金编队：停驻 → 整体横摆 → 到点加速撤离。它和普通杂兵的差别一眼看得出来，
+  // 「这一波要打光」不是靠 HUD 提示，是靠它们在场上多留的那几秒说出来的。
+  // 横摆用同一个相位，整队平移而不是各飞各的，队形始终是完整的一块。
+  if (enemy.hold) {
+    if (enemy.y >= BOUNTY_HOLD_Y && next.age < enemy.holdUntil) {
+      next.y = BOUNTY_HOLD_Y;
+      next.x = clamp(enemy.x + Math.sin(next.age * 0.9) * 12 * dt, 8, FIELD_W - 8);
+    } else if (next.age >= enemy.holdUntil) {
+      next.y = enemy.y + enemy.vy * BOUNTY_EXIT_BOOST * dt;
+    }
+  }
+
   if (next.cool > 0 && next.y > 0) {
     next.timer = enemy.timer - dt;
     if (next.timer <= 0) {
@@ -156,3 +208,15 @@ export const stepShot = (bullet, dt) => ({
 
 export const offField = (item, margin = 16) =>
   item.y < -margin - 12 || item.y > FIELD_H + margin || item.x < -margin || item.x > FIELD_W + margin;
+
+/**
+ * 敌机离场。通用 `offField` 判的是「跑到画面外了」，但敌机**本来就出生在画面上方**：
+ * 一列 9 架的纵队在 -80 起步，用 -32 的上边界去卡，后排当场就被当成脱逃回收，
+ * 一波里有一两架从没进场过。这里只认往下／往左右真的飞出去；
+ * 上方留 1.2 秒宽限，专门兜住被卡住或被打回头的极端情况。
+ */
+export const enemyEscaped = (enemy) =>
+  enemy.y > FIELD_H + 20 ||
+  enemy.x < -20 ||
+  enemy.x > FIELD_W + 20 ||
+  (enemy.age > 1.2 && enemy.y < -32);

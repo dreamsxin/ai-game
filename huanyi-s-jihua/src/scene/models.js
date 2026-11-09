@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { WINGS } from '../game/wings.js';
 import { GEAR } from '../game/gear.js';
-import { FLEET, HAZARD, TIER_COLOR, PHASE_COLOR, gearSkin, wingSkin } from './palette.js';
+import { FLEET, HAZARD, TIER_COLOR, PHASE_COLOR, UPGRADE, gearSkin, wingSkin } from './palette.js';
 import { TILT } from './view.js';
 import { wingProfile, wingSeats, wingTraits, wingTrim, boltAim, boltBarrel, WING_TIP_X } from './wingIcon.js';
 
@@ -1074,11 +1074,40 @@ export function makeBoss() {
   return group;
 }
 
-/** 菱形道具。能不能打进本关弱点直接写在它身上：能的描金环，不能的整枚压暗。 */
+/**
+ * 「同型可升级」的信标：一根纵向灯柱 + 内芯 + 贴地的脉冲环。
+ *
+ * 加色混合的东西最怕叠——灯柱、内芯、光环、道具本体四层都要压不透明度，
+ * 上一版能量翼就是这么烧成一整片纯白的。这里给的上限是：
+ * 外层 0.3、内芯 0.45、脉冲 0.6，渲染层再按呼吸函数在更低的区间里推。
+ *
+ * **默认隐藏**：只有掉落物与当前装配同型号时，渲染层才把它打开。
+ */
+function makeUpgradeBeacon() {
+  const group = new THREE.Group();
+  // openEnded：不封顶，光柱往上「散掉」；封顶会读成一根实心柱子。
+  // 下沿故意比翼展窄一圈：柱子是「提示」，不能把底下那副翼整个罩住。
+  const beamMat = glowMat(UPGRADE.beam, 0.24);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 4.3, 26, 14, 1, true), beamMat);
+  beam.position.y = 13;
+  const coreMat = glowMat(UPGRADE.core, 0.3);
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.4, 24, 8, 1, true), coreMat);
+  core.position.y = 12;
+  const pulseMat = glowMat(UPGRADE.pulse, 0.6);
+  const pulse = new THREE.Mesh(new THREE.TorusGeometry(5.8, 0.32, 6, 28), pulseMat);
+  pulse.rotation.x = -Math.PI / 2;
+
+  group.add(beam, core, pulse);
+  group.userData = { beam, core, pulse, beamMat, coreMat, pulseMat };
+  group.visible = false;
+  return group;
+}
+
 /**
  * 场上那副脱手的机翼。**它就是机翼本身**，不是一枚抽象的宝石：
  * 弃翼是把一整套火力扔出去，所以扔出去的东西必须看得出是哪一套（外形 + 金环 + 叠层上的编号）。
  * 渲染层让它翻滚、并在刚脱手那一下抬一把再落回来，「抛出去」这件事才有手感。
+ * 能不能打进本关弱点直接写在它身上：能的描金环，不能的整枚压暗。
  */
 export function makeDrop() {
   const group = new THREE.Group();
@@ -1087,8 +1116,12 @@ export function makeDrop() {
   const halo = new THREE.Mesh(new THREE.TorusGeometry(5.4, 0.4, 6, 24), glowMat(HAZARD.gold, 0.95));
   halo.rotation.x = -Math.PI / 2;
   group.add(halo);
+  // 同型号时点亮的升级信标。挂在 group 上而不是 spin 上：它得竖直立着，
+  // 不能跟着机翼一起翻滚。
+  const upgrade = makeUpgradeBeacon();
+  group.add(upgrade);
   // 型号与阶级由 2D 叠层写在它上方：道具在屏幕上只有二十像素，贴图文字必糊。
-  group.userData = { spin, halo, wings: new Map() };
+  group.userData = { spin, halo, upgrade, wings: new Map() };
   return group;
 }
 
@@ -1115,9 +1148,12 @@ export function makeGearDrop() {
   const halo = headFlare('#7fe3ff', 8.5, 0.34);
   halo.position.y = 0.4;
   group.add(halo);
+  // 和机翼道具共用同一套信标：同型号的收纳舱也值得绕过去捡（编队 +1）。
+  const upgrade = makeUpgradeBeacon();
+  group.add(upgrade);
   const mats = [shellMat, rimMat, coreMat];
   for (const mat of mats) mat.userData.baseOpacity = mat.opacity;
-  group.userData = { spin, halo, mats, shellMat, rimMat, coreMat };
+  group.userData = { spin, halo, upgrade, mats, shellMat, rimMat, coreMat };
   return group;
 }
 

@@ -16,6 +16,8 @@ import { canSelect } from '../src/game/levels.js';
 
 const MODULES = [
   '../src/game/boss.js',
+  '../src/game/bounty.js',
+  '../src/game/drops.js',
   '../src/game/enemies.js',
   '../src/game/gear.js',
   '../src/game/input.js',

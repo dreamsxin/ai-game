@@ -71,9 +71,10 @@ import {
   escortsOf,
   steerHoming,
 } from './gear.js';
-import { offField, spawnWave, stepEnemy, stepShot } from './enemies.js';
+import { enemyEscaped, offField, spawnWave, stepEnemy, stepShot } from './enemies.js';
 import { makeBoss, stepBoss } from './boss.js';
 import { createRandom } from './random.js';
+import { bountyTracker, forceSettleBounty, loseMedals, medalBonus, registerBounty, settleBounty } from './bounty.js';
 
 export { EMPTY_INPUT };
 export const STEP = 1 / 60;
@@ -152,6 +153,8 @@ function loadLevel(index, carry = {}) {
     hits: carry.hits ?? 0,
     // 这一章重试过几次。不惩罚，只是让结算面板说实话。
     retried: carry.retried ?? 0,
+    // 赏金编队逐关重置：勋章在关末折成分，不带进下一关（雷电的勋章也是关内结算）。
+    bounty: bountyTracker(level),
     stars: 0,
     nextId: 1,
     effects: [],
@@ -459,10 +462,22 @@ function killShip(state, effects) {
   const hadGear = (state.ship.gearLevel ?? 0) > 0;
   const code = state.ship.gear;
   const ship = gearAfterLoss(state.ship);
+  // 掉命：本关攒下的勋章清零（雷电规则），但速歼次数留着给战报看。
+  const lost = state.bounty?.medals ?? 0;
+  if (lost > 0) effects.push({ type: 'medalsLost', lost });
   effects.push({ type: 'die' });
   if (hadGear) effects.push({ type: 'gearLost', code, level: ship.gearLevel, reason: 'death' });
   if (lives <= 0) {
-    return { ...state, ship, lives: 0, status: 'over', stars: 0, chain: 0, effects };
+    return {
+      ...state,
+      ship,
+      lives: 0,
+      status: 'over',
+      stars: 0,
+      chain: 0,
+      bounty: loseMedals(state.bounty),
+      effects,
+    };
   }
   return {
     ...state,
@@ -471,6 +486,7 @@ function killShip(state, effects) {
     status: 'dying',
     reviveTimer: RESPAWN_DELAY,
     chain: 0,
+    bounty: loseMedals(state.bounty),
     effects,
   };
 }
@@ -519,16 +535,49 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   let enemies = state.enemies;
   let waveIndex = state.waveIndex;
   let nextId = state.nextId;
+  let bounty = state.bounty;
   // 一关只掉一件装备：挂在本关第一波运载火箭的头一架上。
   // 不在 wave 表里逐关写 gear 字段，装备主题由 levels.js 的 gearDrops 统一给。
   const gearWave = level.waves.findIndex((item) => item.kind === 'carrier');
   while (waveIndex < level.waves.length && next.time >= level.waves[waveIndex].at) {
     const spec = level.waves[waveIndex];
     const gearCode = waveIndex === gearWave ? level.gearDrops?.[0] ?? null : null;
-    const spawned = spawnWave(gearCode ? { ...spec, gear: gearCode } : spec, { tune: state.tune, rng, nextId });
-    enemies = [...enemies, ...spawned.enemies];
+    const spawned = spawnWave(gearCode ? { ...spec, gear: gearCode } : spec, {
+      tune: state.tune,
+      rng,
+      nextId,
+      waveId: spec.bounty ? waveIndex : null,
+    });
+    let batch = spawned.enemies;
+    if (spec.bounty) {
+      // 赏金编队收成紧凑的一块、停在中场缓缓横移，给一个横扫全歼的窗口。
+      // 撤离时刻按「Boss 还要多久出场」收口：后半关的波也必须赶在 Boss 之前结算完，
+      // 不能一波悬到关末让玩家不知道自己差在哪。射速放慢，这一波是贪分不是扛压。
+      const holdUntil = Math.max(2.6, Math.min(8, bossAt(level) - spec.at - 1.4));
+      batch = batch.map((enemy, i) => {
+        const hp = Math.max(1, Math.round(enemy.hp * 0.7));
+        return {
+          ...enemy,
+          // 赏金波统一收成一条窄纵队，这是它的视觉标识：远远看见一队贴在一起、
+          // 停在中场缓缓横移，就知道「这一波要打光」。窄带还保证加农／激光这种
+          // 单点火力也能扫全——否则「武器即钥匙」之外又多一层武器歧视。
+          x: FIELD_W / 2 + (i % 2 === 0 ? -1 : 1) * 3.2 + (i - batch.length / 2) * 0.5,
+          // 轻装侦察编队：血薄一点，玩家横扫一遍就能收干净。
+          // 不动普通杂兵的 tune.hp，赏金波的「好打」是编排给的，不是全局难度松了。
+          hp,
+          maxHp: hp,
+          hold: true,
+          holdUntil,
+          cool: enemy.cool ? enemy.cool * 1.5 : 0,
+          timer: enemy.timer ? enemy.timer * 1.5 : 0,
+        };
+      });
+      bounty = registerBounty(bounty, waveIndex, batch.length, next.time);
+    }
+    // total 取实际生成数，时间取实际帧：墙会留缺口，波次也可能被前面几波拖晚一拍。
+    enemies = [...enemies, ...batch];
     nextId = spawned.nextId;
-    effects.push({ type: 'wave', kind: level.waves[waveIndex].kind });
+    effects.push({ type: 'wave', kind: level.waves[waveIndex].kind, bounty: Boolean(spec.bounty) });
     waveIndex += 1;
   }
 
@@ -537,6 +586,10 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   if (!boss && !next.skipped && next.time >= bossTime) {
     boss = makeBoss(level, state.tune);
     effects.push({ type: 'bossIn', weak: boss.weak });
+    // 中场到此为止：还挂着没打完的赏金编队按撤离结算，别让它静默悬到关末。
+    const forced = forceSettleBounty(bounty);
+    bounty = forced.tracker;
+    for (const event of forced.events) effects.push(event);
   }
 
   // 跳关门只在「最后一波之后、Boss 之前」这个窗口里开着。
@@ -792,12 +845,22 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
   }
 
   // ——— 敌人阵亡与掉落 ———
+  // 赏金波只认两种结局：全被打光，或者有谁飞出了场地。飞出去一架就整波作废。
+  const bountyEvents = [];
   const alive = [];
   for (const enemy of enemyList) {
     if (enemy.hp > 0) {
-      if (!offField(enemy, 20)) alive.push(enemy);
-      else if (enemy.kind === 'carrier') effects.push({ type: 'escaped', code: enemy.wing });
+      if (!enemyEscaped(enemy)) alive.push(enemy);
+      else {
+        if (enemy.kind === 'carrier') effects.push({ type: 'escaped', code: enemy.wing });
+        if (enemy.waveId !== undefined && enemy.waveId !== null) {
+          bountyEvents.push({ waveId: enemy.waveId, kind: 'escape', count: 1 });
+        }
+      }
       continue;
+    }
+    if (enemy.waveId !== undefined && enemy.waveId !== null) {
+      bountyEvents.push({ waveId: enemy.waveId, kind: 'kill', count: 1 });
     }
     score += enemy.score;
     kills += 1;
@@ -830,6 +893,15 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
       nextId += 1;
       effects.push({ type: 'gearCarrier', code: enemy.gear, x: enemy.x + 6, y: enemy.y + 2 });
     }
+  }
+
+  // 全歼的判定放在所有敌机处理完之后：同一帧里最后一架倒下才成章，
+  // 中途少算一架就会把「全歼」误报成「脱逃」。
+  const bountyResult = settleBounty(bounty, bountyEvents, next.time);
+  bounty = bountyResult.tracker;
+  for (const event of bountyResult.events) {
+    effects.push(event);
+    if (event.points) score += event.points;
   }
 
   // ——— 机翼道具 ———
@@ -1051,10 +1123,26 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
     wingLosses,
     hits,
     nextId,
+    bounty,
     effects,
   };
 
   if (fatal) return killShip(settled, effects);
-  if (status === 'clear') return { ...settled, stars: resultStars({ ...settled, status: 'clear' }) };
+  if (status === 'clear') {
+    // 跳关门会在 Boss 之前就收场，那条路径上没有 bossIn 可以收口：
+    // 这里再兜一次，保证每一波赏金都有明确的结局。
+    const forced = forceSettleBounty(bounty);
+    bounty = forced.tracker;
+    for (const event of forced.events) effects.push(event);
+    // 关末结算：本关勋章 × 保住的阶级。走了跳关门也一样结算——
+    // 那两波是实打实打掉的，不该因为抄近路就白打。
+    const points = medalBonus(bounty.medals, ship.tier);
+    let paid = { ...settled, bounty };
+    if (points > 0) {
+      effects.push({ type: 'medalBonus', medals: bounty.medals, tier: ship.tier, points });
+      paid = { ...paid, score: paid.score + points };
+    }
+    return { ...paid, stars: resultStars({ ...paid, status: 'clear' }) };
+  }
   return settled;
 }

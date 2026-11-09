@@ -16,9 +16,9 @@
 | 本地预览 | `http://127.0.0.1:4205/`（当前服务的是 `dist/`，不是 dev） |
 | 线上 | `https://wing-swap-s.app.workbuddy.host/?sharecode=WAR5MAZJ5P` |
 | 发布参数 | 从 `huanyi-s-jihua/dist` 发布，`appName=换翼S计划`、`domainPrefix=wing-swap-s`（换目录会换分享链） |
-| 本游戏最后提交 | `a5a2170`（装备槽与僚机编队落地）；仓库 HEAD `79adf79` 属 `yushan-ink` 项目，与本游戏无关 |
-| 当前构建 | `dist/assets/index-Bm0qqobx.js` / `index-DOB_tRt0.css` |
-| 当前测试 | `npm test` 295 条断言（本轮追加 1 条后为 296，见 §9） |
+| 本游戏最后提交 | `c4e1f44`（Boss 舰队 / 三型僚机走位 / 巡航导弹 / 按钮栏自适应）；**升级信标与关卡编排仍只在本地，未提交、未发布** |
+| 当前构建 | `dist/assets/index-B6ymnKu_.js` / `index-CbEPGw61.css`（4205 preview 已指向这一版） |
+| 当前测试 | `npm test` **317 条**，全绿（见 §9） |
 
 **三条地基，任何时候都不要破：**
 
@@ -66,9 +66,11 @@
    `SS` 是只能在场上捡到的秘密机翼。同一屏可选一型装备预带（`chooseWing(state, code, gearCode)`）。
 3. 关内：火力自动开；按住任意处**相对拖动**走位；轻点**弃翼**（不是点右下角那枚圆钮，它 `pointer-events: none`）。
 4. 打掉运载火箭掉道具：菱形翻滚的是**机翼**，六边形悬浮的是**装备**（`drops.kind` 分流，旧 drop 无 kind 兼容为 wing）。
-5. 接同型号机翼 → 升阶 + 相位冲击；接同型号装备 → 编队 +1（满 3 换分）。
-6. Boss 出场有一拍 WARNING（1.7s）；弱点环照 `weakSpots()` 摆；血量归零进 1.3s 死亡演出才结算。
-7. 过关给星级 / 战报；`4n+2` 关有跳关门（跳 4 关，Boss 不削弱）。
+5. 关内穿插**赏金编队**（收成窄纵队、中场盘旋、限时撤离）：一波不漏全歼给一枚勋章，
+   4.5 秒内打完额外给速歼分；关末按 `600 × 勋章 × 阶级` 结算，掉命清零（见 §6.1 / `game/bounty.js`）。
+6. 接同型号机翼 → 升阶 + 相位冲击；接同型号装备 → 编队 +1（满 3 换分）。
+7. Boss 出场有一拍 WARNING（1.7s）；弱点环照 `weakSpots()` 摆；血量归零进 1.3s 死亡演出才结算。
+8. 过关给星级 / 战报；`4n+2` 关有跳关门（跳 4 关，Boss 不削弱）。
 
 **输入**：触屏按住拖动 + 轻点弃翼；键盘方向键 / `WASD`，`Space`/`Z`/`X`/`J` 弃翼，
 `Esc`/`P` 暂停，`R` 重开（仅暂停/结算时接手），`M` 静音。提示按 `matchMedia('(pointer: coarse)')` 切换两套。
@@ -258,6 +260,36 @@ PATTERN_HIT = { sweep: 1, twin: 1, ring: 1, fortress: 1, centipede: 0.5, fortres
 **杂兵六型**：`zako / diver / turret / ground / carrier / wall`。`carrier` 是运载火箭，打掉才掉道具；
 `spawnWave()` 只给该波第一架 carrier 挂 `item.gear`。
 
+### 6.1 版面编排与赏金编队（2026-11-09）
+
+参考《雷电》补的「背版面」层。此前 16 关波次只有种类 / 数量 / 时间，每波都是等间距平铺，
+关内也没有目标；现在波次既有队形，也有两次全歼小高潮。
+
+- **五种出场队形**（`enemies.js` 的 `FORMATIONS`）：`line`（等间距原样）、`wedge`（两翼先到、
+  中路拖后 5 格）、`pincer`（左右两簇，中路留 ≥14 格通道）、`column`（窄纵列、纵向拉开）、
+  `wave`（正弦横摆）。`levels.js` 的 `FORMATION_PLAN` 按 `(波序 + 章号) % 5` 轮换，
+  墙 / 运载火箭 / 侧向进场波不覆盖。**只改初始 x 与少许 y 错开**，不动数量、血量、射速、弹速。
+- **每关 1~2 波赏金编队**（`HUNT_PRIORITY = zako / diver / turret`，取首个与中段一个）。
+  生成时（`simulation.js` 波次段）改写成：窄带 `x = 50 ± 3.2 + 微错开`、`hp × 0.7`、
+  `cool/timer × 1.5`、带 `hold` / `holdUntil`；`stepEnemy()` 让它们在 `y = 44` 停住、
+  整队同相位横摆，`holdUntil` 到点后 `vy × 2.6` 加速撤离。`holdUntil = clamp(bossAt - at - 1.4, 2.6, 8)`，
+  保证后半关的波也赶在 Boss 之前结算完。
+  窄带是刻意的：只沿正前方一路开火的加农 / 激光也必须扫得全。
+- **判定**（`game/bounty.js`，纯函数）：`bountyWaves / bountyTracker / registerBounty /
+  settleBounty / forceSettleBounty / loseMedals / medalBonus`。全歼 = `escaped === 0 && kills === total`；
+  `total` 取**实际生成数**（墙会留缺口）。速歼窗口 `FLASH_WINDOW = 4.5s` → `FLASH_SCORE = 500`。
+  关末 `medalBonus = MEDAL_UNIT(600) × medals × clampTier(1..3)`；掉命清零；跳关门照常结算。
+  `bossIn` 与 `clear` 两处都调 `forceSettleBounty()`，杜绝悬空波（实测 16 关 0 个）。
+- **事件出口**：`medal / bountyLost(reason:'boss'|undefined) / medalsLost / medalBonus`，
+  另外 `wave` 事件多带一个 `bounty` 布尔。`render.js` 出金环与飘字、`audio.js` 新增 `medal` 音色
+  与 `VIBRATION.medal`、`App.jsx` 在分数下挂常驻读数、选翼面板报本关波数、结算面板摊开公式。
+  中文全在 `readout.js`（`bountyLabel / medalLabel / medalMark / medalBonusLabel / bountyLostLabel`）。
+- **不变量**：`bossHp` 反推链、`HIT_RATE` / `PATTERN_HIT`、`effectiveDps`、`WING_HALF_W` 一行未改；
+  分数不进配平。机器人（不主动追编队）16 关拿 13/28 枚，真人上移横扫或靠升阶叠火力会更容易拿满。
+- **同时修掉的老 bug**：`offField(enemy, 20)` 上边界 −32，而纵队后排生在 −80，每波有 1~2 架
+  一出场就被当脱逃回收。敌机离场改用 `enemyEscaped()`，只认真的往下 / 左右飞出去，
+  上方留 1.2s 宽限兜底。`test/bounty.test.js` 守这条。
+
 **Boss 六套走位**：`sweep / twin / ring / fortress / centipede / fortressCore`。
 `weakSpots(boss)` 按弱点给 1～2 个环（`side` 两个、`core` r=4.2、`low` r=3.8），表现层照这份摆，
 `depthTest = false` 永远压在舰体上面。死亡演出：血量归零 → 1.3s 过载，场上它打出的弹幕化为火花（不给分）、
@@ -305,6 +337,13 @@ PATTERN_HIT = { sweep: 1, twin: 1, ring: 1, fortress: 1, centipede: 0.5, fortres
 - **弹道**：我方弹是白芯 / 色壳 / 外晕 / 头部闪光四层，按自身速度方向转身；激光 `L` 长 30 格，
   靠 0.05s 间隔首尾相接成光柱。**僚机弹是双股离子矢**（两根识别色光条 + 白芯 + 菱形弹尖 + 亮头光团），
   **巡航导弹是细长箭体 + 分叉尾翼 + 双股尾焰**，按 `vx/vy` 定向、单独分池 `cruise:E2`。
+- **升级信标**：掉落物与当前装配**同型号**时（判定 `game/drops.js` 的 `dropUpgrade()`），
+  道具上点亮 `makeUpgradeBeacon()`——纵向 openEnded 灯柱（外层 2.7/4.3 半径、内芯 0.8/1.4）
+  + 贴地脉冲环，配色 `palette.js` 的 `UPGRADE`，默认 `visible=false`、`render.js` 的
+  `syncUpgradeBeacon()` 按呼吸函数驱动透明度（外层 0.12~0.26 / 内芯 0.2~0.4 / 脉冲 0.52→0.22 外涨）。
+  灯柱下沿故意比翼展窄一圈，柱子是提示、不能把底下那副翼罩住；道具临近消失的闪烁期不点灯，
+  免得和消失闪烁叠成故障。2D 叠层同时把 `sub` 换成 `upgradeMark()` 的短文案
+  （可升 Mk.II / 转过载 / 合流 ×2 / 已满编，见 `readout.js`）。
 - **世界不放字**：斜俯视下道具约 20px，贴图文字必糊；型号 / 阶级 / 跳关门说明全由 2D 叠层
   （`render.js` 的 `marks`）按投影位置画原生分辨率的字。中文集中在 `readout.js`，`App.jsx` 不硬编码。
 - **音效** `audio.js`：`SOUNDS` / `soundsFor()` / `vibrationFor()` 是纯数据纯函数，只有 `createAudio()`
@@ -364,13 +403,14 @@ PATTERN_HIT = { sweep: 1, twin: 1, ring: 1, fortress: 1, centipede: 0.5, fortres
 **每次改完至少跑这四步：**
 
 ```bash
-npm test                 # node --test test/*.test.js，当前 295 → 本轮 +1 = 296
+npm test                 # node --test test/*.test.js，当前 317 条，全绿
 npm run build            # 只看 three.js 的 >500 kB chunk 老警告，不阻塞
 # 无头 Chrome + CDP 实拍（--headless=new --use-angle=swiftshader --enable-unsafe-swiftshader）
 # 对比 dist/index.html 与线上首页哈希 / 资源文件名
 ```
 
-`test/` 分层：`game/*` 守判定层；`gear.test.js` 18 条守装备槽；`models/visuals/palette/wingIcon/view/loop/
+`test/` 分层：`game/*` 守判定层；`gear.test.js` 守装备槽；`bounty.test.js` 守关卡编排的
+队形、赏金判定、离场回收与两条结算路径；`models/visuals/palette/wingIcon/view/loop/
 progress/wiring` 守表现层与接线；`playthrough.test.js` 用机器人跑完 16 关守配平。
 `bot.js` 的 `worthTaking()` 对 `drop.kind === 'gear'` 返回 0，保证量到的仍只是机翼效率。
 
@@ -391,18 +431,21 @@ JS/CSS 同源正常加载。发布目录固定 `huanyi-s-jihua/dist`，换目录
 
 ## 10. 接续清单（下次从哪儿改）
 
-**当前状态（2026-11-08）**：Boss 舰队重做、僚机三型阵型 + 巡航导弹、按钮栏自适应这几轮
-**都只在本地，未提交、未发布**。本游戏最后一次提交是 `a5a2170`，线上仍是那一版，
-不含装备之后的任何改动。仓库里 `yushan-ink/project.godot` 的改动属另一个项目，提交时按
-`huanyi-s-jihua/` 路径逐个 add，不要 `git add -A`。
+**当前状态（2026-11-09）**：`c4e1f44` 已提交并推送、线上同版本。
+之后两轮改动——**同型掉落的升级信标**与**关卡编排 / 赏金编队**——**都只在本地，未提交、未发布**；
+`npm test` 317/317，`dist/` 已重建（`index-B6ymnKu_.js` / `index-CbEPGw61.css`），
+4205 preview 已指向新构建，刷新即见。仓库里 `yushan-ink/project.godot` 的改动属另一个项目，
+提交时按 `huanyi-s-jihua/` 路径逐个 add，不要 `git add -A`。
 
 | 优先级 | 待办 | 说明 |
 | --- | --- | --- |
 | 立刻 | 审 diff → 提交 → 推 `origin/main` → 从 `dist/` 重新发布 | 用户试玩确认后再做，分享链保持不变 |
+| P2 | **擦弹（Graze）** | 贴身掠过敌弹给连消充能 / 小额分，补上「主动贴近风险」这一环；接现有 `chain` / `popScore`，不动配平 |
+| P2 | **Boss 分形态 / 部件破坏** | 参考打击者 1945 的变身与 Gradius 的「打穿防御层才露核心」。建议只做视觉 + 开火节奏分段，**不改 hp / ttk** |
 | P3 | **第二件非僚机装备**（护盾 / 雷达） | 规划稿主动留的后续项。框架口子已备好：`GEAR[code].kind`、`drops.kind`、按 kind 分池、`gearFields()`。当前三型都是 `kind: 'escort'` |
-| 可选 | 调阵型幅度 / 导弹转向速率 / 子舰数量 / 离子矢粗细 | 都是单常量，`gear.js` 与 `FLEET_FORMATIONS` 里改，改完补断言 |
-| 可选 | 更多 Boss 走位、更多装备成长轴、章节专属僚机 | `CHAPTER_GEAR` 目前第 3、4 章都是 E3 |
-| 可选 | 首屏说明与战报文案再打磨 | 全部中文在 `readout.js` 与 `App.jsx` 折叠区 |
+| 可选 | 调赏金窗口 / 阵型幅度 / 导弹转向速率 / 子舰数量 | 都是单常量；改完必须重跑 `playthrough.test.js` 与 16 关勋章达成率 |
+| 可选 | 更多 Boss 走位、章节专属僚机 | `CHAPTER_GEAR` 目前第 3、4 章都是 E3 |
+| 可选 | 软性动态 rank（按不掉命 / 连锁微涨弹速并抬分） | 雷电有 rank；本作目前 `tuning(index)` 只随关号线性涨。风险是动到 TTK 断言，需谨慎 |
 
 **改动检查清单**（改完照着过一遍）：
 

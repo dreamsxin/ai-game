@@ -270,6 +270,32 @@ export const LEVELS = [
 const CHAPTER_GEAR = ['E1', 'E2', 'E3', 'E3'];
 for (const level of LEVELS) level.gearDrops = [CHAPTER_GEAR[level.chapter]];
 
+/**
+ * 版面编排。经典纵版射击的第二层深度不是「敌人更多」，是「这一波长什么样、我该往哪钻」。
+ * 阵型按「波序 + 章号」轮换，同一章四关的图案不重样，跨章又整体错开一拍；
+ * 墙与运载火箭有专属队形，侧向进场的波保留原来的两翼夹击，都不覆盖。
+ *
+ * 赏金编队：每关点名两波「全歼才给勋章」的目标，一前一后，让关内有两次小高潮。
+ * 只从能被稳定打光的杂兵里挑——障碍墙必然留缺口、贴地目标要特定机翼，
+ * 拿它们当赏金目标等于发一张注定作废的奖券。规则见 game/bounty.js。
+ */
+export const FORMATION_PLAN = ['wedge', 'pincer', 'column', 'wave', 'line'];
+const HUNT_PRIORITY = ['zako', 'diver', 'turret'];
+for (const level of LEVELS) {
+  level.waves.forEach((item, i) => {
+    if (item.kind === 'wall' || item.kind === 'carrier' || item.from === 'side') return;
+    item.formation = FORMATION_PLAN[(i + level.chapter) % FORMATION_PLAN.length];
+  });
+  const huntable = level.waves.filter((item) => HUNT_PRIORITY.includes(item.kind));
+  const picks = new Set([
+    huntable[0],
+    huntable[Math.min(huntable.length - 1, Math.ceil(huntable.length / 2))],
+  ]);
+  for (const item of picks) if (item) item.bounty = true;
+  // 一关的版面指纹写进情报里，选翼面板能一句话说清「这关要背两波」。
+  level.bounties = picks.size;
+}
+
 export const levelCount = LEVELS.length;
 
 export const levelAt = (index) => LEVELS[Math.min(Math.max(index, 0), LEVELS.length - 1)];
@@ -296,6 +322,8 @@ export const briefing = (index) => {
     // 这一关的选单里有哪些机翼。实验机翼从第 3 章起解锁。
     codes: codesFor(level.chapter),
     lab: level.chapter >= LAB_CHAPTER,
+    // 版面情报：这一关有几波赏金编队，选翼面板会把它和 Boss 弱点一起说清楚。
+    bounties: level.bounties ?? 0,
   };
 };
 

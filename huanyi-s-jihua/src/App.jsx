@@ -6,11 +6,13 @@ import { loadProgress, mergeProgress, resumeIndex, saveProgress } from './game/p
 import { WINGS } from './game/wings.js';
 import { GEAR, GEAR_CODES } from './game/gear.js';
 import { bossAt, briefing, canSelect, levelAt } from './game/levels.js';
+import { medalBonus } from './game/bounty.js';
 import { createRenderer } from './scene/render.js';
 import { VIBRATION, createAudio, vibrate, vibrationFor, winSound } from './scene/audio.js';
 import {
   archiveLabel,
   bossRatio,
+  bountyLabel,
   briefLine,
   chainLabel,
   defeatLabel,
@@ -25,6 +27,8 @@ import {
   labLabel,
   levelLabel,
   loreLine,
+  medalBonusLabel,
+  medalLabel,
   muteLabel,
   nextTierLabel,
   progressLabel,
@@ -542,6 +546,7 @@ export default function App() {
   // 拿开局那一刻的旧纪录比，而不是拿已经被本局刷过的 best 比。
   const record = finished && view.score > bestAtStartRef.current;
   const brief = briefing(view.levelIndex);
+  const medals = view.bounty?.medals ?? 0;
   const hp = bossRatio(view);
   const jettison = jettisonKey(view.ship);
   const surge = surgeLabel(view.ship);
@@ -561,6 +566,9 @@ export default function App() {
         <div className="stat stat-score">
           <span className="stat-value">{formatScore(view.score)}</span>
           <span className="stat-label">{progressLabel(view)}</span>
+          {/* 勋章是关内目标：攒到几枚必须一直看得见，才知道这一命值不值得拿来换。
+              竖向多一行而不是横向多一格——窄屏上 HUD 三块本来就贴边了。 */}
+          {medals > 0 && <span className="stat-label stat-medals">{medalLabel(medals)}</span>}
         </div>
         <div className="stat stat-row">
           <Heart size={14} aria-hidden="true" />
@@ -764,6 +772,8 @@ export default function App() {
                   </div>
                 </div>
                 <p className="panel-detail panel-lab">{labLabel(brief.lab)}</p>
+                {/* 版面情报：进关之前先知道这一关要背几波全歼，别打完了才发现有勋章这回事。 */}
+                {brief.bounties > 0 && <p className="panel-detail">{bountyLabel(brief.bounties)}</p>}
                 <p className="panel-detail">或者自己挑一只（{brief.codes.length} 种可选，往下滑看全部）</p>
                 <div className="wing-grid">
                   {brief.codes.map((code) => (
@@ -802,6 +812,13 @@ export default function App() {
                   {levelLabel(view)} · {view.skipped ? '走了跳关门，直接省 4 关' : `击破 ${view.bossName}`}
                 </p>
                 <p className="panel-detail">{runReport(view)} · 最长连消 {view.bestChain}</p>
+                {/* 关末把公式摊开：勋章 × 保住的阶级。玩家下次才知道该拿命换什么。 */}
+                {medals > 0 && (
+                  <p className="panel-detail panel-medals">
+                    <Trophy size={13} aria-hidden="true" />{' '}
+                    {medalBonusLabel(medals, view.ship.tier, medalBonus(medals, view.ship.tier))}
+                  </p>
+                )}
                 <p className="panel-detail">
                   现在挂着 {wingName(view.ship.wing)}
                   {tierLabel(view.ship.tier) ? ` ${tierLabel(view.ship.tier)}` : ''}

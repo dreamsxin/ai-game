@@ -781,6 +781,17 @@ body {
   color: var(--accent);
 }
 
+/* 本关勋章：关内目标的常驻读数与关末结算，和分数用同一个暖金但更亮一档。
+   只在攒到勋章时才出现，开局不多占一行。 */
+.stat-medals {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.panel-medals {
+  color: var(--accent);
+}
+
 /* 失败战报是诊断，不是责备。 */
 .panel-defeat {
   color: var(--cool);
@@ -810,6 +821,12 @@ body {
 
   .stat-label {
     display: none;
+  }
+
+  /* 矮屏收掉的是说明文字，不是关内目标本身：勋章数留着。 */
+  .stat-medals {
+    display: block;
+    font-size: 10px;
   }
 
   .sync-meter-name,

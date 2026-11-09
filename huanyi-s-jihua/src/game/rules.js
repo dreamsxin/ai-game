@@ -90,6 +90,14 @@ export const BOSS_BLAST_EVERY = 0.18;
 export const WELL_PULL = 62;
 export const WELL_KILL = 3.6;
 
+// ——— 赏金编队（关卡编排） ———
+// 经典纵版射击的两条留存骨架：关内「这一波要全歼」的目标，和关末把收集品折成一大笔分。
+// 雷电是 1000 × 保险存量 × 本关勋章；这里把「保险存量」换成本作自己的资源——
+// 挂在机上的阶级。保住 Mk.III 打完一关，勋章才最值钱；掉命则本关勋章清零。
+export const MEDAL_UNIT = 600;
+export const FLASH_WINDOW = 4.5;
+export const FLASH_SCORE = 500;
+
 // 连消敌弹：不挨打的情况下连着打掉敌弹，分数和音高一起往上爬。
 // 「弹幕可以被打掉」是这游戏的身份，它必须听得见也看得见。
 const POP_CHAIN = [1, 1.5, 2, 3, 4, 6];

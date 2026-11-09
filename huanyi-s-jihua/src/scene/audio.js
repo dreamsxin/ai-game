@@ -45,6 +45,15 @@ export const SOUNDS = {
     tones: [{ wave: 'square', freq: 260, to: 120, dur: 0.11, gain: 0.09 }],
     noise: { dur: 0.09, gain: 0.06, cutoff: 1600 },
   },
+  // 赏金编队全歼：两记短促上行。它比「击落」亮、比「进化」轻——
+  // 听众要分清的是「这一波收干净了」和「我又升了一阶」，别抢那串四级琶音。
+  medal: {
+    tones: [
+      { wave: 'triangle', freq: NOTE.G4, to: NOTE.G4, dur: 0.06, gain: 0.09 },
+      { wave: 'triangle', freq: NOTE.D5, to: NOTE.D5, dur: 0.14, gain: 0.1, delay: 0.07 },
+    ],
+    noise: { dur: 0.05, gain: 0.03, cutoff: 4200, type: 'highpass' },
+  },
   // 运载火箭炸开：比普通爆炸厚，因为它掉出来的是一整套火力配置。
   carrier: {
     tones: [
@@ -329,7 +338,8 @@ export function soundsFor(effects = []) {
   else if (find('chip')) push('chip');
   const popped = find('pop');
   if (popped) push('pop', chainShift(popped.chain));
-  if (find('kill')) push('kill');
+  if (find('medal')) push('medal');
+  else if (find('kill')) push('kill');
   else if (find('arc')) push('arc');
   else if (find('hit')) push('hit');
   if (find('deny')) push('deny');
@@ -348,6 +358,8 @@ export const VIBRATION = {
   catch: [12],
   // 进化是一串往上敲的短震，和「接到一只翅膀」的单下分得开。
   evolve: [10, 24, 10, 24, 22],
+  // 赏金编队全歼：两短一长，比进化的四连敲轻一档。
+  medal: [12, 20, 12],
   // 相位过载比进化更重一档：它是满阶之后再叠出来的爆发。
   overdrive: [18, 36, 18, 36, 30],
   // 替挡：两短一长，比掉翼更「挡了一下」而不是「碎了一下」。
@@ -384,6 +396,7 @@ export function vibrationFor(effects = []) {
   if (find('wingLost')) return VIBRATION.wingLost;
   if (find('bare')) return VIBRATION.bare;
   if (find('evolve')) return VIBRATION.evolve;
+  if (find('medal')) return VIBRATION.medal;
   if (find('overdrive')) return VIBRATION.overdrive;
   if (find('jettison')) return VIBRATION.jettison;
   if (find('catch') || find('swap')) return VIBRATION.catch;

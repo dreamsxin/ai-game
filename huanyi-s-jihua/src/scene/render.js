@@ -10,11 +10,12 @@ import * as THREE from 'three';
 import { BOSS_DEATH_TIME, FIELD_W, WING_DRIFT } from '../game/rules.js';
 import { WEAKNESS, WINGS, tierOf, wingAtTier } from '../game/wings.js';
 import { GEAR, MAX_FORMATION, escortWorld, escortsOf, gearSpec } from '../game/gear.js';
+import { dropUpgrade } from '../game/drops.js';
 import { orbsOf } from '../game/simulation.js';
 import { weakSpots } from '../game/boss.js';
 import { ALT, pixelScale, worldX, worldZ } from './view.js';
-import { FLEET, HAZARD, TIER_COLOR, OVERDRIVE_COLOR, PHASE_COLOR, gearSkin } from './palette.js';
-import { tierGainLabel } from './readout.js';
+import { FLEET, HAZARD, TIER_COLOR, OVERDRIVE_COLOR, PHASE_COLOR, UPGRADE, gearSkin } from './palette.js';
+import { bountyLostLabel, medalBonusLabel, medalMark, tierGainLabel, upgradeMark } from './readout.js';
 import { createStage } from './stage.js';
 import {
   FLEET_FORMATIONS,
@@ -413,7 +414,21 @@ export function createRenderer(host) {
   // effects 是逻辑层唯一的出口：火花、飘字、震动、闪光都从这里长出来。
   const notify = (effects = []) => {
     for (const effect of effects) {
-      if (effect.type === 'pop') {
+      if (effect.type === 'medal') {
+        // 全歼是关内的一个小高潮：金环 + 星火，速歼再多闪一记。
+        // 位置固定在场地中上方，别跟着最后一架敌机飘——那架可能在屏幕角落。
+        const color = effect.flash ? '#ffe066' : HAZARD.gold;
+        spark(FIELD_W / 2, 62, color, effect.flash ? 24 : 15, 42);
+        shockwave(FIELD_W / 2, 62, color, effect.flash ? 14 : 9, 0.5);
+        note(FIELD_W / 2, 70, medalMark(effect.medals, effect.flash), color);
+        if (effect.flash) bang('#ffe9a8', 0.26);
+      } else if (effect.type === 'bountyLost') {
+        note(FIELD_W / 2, 64, bountyLostLabel(effect.reason), '#9aa4bd');
+      } else if (effect.type === 'medalsLost') {
+        note(FIELD_W / 2, 78, `掉命 · ${effect.lost} 枚勋章作废`, HAZARD.warm);
+      } else if (effect.type === 'medalBonus') {
+        note(FIELD_W / 2, 84, medalBonusLabel(effect.medals, effect.tier, effect.points), HAZARD.gold);
+      } else if (effect.type === 'pop') {
         spark(effect.x, effect.y, HAZARD.gold, 5, 24);
         if (effect.chain >= 3) note(FIELD_W / 2, 40, `连消 ${effect.chain}`, '#ffe066');
       } else if (effect.type === 'kill') {
@@ -1025,11 +1040,33 @@ export function createRenderer(host) {
     }
   };
 
+  /**
+   * 同型号掉落头顶的信标：竖直灯柱 + 内芯 + 贴地脉冲环。
+   *
+   * 三样全在加色混合下叠着，所以这里一律往低里推（外层 ≤0.26、内芯 ≤0.4、脉冲 ≤0.55），
+   * 只靠「呼吸 + 脉冲环一涨一灭」制造存在感，不用亮度堆。烧成白团就什么都没说清了。
+   * seed 用道具的 x：同屏掉两枚同型号时，两根柱子不会整齐地一起呼吸。
+   */
+  const syncUpgradeBeacon = (mesh, state, seed = 0) => {
+    const beacon = mesh.userData.upgrade;
+    if (!beacon) return;
+    const beat = (Math.sin(state.elapsed * 3.2 + seed) + 1) / 2;
+    const ud = beacon.userData;
+    ud.beamMat.opacity = 0.12 + beat * 0.14;
+    ud.coreMat.opacity = 0.2 + beat * 0.2;
+    // 脉冲环从脚下往外涨、同时淡掉，读起来像「在招呼你过来」。
+    ud.pulse.scale.setScalar(0.72 + beat * 0.66);
+    ud.pulseMat.opacity = 0.52 - beat * 0.3;
+  };
+
   const syncDrops = (state) => {
     const keys = WEAKNESS[state.weak]?.keys ?? [];
     dropPool.begin();
     gearDropPool.begin();
     for (const drop of state.drops) {
+      // 与当前装配同型号？同型号才有额外收益（机翼升阶 / 僚机合流），点一根灯柱告诉玩家
+      // 「这个可以绕过去捡」。判定在 game/drops.js，这一层只负责让它看得见。
+      const upgrade = dropUpgrade(drop, state.ship);
       if (drop.kind === 'gear') {
         // 六边形收纳舱：不翻滚、只缓慢自转，颜色按型号逐帧 set 覆盖（池子会复用）。
         const mesh = gearDropPool.take();
@@ -1044,6 +1081,9 @@ export function createRenderer(host) {
         ud.halo.material.opacity = fading ? 0.1 : 0.28 + Math.sin(state.elapsed * 4) * 0.07;
         ud.spin.rotation.y += 0.024;
         ud.spin.scale.setScalar(fading ? 0.7 : 0.9);
+        // 快消失时不点灯柱：那两秒本来就在闪烁，再叠一根脉动的柱子只会读成故障。
+        ud.upgrade.visible = Boolean(upgrade) && !fading;
+        if (ud.upgrade.visible) syncUpgradeBeacon(mesh, state, drop.x * 0.4);
         mesh.position.set(worldX(drop.x), ALT.shot + 1 + Math.sin(state.elapsed * 3 + drop.x) * 0.55, worldZ(drop.y));
         marks.push({
           x: drop.x,
@@ -1052,8 +1092,10 @@ export function createRenderer(host) {
           text: drop.code,
           color: skin.lead,
           size: 16,
-          sub: gearSpec(drop.code)?.name ?? null,
-          subColor: skin.chrome,
+          // 同型号时这一行改说「捡了会怎样」：型号已经写在上面，编队数才是这一刻要判断的事。
+          sub: upgrade ? upgradeMark(upgrade, state.ship) : (gearSpec(drop.code)?.name ?? null),
+          subColor: upgrade ? UPGRADE.core : skin.chrome,
+          subSize: upgrade ? 15 : null,
         });
         continue;
       }
@@ -1094,9 +1136,12 @@ export function createRenderer(host) {
       ud.spin.rotation.x = (1 - toss) * 2.2;
       ud.spin.scale.setScalar(fading ? 0.62 : 0.8);
       ud.halo.visible = usable && !fading;
+      ud.upgrade.visible = Boolean(upgrade) && !fading;
+      if (ud.upgrade.visible) syncUpgradeBeacon(mesh, state, drop.x * 0.7);
 
       // 型号与阶级写在 2D 叠层上：道具在屏幕上只有二十像素，贴图文字必糊。
       // 打不进本关弱点的压成灰字，和压暗的机翼说同一件事。
+      // 同型号时这一行换成「可升 Mk.II / 转过载」——捡之前就知道这一步值不值。
       marks.push({
         x: drop.x,
         y: drop.y,
@@ -1104,8 +1149,9 @@ export function createRenderer(host) {
         text: drop.code,
         color: usable ? (drop.mine ? HAZARD.cool : HAZARD.gold) : '#8b93a7',
         size: 16,
-        sub: tier > 1 ? tierOf(tier).mark : null,
-        subColor: trim,
+        sub: upgrade ? upgradeMark(upgrade, state.ship) : (tier > 1 ? tierOf(tier).mark : null),
+        subColor: upgrade ? UPGRADE.core : trim,
+        subSize: upgrade ? 15 : null,
       });
     }
     dropPool.end();
@@ -1362,7 +1408,7 @@ export function createRenderer(host) {
       ctx.fillStyle = mark.color;
       ctx.fillText(mark.text, spot.x, spot.y);
       if (mark.sub) {
-        ctx.font = `800 ${Math.round(mark.size * 0.72 * Math.min(1.2, scale))}px 'PingFang SC', system-ui, sans-serif`;
+        ctx.font = `800 ${Math.round((mark.subSize ?? mark.size * 0.72) * Math.min(1.2, scale))}px 'PingFang SC', system-ui, sans-serif`;
         ctx.lineWidth = 3;
         ctx.strokeText(mark.sub, spot.x, spot.y + mark.size * 1.1);
         ctx.fillStyle = mark.subColor ?? mark.color;

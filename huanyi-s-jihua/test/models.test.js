@@ -294,6 +294,23 @@ test('装备道具是六边形收纳舱，不是那枚会翻滚的菱形机翼',
   assert.ok(gear.userData.halo.isSprite, '装备道具带一圈柔光，远处才认得出');
 });
 
+test('同型掉落才有升级灯柱：默认熄灭、不封顶、亮度压得住', () => {
+  for (const [name, model] of [['机翼道具', makeDrop()], ['装备道具', makeGearDrop()]]) {
+    const beacon = model.userData.upgrade;
+    assert.ok(beacon, `${name}要带可升级信标`);
+    assert.equal(beacon.visible, false, `${name}默认不亮：同型与否由渲染层逐帧决定`);
+    const { beam, core, pulse } = beacon.userData;
+    assert.equal(beam.geometry.type, 'CylinderGeometry', '光柱是一根圆柱');
+    assert.equal(beam.geometry.parameters.openEnded, true, '封顶会读成一根实心柱子');
+    assert.ok(beam.geometry.parameters.height >= 20, `太矮就只是脚下一圈光，量到 ${beam.geometry.parameters.height}`);
+    assert.equal(pulse.geometry.type, 'TorusGeometry', '脚下要有一圈脉冲环');
+    assert.equal(beam.material.blending, THREE.AdditiveBlending, '灯柱靠加色混合发光');
+    assert.ok(beam.material.opacity <= 0.3, '外层亮度上限');
+    assert.ok(core.material.opacity <= 0.45, '内芯亮度上限——四层加色叠起来最容易烧白');
+    assert.equal(beacon.parent, model, '灯柱挂在道具本体上，不跟着机翼翻滚（spin 里）');
+  }
+});
+
 test('僚机弹是看得见的双股离子矢，形状和主机弹完全不同', () => {
   const escort = makeShot('escort', '#7fe3ff');
   const plain = makeShot('pellet');

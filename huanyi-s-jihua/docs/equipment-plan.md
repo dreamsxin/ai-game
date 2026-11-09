@@ -312,3 +312,18 @@ E3 金色环哨绕出弧形拖尾，均无连线、无页面报错（只有 head
 等不够 6.5 秒第一波敌人还没出场，僚机看起来「没走位」，其实停在停机位。
 用临时调试钩子读出渲染器实际拿到的 `enemies / targets / pos` 定位后删掉；
 另外手动 `localStorage.clear()` 会被 React 主循环写回，改成在文档加载前注入清理脚本。
+
+## 10. 同型掉落的升级信标（2026-11-08）
+
+「这枚道具值不值得绕过去捡」不该等捡起来才知道——`game/drops.js` 的
+`dropUpgrade(drop, ship)` 在场上逐帧回答这件事：
+
+- 同型号机翼：没满阶 → `tier`（升一阶）；满阶 → `overdrive`（转相位过载）。
+- 同型号僚机：编队未满 → `merge`（编队 +1）；满编 → `full`（折算加分）。
+- 异型号 / 没装 / 道具失效 → `null`，什么都不亮。
+
+表现层按结果点亮 `models.js` 的 `makeUpgradeBeacon()`（纵向灯柱 + 内芯 +
+贴地脉冲环，配色 `palette.js` 的 `UPGRADE`），`render.js` 的
+`syncUpgradeBeacon()` 呼吸驱动；2D 叠层的副行换成 `readout.js` 的
+`upgradeMark()` 短文案。信标不判断弱点兼容（拿错机翼同型号仍升级，那是真实收益），
+也不碰任何配平数字。测试 302/302，无头 Chrome 实拍同型亮、异型不亮。
