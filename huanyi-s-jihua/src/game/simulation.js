@@ -56,6 +56,7 @@ import {
   tuning,
 } from './rules.js';
 import { EMPTY_INPUT } from './input.js';
+import { DEFAULT_HULL, normalizeHull } from './hulls.js';
 import { LEVELS, bossAt, canSelect, chapterStart, levelAt, skipTarget } from './levels.js';
 import { MAX_TIER, WEAKNESS, WINGS, clampTier, damageMultiplier, hitKind, wingAtTier } from './wings.js';
 import {
@@ -93,9 +94,11 @@ const ORB_R = 2.6;
 const ORB_DPS = 7;
 const ORB_DIST = 9.5;
 
-const makeShip = (wing, tier = 1, gear = null) => ({
+const makeShip = (wing, tier = 1, gear = null, hull = DEFAULT_HULL) => ({
   x: FIELD_W / 2,
   y: PLAYER_Y,
+  // 机身是外观身份，不参与任何判定；坏 code 在这里就归位，判定层只认合法值。
+  hull: normalizeHull(hull),
   wing: wing ?? null,
   // 机翼的阶级。它跟着机翼走，不跟着人走——弃翼脱落的道具带着它一起飞出去。
   tier: wing ? clampTier(tier) : 1,
@@ -130,7 +133,7 @@ function loadLevel(index, carry = {}) {
     entryWing: carry.wing ?? null,
     seed: 1013 + index * 7919,
     waveIndex: 0,
-    ship: makeShip(carry.wing ?? null, carry.tier ?? 1, carry.gear ?? null),
+    ship: makeShip(carry.wing ?? null, carry.tier ?? 1, carry.gear ?? null, carry.hull ?? DEFAULT_HULL),
     drops: [],
     shots: [],
     foes: [],
@@ -167,9 +170,9 @@ export const createGame = (levelIndex = 0) => ({ ...loadLevel(levelIndex), statu
  * 开一关。给了 wing 就是「选择已经做完了」，直接开打；不给就按关卡规则决定要不要进选翼界面。
  * advance 进到每章第一关时不走这里，所以那几关一定会再问一次「这一关带什么翅膀」。
  */
-export const startGame = (levelIndex = 0, wing = null, gearCode = null) => {
+export const startGame = (levelIndex = 0, wing = null, gearCode = null, hullCode = DEFAULT_HULL) => {
   const gear = gearSpec(gearCode) ? { code: gearCode, level: 1, guard: true } : null;
-  const state = loadLevel(levelIndex, { wing, gear });
+  const state = loadLevel(levelIndex, { wing, gear, hull: hullCode });
   return wing ? { ...state, status: 'playing' } : state;
 };
 
@@ -180,7 +183,7 @@ export const togglePause = (state) => {
 };
 
 /** 选翼界面按下某一种机翼。只有 select 状态接受这个动作。第三个参数是同一面板上预带的装备。 */
-export function chooseWing(state, code, gearCode = null) {
+export function chooseWing(state, code, gearCode = null, hullCode = null) {
   if (state.status !== 'select' || !WINGS[code]) return state;
   const picked = gearSpec(gearCode) ? gearPick({ gear: null }, gearCode) : null;
   const effects = [{ type: 'catch', code }];
@@ -190,6 +193,8 @@ export function chooseWing(state, code, gearCode = null) {
     status: 'playing',
     ship: {
       ...state.ship,
+      // 机身沿用当前已选的；只有显式传了新 code 才换。外观选择不带数值，换机不重置任何战果。
+      hull: hullCode ? normalizeHull(hullCode) : normalizeHull(state.ship.hull),
       wing: code,
       tier: 1,
       overdrive: 0,
@@ -216,6 +221,7 @@ export function advance(state) {
   const crossing = levelAt(next).chapter !== state.chapter;
   const carry = {
     wing: state.ship.wing,
+    hull: state.ship.hull,
     tier: state.ship.tier,
     // 装备跟着编队一起过下一关，但不进存档：关掉网页就没了。
     gear: state.ship.gear
@@ -247,6 +253,8 @@ export function retryChapter(state) {
   // 不带 gear：重试本章时整槽装备作废，比掉命「掉一级」更重一档。
   return loadLevel(start, {
     wing: null,
+    // 机身是审美选择，重试本章不没收；机翼与攒下的阶级才作废。
+    hull: state.ship.hull,
     lives: START_LIVES,
     score: state.baseScore ?? 0,
     baseScore: state.baseScore ?? 0,
@@ -513,7 +521,7 @@ export function step(state, input = EMPTY_INPUT, dt = STEP) {
           code: state.ship.gear,
           level: state.ship.gearLevel,
           guard: state.ship.gearGuard,
-        }),
+        }, state.ship.hull),
         invuln: HURT_INVULN,
       },
       effects: [{ type: 'revive', code: state.entryWing }],

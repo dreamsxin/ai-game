@@ -7,6 +7,10 @@ import { WINGS } from './game/wings.js';
 import { GEAR, GEAR_CODES } from './game/gear.js';
 import { bossAt, briefing, canSelect, levelAt } from './game/levels.js';
 import { medalBonus } from './game/bounty.js';
+import { HULLS, HULL_CODES, DEFAULT_HULL, hullSpec, normalizeHull } from './game/hulls.js';
+import { CLOUD_TOP, addLocalEntry, makeEntry, mergeBoards, rankOf, readClientId, readLocalBoard, readNickname, writeNickname } from './game/leaderboard.js';
+import { fetchCloudBoard, fetchMyScores, submitCloudScore } from './cloud.js';
+import BoardPanel from './BoardPanel.jsx';
 import { createRenderer } from './scene/render.js';
 import { VIBRATION, createAudio, vibrate, vibrationFor, winSound } from './scene/audio.js';
 import {
@@ -23,6 +27,8 @@ import {
   gearLabel,
   gearMeterLabel,
   gearPanelHint,
+  hullLabel,
+  hullPanelHint,
   jettisonKey,
   labLabel,
   levelLabel,
@@ -54,6 +60,7 @@ import {
   wingName,
 } from './scene/readout.js';
 import { wingIcon } from './scene/wingIcon.js';
+import { hullIcon } from './scene/hullIcon.js';
 import { createLoop } from './scene/loop.js';
 import { HAZARD, TIER_COLOR, gearSkin } from './scene/palette.js';
 
@@ -65,6 +72,54 @@ const MUTE_KEY = 'huanyi-s-jihua:muted';
  * 和场上那副三维机翼同源——所以「挑的时候看到的」就是「飞起来带的」：
  * 翼型（八种轮廓）、几路火力、扇形张多宽、炸弹挂不挂、有没有那圈护环，一眼分得开。
  */
+/** 机身的 2D 小图。和场上那具模型同源（hullIcon.js 取自 dressHull 的造型）。 */
+function HullIcon({ code }) {
+  const art = hullIcon(code);
+  const { skin, box } = art;
+  return (
+    <svg className="hull-art" viewBox={`0 0 ${box.w} ${box.h}`} role="img" aria-label={`${code} 机身外形`}>
+      {/* 舰桥环画在壳体之前：H2 那一圈在俯视里是套在船体外的。 */}
+      {art.bridge && (
+        <>
+          <ellipse cx={art.bridge.cx} cy={art.bridge.cy} rx={art.bridge.rx} ry={art.bridge.ry}
+            fill="none" stroke={skin.edge} strokeWidth="1.6" opacity="0.9" />
+          <ellipse cx={art.bridge.cx} cy={art.bridge.cy} rx={art.bridge.inner} ry={art.bridge.ry * 0.8}
+            fill="none" stroke={skin.seam} strokeWidth="0.8" opacity="0.7" />
+        </>
+      )}
+      {art.tail.map((fin, i) => (
+        <line key={`tail-${i}`} x1={fin.x1} y1={fin.y1} x2={fin.x2} y2={fin.y2}
+          stroke={skin.spine} strokeWidth={fin.w ?? 2} strokeLinecap="round" />
+      ))}
+      <polygon points={art.body} fill={skin.hull} stroke={skin.edge} strokeWidth="1.2" />
+      {(art.plates ?? []).map((points, i) => (
+        <polygon key={`plate-${i}`} points={points} fill={skin.plate} stroke={skin.seam} strokeWidth="0.8" />
+      ))}
+      {art.fins.map((fin, i) => (
+        <line key={`fin-${i}`} x1={fin.x1} y1={fin.y1} x2={fin.x2} y2={fin.y2}
+          stroke={skin.spine} strokeWidth={fin.w} strokeLinecap="round" />
+      ))}
+      {art.bands.map((band, i) => (
+        <line key={`band-${i}`} x1={band.x1} y1={band.y1} x2={band.x2} y2={band.y2}
+          stroke={skin.seam} strokeWidth="1.5" strokeLinecap="round" opacity="0.9" />
+      ))}
+      {art.towers.map((tower, i) => (
+        <line key={`tower-${i}`} x1={tower.x} y1={tower.y} x2={tower.x} y2={tower.y - tower.h}
+          stroke={skin.sensor} strokeWidth="1.6" strokeLinecap="round" />
+      ))}
+      {/* 尾焰画在最后，盖在喷口上。 */}
+      {art.engines.map((engine, i) => (
+        <g key={`engine-${i}`}>
+          <path d={`M ${engine.x} ${engine.y + engine.r} L ${engine.x - engine.r * 0.7} ${engine.y + engine.flare}
+            Q ${engine.x} ${engine.y + engine.flare + 2} ${engine.x + engine.r * 0.7} ${engine.y + engine.flare} Z`}
+            fill={skin.fire} opacity="0.55" />
+          <circle cx={engine.x} cy={engine.y} r={engine.r} fill={skin.nozzle} stroke={skin.halo} strokeWidth="0.8" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function WingIcon({ code }) {
   const art = wingIcon(code);
   const { skin, box, ring } = art;
@@ -247,10 +302,21 @@ export default function App() {
   const [progress, setProgress] = useState(loadProgress);
   // 复制战绩的三态：idle / ok / fail。fail 时把文案摆出来让人手动复制。
   const [copyState, setCopyState] = useState('idle');
+  // 榜单：本地榜先落盘，云榜连得上就盖上来；连不上整块切「本机排行」。
+  const [board, setBoard] = useState(readLocalBoard);
+  const [boardOnline, setBoardOnline] = useState(false);
+  const [boardLoading, setBoardLoading] = useState(true);
+  const [nickname, setNickname] = useState(readNickname);
+  const [myRank, setMyRank] = useState(0);
+  const [clientId] = useState(readClientId);
+  const submittedRef = useRef('');
   const [banner, setBanner] = useState('');
   // 选翼面板上「先带哪一型僚机」的预选。它只是这一屏的 UI 状态，
   // 不进 game state、不进存档；按出击时才随 chooseWing 一起生效。
   const [presetGear, setPresetGear] = useState(null);
+  // 机身预选：和装备一样在这一屏选，出击时写进 ship.hull 并跨关 carry。
+  // 选的是外形，不带数值；默认玄鸟，重开一局回到默认。
+  const [presetHull, setPresetHull] = useState(DEFAULT_HULL);
   // 表现层挂掉时的提示。黑屏本身不说话，这行字替它说。
   const [fault, setFault] = useState('');
   // 触屏和键盘是两套母语：提示、快捷键都按「这只手是什么」切换。
@@ -271,13 +337,53 @@ export default function App() {
     setView(next);
   }, []);
 
+  // 云榜为主、本地补位：断网、未发布、额度暂停都走同一个 catch，
+  // 玩家看到的是「本机排行」而不是一串云错误码。
+  // 联网恢复时顺手把离线攒下的本机成绩补传，补完再读一次榜单。
+  const refreshBoard = useCallback(async () => {
+    const local = readLocalBoard();
+    try {
+      let cloudRows = await fetchCloudBoard();
+      const uploaded = new Set((await fetchMyScores(clientId)).map((row) => Number(row.score)));
+      const pending = local.filter((item) => item.clientId === clientId && !uploaded.has(item.score));
+      if (pending.length > 0) {
+        const results = await Promise.allSettled(pending.map((item) => submitCloudScore(item)));
+        if (results.some((result) => result.status === 'fulfilled')) {
+          cloudRows = await fetchCloudBoard();
+        }
+      }
+      const merged = mergeBoards(cloudRows, local, CLOUD_TOP, uploaded);
+      setBoard(merged);
+      setBoardOnline(true);
+      setBoardLoading(false);
+      return merged;
+    } catch {
+      setBoard(local);
+      setBoardOnline(false);
+      setBoardLoading(false);
+      return local;
+    }
+  }, [clientId]);
+
+  useEffect(() => {
+    refreshBoard();
+  }, [refreshBoard]);
+
+  const changeNickname = useCallback((name) => {
+    setNickname(name);
+    writeNickname(globalThis.localStorage, name);
+  }, []);
+
   const restart = useCallback(() => {
     bestAtStartRef.current = best;
     // 第 1 关是选翼关，所以重开一局就落在选翼界面上。
-    push(startGame(0));
+    push(startGame(0, null, null, DEFAULT_HULL));
     setPresetGear(null);
+    setPresetHull(DEFAULT_HULL);
     setBanner('');
     setCopyState('idle');
+    setMyRank(0);
+    submittedRef.current = '';
     // 面板上的按钮是本局第一个用户手势，正好拿它把 AudioContext 解锁。
     sound('catch');
   }, [best, push, sound]);
@@ -317,9 +423,9 @@ export default function App() {
   }, []);
 
   const pick = useCallback((code) => {
-    push(chooseWing(gameRef.current, code, presetGear));
+    push(chooseWing(gameRef.current, code, presetGear, presetHull));
     sound('catch');
-  }, [presetGear, push, sound]);
+  }, [presetGear, presetHull, push, sound]);
 
   const next = useCallback(() => {
     setCopyState('idle');
@@ -473,6 +579,28 @@ export default function App() {
     setBest(view.score);
     writeBest(view.score);
   }, [view.status, view.score, best]);
+
+  // 一局只上报一次：结算屏会停好几秒、React 也会重渲染，不能反复写同一条成绩。
+  // 顺序是刻意的——先落本地盘，再谈上传；网络挂了这一局也不会白打。
+  useEffect(() => {
+    if (view.status !== 'over' && view.status !== 'won') return;
+    const stamp = `${view.status}:${view.levelKey}:${view.score}:${view.stars}`;
+    if (submittedRef.current === stamp) return;
+    submittedRef.current = stamp;
+    const entry = makeEntry(view, nickname, clientId);
+    if (!entry) return;
+    addLocalEntry(globalThis.localStorage, entry);
+    setBoard(readLocalBoard());
+    (async () => {
+      try {
+        await submitCloudScore(entry);
+      } catch {
+        // 本地已经留痕，等联网后自然并进榜单。
+      }
+      const merged = await refreshBoard();
+      setMyRank(rankOf(merged, entry));
+    })();
+  }, [view.status, view.levelKey, view.score, view.stars, nickname, clientId, refreshBoard]);
 
   // 过关就落盘。over 不写：失败不该改变「已经解锁到哪」，那是玩家已经拿到的旅程。
   // stamp 去重是因为 clear 会停留好几秒，React 重渲染不该把同一关反复写一遍。
@@ -726,6 +854,16 @@ export default function App() {
                     <Trophy size={13} aria-hidden="true" /> 最高 {formatScore(best)}
                   </p>
                 )}
+                <BoardPanel
+                  entries={board}
+                  online={boardOnline}
+                  loading={boardLoading}
+                  nickname={nickname}
+                  onNickname={changeNickname}
+                  clientId={clientId}
+                  limit={6}
+                  showNick
+                />
               </>
             )}
 
@@ -739,6 +877,27 @@ export default function App() {
                   <Play size={18} aria-hidden="true" />
                   带 {brief.pick} {WINGS[brief.pick].name} 出击
                 </button>
+
+                {/* 机身：选的是「我开哪一艘」，纯外形、不带数值。和装备同屏不新增弹窗。 */}
+                <div className="gear-row hull-row">
+                  <p className="panel-detail">{hullPanelHint(HULL_CODES)}</p>
+                  <div className="gear-grid hull-grid">
+                    {HULL_CODES.map((code) => (
+                      <button
+                        type="button"
+                        key={code}
+                        className={`gear-card hull-card${presetHull === code ? ' gear-card-on' : ''}`}
+                        aria-pressed={presetHull === code}
+                        onClick={() => setPresetHull(code)}
+                      >
+                        <HullIcon code={code} />
+                        <b>{code} {HULLS[code].name}</b>
+                        <span>{HULLS[code].tagline}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="panel-detail hull-note">{hullSpec(presetHull).brief}</p>
+                </div>
 
                 {/* 装备仍在同一屏、不新增一步弹窗：手机上多一次点击就是一次流失。
                     摆在出击键正下方而不是机翼列表之后——那里要滚一屏才看得到，
@@ -820,7 +979,7 @@ export default function App() {
                   </p>
                 )}
                 <p className="panel-detail">
-                  现在挂着 {wingName(view.ship.wing)}
+                  驾驶 {hullLabel(view.ship)} · 挂着 {wingName(view.ship.wing)}
                   {tierLabel(view.ship.tier) ? ` ${tierLabel(view.ship.tier)}` : ''}
                 </p>
                 {/* 跨章补给要当面说：玩家该知道「下一章多一条命」是他打完这一章换来的。 */}
@@ -863,6 +1022,15 @@ export default function App() {
                 <p className="panel-detail">
                   <Trophy size={13} aria-hidden="true" /> 最高 {formatScore(best)}
                 </p>
+                <BoardPanel
+                  entries={board}
+                  online={boardOnline}
+                  loading={boardLoading}
+                  nickname={nickname}
+                  clientId={clientId}
+                  rank={myRank}
+                  limit={5}
+                />
                 {/* 分享是这游戏唯一「出圈」的部分：一句话拉人进来比谁飞得远。 */}
                 <button type="button" className="panel-action panel-action-ghost" onClick={share}>
                   <Share2 size={16} aria-hidden="true" />

@@ -1,6 +1,7 @@
 import { chapterNumber, isChapterEnd, levelCount } from '../game/levels.js';
 import { LAB_CHAPTER, MAX_TIER, SURGE, WEAKNESS, WINGS, clampTier, tierOf } from '../game/wings.js';
 import { GEAR, MAX_FORMATION, gearLine } from '../game/gear.js';
+import { hullSpec } from '../game/hulls.js';
 import { CHAPTER_LIFE_BONUS, FIELD_H, FLASH_SCORE } from '../game/rules.js';
 import { maxStars, resumeIndex, totalStars } from '../game/progress.js';
 
@@ -134,6 +135,12 @@ export const gearMeterLabel = (ship) => {
 };
 
 /** 选翼面板上那句「可选」的说明：不新增一步弹窗，也不让人以为必须挑。 */
+/** 机身选择区：一句话讲清「换壳不换数值」，免得玩家以为是难度选项。 */
+export const hullPanelHint = (codes = []) =>
+  `机身 ×${codes.length} · 只换外形不改数值，火力仍看机翼`;
+export const hullName = (code) => hullSpec(code).name;
+export const hullLabel = (ship) => `机身 ${hullSpec(ship?.hull).name}`;
+
 export const gearPanelHint = (codes) =>
   codes.length ? `可选 · 先带一架僚机（${codes.join(' / ')}）；不挑也能在关内捡到` : '';
 
@@ -280,3 +287,28 @@ export const scaleFor = (width, height) => {
   const scale = Math.min(width / 100, height / FIELD_H);
   return { scale, offsetX: (width - 100 * scale) / 2, offsetY: (height - FIELD_H * scale) / 2 };
 };
+
+// ——— 排行榜文案 ———
+// 在线榜不可用时整块切成「本机排行」，但一句报错都不给玩家看：
+// 榜单只是锦上添花，不该让人以为游戏坏了。
+
+export const boardTitle = (online) => (online ? '在线排行' : '本机排行');
+
+export const boardHint = (online, loading) => {
+  if (loading) return '正在同步…';
+  return online ? '所有拿到链接的人' : '暂未连上，先记在这台设备';
+};
+
+export const boardEmpty = () => '还没有成绩，打一局就上榜';
+
+/** 一行拆成主副两段：主行给名次和分数，副行说这一局是怎么打的。 */
+export const boardRow = (entry, index) => ({
+  main: `${index + 1}. ${entry.nickname} · ${formatScore(entry.score)}`,
+  sub: `第 ${entry.levelNo} 关 · ${entry.wing} ${tierLabel(entry.tier) || 'Mk.I'}`
+    + `${entry.medals > 0 ? ` · ${entry.medals} 勋章` : ''}`,
+});
+
+export const boardRank = (rank) => (rank > 0 ? `本次第 ${rank} 名` : '本次未进榜');
+
+export const boardPending = () => '待同步';
+

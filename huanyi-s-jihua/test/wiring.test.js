@@ -20,6 +20,8 @@ const MODULES = [
   '../src/game/drops.js',
   '../src/game/enemies.js',
   '../src/game/gear.js',
+  '../src/game/hulls.js',
+  '../src/game/leaderboard.js',
   '../src/game/input.js',
   '../src/game/levels.js',
   '../src/game/random.js',
@@ -27,6 +29,7 @@ const MODULES = [
   '../src/game/simulation.js',
   '../src/game/wings.js',
   '../src/scene/audio.js',
+  '../src/scene/hullIcon.js',
   '../src/scene/loop.js',
   '../src/scene/models.js',
   '../src/scene/palette.js',
@@ -130,6 +133,59 @@ test('僚机不靠一根连线绑在主机上：渲染层没有指挥线对象',
     '三型各自散开之后，连线会把它们重新绑成挂件');
   assert.ok(!source.includes('主机到每架僚机的连线'), '注释里也不该留着旧设计');
   assert.ok(source.includes("shot.homing ? 'cruise' : 'escort'"), '巡航导弹要单独分池');
+});
+
+test('排行榜接线：SDK 从 publicConfig 初始化，App 先落本地再上云', () => {
+  const cloud = readFileSync(new URL('../src/cloud.js', import.meta.url), 'utf8');
+  assert.ok(cloud.includes('createWorkBuddyCloud'), '必须走官方 SDK，不许手写 fetch');
+  const init = cloud.match(/createWorkBuddyCloud\(\{([\s\S]*?)\}\)/)?.[1] ?? '';
+  for (const field of [
+    'endpoint: publicConfig.endpoint',
+    'oauthRelayBaseUrl: publicConfig.oauthRelayBaseUrl',
+    'publishableKey: publicConfig.publishableKey',
+  ]) {
+    assert.ok(init.includes(field), `初始化少了 ${field}`);
+  }
+  assert.ok(!init.includes('https://'), 'endpoint 只能来自 publicConfig，不能硬编码域名');
+  assert.ok(cloud.includes('fetchMyScores'), '联网恢复后要能认出哪些本机成绩已上传');
+  assert.ok(!cloud.includes('/.cloud/database/rest'), '不许绕过 SDK 拼数据面路径');
+  assert.ok(cloud.includes("from('scores')"), '表名要和建表语句一致');
+  assert.ok(!cloud.includes('.update(') && !cloud.includes('.delete('), '榜单只增不改');
+
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const localWrite = app.indexOf('addLocalEntry(globalThis.localStorage, entry)');
+  const cloudWrite = app.indexOf('submitCloudScore(entry)');
+  assert.ok(localWrite > 0 && cloudWrite > localWrite, '断网也要留痕：本地盘必须先写');
+  assert.ok(/mergeBoards\(cloudRows, local, CLOUD_TOP, uploaded\)/.test(app),
+    '云榜要盖上来、离线待同步的要补位、已上传的别重复显示');
+  assert.ok(app.includes('fetchMyScores(clientId)') && app.includes('Promise.allSettled'),
+    '联网恢复要补传离线成绩，且单条失败不拖垮整块榜单');
+  assert.equal((app.match(/<BoardPanel/g) ?? []).length, 2, '标题页与结算面板各一块榜单');
+
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.board-list') && css.includes('max-height'), '榜单要自己限高，不能顶走按钮');
+  assert.ok(/\.board-nick \{[^}]*flex-wrap: wrap/s.test(css), '昵称栏窄屏要能换行');
+});
+
+test('机身选择接线：三型卡片 → chooseWing → 场上模型换船，全程不带数值', () => {
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.ok(app.includes('presetHull'), '选机面板要有机身预选状态');
+  assert.ok(app.includes('chooseWing(gameRef.current, code, presetGear, presetHull)'),
+    '出击时机身要随机翼一起进判定层');
+  assert.ok(app.includes('HULL_CODES.map((code) =>'), '三型机身都要渲染成卡片');
+  assert.ok(app.includes('<HullIcon code={code} />'), '卡片要画机身外形，不能只有文字');
+  assert.ok(app.includes('setPresetHull(DEFAULT_HULL)'), '重开一局回到默认机身');
+
+  const render = readFileSync(new URL('../src/scene/render.js', import.meta.url), 'utf8');
+  assert.ok(render.includes('swapHull(data.hull'), '场上机身要跟着判定层换');
+  assert.ok(render.includes('makeShip({ ghost: true, hull: code })'), '分身也要换机型');
+  assert.ok(render.includes('next.userData.wings = old.userData.wings'), '换船不该丢机翼缓存');
+
+  const readout = readFileSync(new URL('../src/scene/readout.js', import.meta.url), 'utf8');
+  assert.ok(readout.includes('只换外形不改数值'), '面板要说清机身不是难度选项');
+
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.hull-art') && css.includes('.gear-grid'), '机身卡片复用自适应网格');
 });
 
 test('暂停面板底部按钮栏随面板宽度收缩，不再向右溢出', () => {

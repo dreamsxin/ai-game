@@ -18,7 +18,7 @@
 | 发布参数 | 从 `huanyi-s-jihua/dist` 发布，`appName=换翼S计划`、`domainPrefix=wing-swap-s`（换目录会换分享链） |
 | 本游戏最后提交 | `498b4a0`（升级信标 + 关卡编排 / 赏金编队，已推送并重新上线；`docs:` 状态同步另有一笔小提交） |
 | 当前构建 | `dist/assets/index-B6ymnKu_.js` / `index-CbEPGw61.css`（4205 preview 已指向这一版） |
-| 当前测试 | `npm test` **317 条**，全绿（见 §9） |
+| 当前测试 | `npm test` **349 条**，全绿（见 §9） |
 
 **三条地基，任何时候都不要破：**
 
@@ -221,6 +221,27 @@
 
 `briefing().gearCodes` 由 `CHAPTER_GEAR = ['E1','E2','E3','E3']` 按章注入；`briefing().pick` 永远只推机翼。
 
+### 5.1 机身选择（`hulls.js` / `hullIcon.js`）
+
+机身是**纯外观身份**：`game/hulls.js` 只有 code / 名字 / 简介，没有任何速度、受击、火力字段。
+`ship.hull` 默认 `H1`，`startGame()` 与 `chooseWing()` 各多一个可选尾参；三型跑同一关的状态轨迹
+逐字段一致（`hulls.test.js` 守着），配平地基一行未动。
+
+| 机型 | 外形来源 | 识别点 |
+| --- | --- | --- |
+| H1 玄鸟 | 原乘波体 | 钢蓝宽肩、三喷口、低矮座舱 |
+| H2 蚀影 | Void Phantoms「ECLIPSE WRAITH 级战列舰」设定图 | 楔形分层舰艏、纵向紫电光带、水平**环形舰桥**、环心五根**尖塔**、两侧外张引擎、暗紫壳体 |
+| H3 游隼 | 同骨架的轻装版 | 削掉肩甲露出冷青骨架梁、双尾翼拉高外张 |
+
+- **一条硬约束**：三型裸机宽度都 < 7 格（H2 最宽 6.82），带翼仍是 12.92 格——
+  「带翼比裸机宽」这一位信息不能被机身造型吃掉（`hull-visual.test.js` 量 `Box3` 守住）。
+- **同源图标**：`scene/hullIcon.js` 从 `dressHull()` 的造型取数据，选机卡片上的双环／尖塔／骨架
+  与场上是同一艘船；卡片配色直接引用 `HULL_SKINS`，与三维共用一份调色板。
+- **换船**：`render.js` 的 `syncShip()` 检测 `data.hull` 变化调 `swapHull()`——整船替换，
+  机翼缓存与实例搬过去，阶级光环和相位翼场挪到新船，分身同步换机型；动画计时不重置。
+- **持久化**：跨关 `carry`、掉命复活、重试本章都保留；只有 `restart()` 回到 H1。不进 localStorage
+  （外观偏好不值得单独存一份，下一局重选只需一次点击）。
+
 ---
 
 ## 6. 关卡与 Boss（`levels.js` / `boss.js` / `enemies.js`）
@@ -403,7 +424,7 @@ PATTERN_HIT = { sweep: 1, twin: 1, ring: 1, fortress: 1, centipede: 0.5, fortres
 **每次改完至少跑这四步：**
 
 ```bash
-npm test                 # node --test test/*.test.js，当前 317 条，全绿
+npm test                 # node --test test/*.test.js，当前 349 条，全绿
 npm run build            # 只看 three.js 的 >500 kB chunk 老警告，不阻塞
 # 无头 Chrome + CDP 实拍（--headless=new --use-angle=swiftshader --enable-unsafe-swiftshader）
 # 对比 dist/index.html 与线上首页哈希 / 资源文件名
@@ -431,10 +452,11 @@ JS/CSS 同源正常加载。发布目录固定 `huanyi-s-jihua/dist`，换目录
 
 ## 10. 接续清单（下次从哪儿改）
 
-**当前状态（2026-11-09）**：`498b4a0` 已提交并推送到 `origin/main`，**线上已重新发布为同一版本**，
-分享链保持 `https://wing-swap-s.app.workbuddy.host/?sharecode=WAR5MAZJ5P`，线上首页资源哈希与
-本地 `dist/` 一致（`index-B6ymnKu_.js` / `index-CbEPGw61.css`）。本轮包含
-**同型掉落的升级信标**与**关卡编排 / 赏金编队**，`npm test` 317/317。
+**当前状态（2026-11-20）**：`498b4a0` 已提交推送、线上同版本，分享链
+`https://wing-swap-s.app.workbuddy.host/?sharecode=WAR5MAZJ5P`。此后两轮改动**只在本地、未提交未发布**：
+① A+B 排行榜（`cloud.js` / `BoardPanel.jsx` / `leaderboard.js`，云服务已开通、表与 RLS 已建、
+端到端写入读回验证过并清理测试数据）；② 三型机身选择（§5.1）。`npm test` **349/349**，
+`dist/` 已重建（`index-sJ2WKhMD.js` / `index-8kV5TrHO.css`），4205 preview 指向这一版。
 仓库里 `yushan-ink/project.godot` 的改动属另一个项目，提交时按 `huanyi-s-jihua/` 路径
 逐个 add，不要 `git add -A`。
 

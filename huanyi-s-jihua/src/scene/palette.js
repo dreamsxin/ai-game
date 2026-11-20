@@ -8,6 +8,37 @@
 
 import { GEAR } from '../game/gear.js';
 
+/**
+ * 三型机体的涂装。机身是纯外观身份（game/hulls.js 不给任何数值），
+ * 所以三套颜色的差别必须一眼可读：H1 钢蓝、H2 暗紫、H3 冷青。
+ * 每套都按「壳体 / 边条 / 脊 / 装甲 / 进气 / 座舱 / 焰心」七处定义，
+ * makeShip 一律从这里取色，改涂装不会碰到判定层。
+ */
+export const HULL_SKINS = {
+  H1: {
+    hull: '#38456b', hullLit: '#2a3a72', edge: '#7fe3ff', spine: '#4b5c93', spineLit: '#33509f',
+    plate: '#55679e', plateLit: '#37509f', intake: '#4f7bff', canopy: '#8ff0ff', seam: '#a9f0ff',
+    sensor: '#d8fbff', sensorHalo: '#8fe6ff', nozzle: '#2a3350', halo: '#9fe4ff',
+    soft: '#4f9bff', fire: '#8fd4ff', core: '#ffffff', ring: '#f6f4ee',
+  },
+  H2: {
+    // 蚀影：舰艏与装甲是近黑的石墨紫，真正把轮廓读出来的是纵向的紫电光带。
+    hull: '#2b2447', hullLit: '#4a2f86', edge: '#a98bff', spine: '#453566', spineLit: '#6b3fbf',
+    plate: '#4b3a72', plateLit: '#6b45b8', intake: '#9a5bff', canopy: '#cbb6ff', seam: '#d4bcff',
+    sensor: '#f0e8ff', sensorHalo: '#b993ff', nozzle: '#1d1832', halo: '#c9a6ff',
+    soft: '#6b4bd8', fire: '#b791ff', core: '#f4eaff', ring: '#e8dcff',
+  },
+  H3: {
+    // 游隼：壳体削到最薄，冷青骨架外露，焰心偏白——「更快的感觉」全靠这一套。
+    hull: '#274b5c', hullLit: '#2f7c86', edge: '#8effe0', spine: '#356a79', spineLit: '#3aa9a0',
+    plate: '#417884', plateLit: '#3ba9a0', intake: '#57e0c6', canopy: '#b8fff0', seam: '#d6fff4',
+    sensor: '#eafffb', sensorHalo: '#8effe0', nozzle: '#1c3440', halo: '#bcfff0',
+    soft: '#43c9ae', fire: '#9affea', core: '#ffffff', ring: '#eafffb',
+  },
+};
+
+export const hullSkin = (code) => HULL_SKINS[code] ?? HULL_SKINS.H1;
+
 /** 威胁色：跟章节无关，四章一模一样。认颜色比认形状快。 */
 export const HAZARD = {
   foe: '#ff2f5e', // 敌弹

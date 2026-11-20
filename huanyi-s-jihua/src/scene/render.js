@@ -115,7 +115,10 @@ export function createRenderer(host) {
   observer.observe(host);
 
   // ---- 世界里的东西 ----
-  const ship = makeShip();
+  // ship 用 let：换机身时整船替换（和机翼按型号现造同一思路），aura 与相位翼场
+  // 跟着挪到新船上。机身在判定层是纯外形，所以换船不重置任何动画计时。
+  let ship = makeShip();
+  let shipHull = 'H1';
   // 阶级光环：两道反向旋转的弧环贴着机身转。Mk.II 起亮一道，Mk.III 两道全开——
   // 「升阶了」要一眼看出，而且要科幻：能量环比贴图强得多。
   const auraMat = () => new THREE.MeshBasicMaterial({
@@ -142,10 +145,39 @@ export function createRenderer(host) {
   ship.add(phaseFrame);
   let phaseAnim = 1;
   let surgeFlash = 0;
-  const echo = makeShip({ ghost: true });
+  let echo = makeShip({ ghost: true });
   echo.visible = false;
   stage.world.add(ship);
   stage.world.add(echo);
+
+  /**
+   * 机身换了就整船替换。旧船的机翼缓存搬过去（同一型号不必重造），
+   * 阶级光环与相位翼场挪到新船；世界里的位置在 syncShip 当帧覆盖。
+   * 残影跟着换：分身是「同一架飞机的镜像」，不能本体换了它还留旧轮廓。
+   */
+  const swapHull = (code) => {
+    if (code === shipHull) return;
+    const old = ship;
+    const next = makeShip({ hull: code });
+    next.userData.wings = old.userData.wings;
+    for (const wing of old.userData.wingSlot.children.slice()) next.userData.wingSlot.add(wing);
+    next.add(aura);
+    next.add(phaseFrame);
+    next.position.copy(old.position);
+    next.rotation.copy(old.rotation);
+    next.visible = old.visible;
+    stage.world.remove(old);
+    stage.world.add(next);
+    ship = next;
+    shipHull = code;
+
+    const oldEcho = echo;
+    echo = makeShip({ ghost: true, hull: code });
+    echo.visible = oldEcho.visible;
+    echo.position.copy(oldEcho.position);
+    stage.world.remove(oldEcho);
+    stage.world.add(echo);
+  };
 
   const trailPool = createPool(stage.world, makeGhostHull);
   const orbPool = createPool(stage.world, makeOrb);
@@ -556,6 +588,8 @@ export function createRenderer(host) {
 
   const syncShip = (state, dt = 0) => {
     const data = state.ship;
+    // 机身是纯外形身份：换机时整船替换，动画计时不重置。
+    swapHull(data.hull ?? 'H1');
     const tier = data.wing ? Math.min(3, Math.max(1, data.tier ?? 1)) : 1;
     const surge = (data.overdrive ?? 0) > 0;
     const trim = TIER_COLOR[tier - 1];

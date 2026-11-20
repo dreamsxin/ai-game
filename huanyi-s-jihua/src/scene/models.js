@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { WINGS } from '../game/wings.js';
 import { GEAR } from '../game/gear.js';
-import { FLEET, HAZARD, TIER_COLOR, PHASE_COLOR, UPGRADE, gearSkin, wingSkin } from './palette.js';
+import { FLEET, HAZARD, TIER_COLOR, PHASE_COLOR, UPGRADE, gearSkin, wingSkin, hullSkin } from './palette.js';
 import { TILT } from './view.js';
 import { wingProfile, wingSeats, wingTraits, wingTrim, boltAim, boltBarrel, WING_TIP_X } from './wingIcon.js';
 
@@ -228,23 +228,140 @@ function chineGeometry() {
 const HULL_GEOMETRY = hullGeometry();
 const CHINE_GEOMETRY = chineGeometry();
 
-const edgeGlow = () => glowMat('#7fe3ff', 0.9);
+const edgeGlow = (hull = 'H1') => glowMat(hullSkin(hull).edge, 0.9);
+
+/**
+ * 机型专属外形。全部压在 |x| ≤ 3.4 的裸机宽度内——「带翼比裸机宽」是判定层的诚实信息，
+ * 机身再帅也不能把这一位吃掉。H2 的环半径 2.9、外张引擎到 3.35，正好卡在这条线内。
+ */
+function dressHull(group, hull, mats) {
+  if (hull === 'H1') return;
+  const skin = hullSkin(hull);
+  const add = (mesh) => { group.add(mesh); return mesh; };
+
+  if (hull === 'H2') {
+    // 楔形分层舰艏：三片逐级前伸的暗紫装甲，叠出设定图那种「多层铲形艏」。
+    const prowMat = flat(skin.plate, { emissive: skin.plateLit, glow: 0.6, metalness: 0.7, roughness: 0.3, opacity: 1 });
+    prowMat.side = THREE.DoubleSide;
+    mats.push(prowMat);
+    [-1, 0, 1].forEach((layer) => {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(1.5 - Math.abs(layer) * 0.35, 0.14, 3.1), prowMat);
+      blade.position.set(layer * 1.15, 0.62 + Math.abs(layer) * 0.08, -5.1 - Math.abs(layer) * 0.5);
+      blade.rotation.x = -0.12;
+      blade.rotation.y = layer * 0.16;
+      add(blade);
+    });
+
+    // 纵向光带：舰艏到引擎两条紫电，比边条灯更靠内，缩到十几像素仍看得出「双线」。
+    const bandMat = glowMat(skin.seam, 0.55);
+    mats.push(bandMat);
+    for (const side of [-1, 1]) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 7.4), bandMat);
+      band.position.set(side * 1.05, 1.28, -0.6);
+      band.rotation.y = side * 0.05;
+      add(band);
+    }
+
+    // 环形舰桥：设定图最醒目的那一圈。水平大环压在脊背上方，内圈再嵌一道亮边。
+    const bridgeMat = flat(skin.spine, { emissive: skin.spineLit, glow: 0.85, metalness: 0.6, roughness: 0.32, opacity: 1 });
+    const bridgeGlow = glowMat(skin.edge, 0.55);
+    mats.push(bridgeMat, bridgeGlow);
+    const bridge = new THREE.Mesh(new THREE.TorusGeometry(2.9, 0.26, 6, 34), bridgeMat);
+    bridge.rotation.x = -Math.PI / 2;
+    bridge.position.set(0, 2.25, 0.7);
+    add(bridge);
+    const bridgeInner = new THREE.Mesh(new THREE.TorusGeometry(2.55, 0.1, 5, 30), bridgeGlow);
+    bridgeInner.rotation.x = -Math.PI / 2;
+    bridgeInner.position.set(0, 2.3, 0.7);
+    add(bridgeInner);
+
+    // 尖塔群：环心竖起五根尖塔，中央最高。Cylinder 不镜像，单面材质即可。
+    const spireMat = flat(skin.hull, { emissive: skin.hullLit, glow: 0.7, metalness: 0.75, roughness: 0.26, opacity: 1 });
+    const spireTip = glowMat(sensorBright(skin), 0.8);
+    mats.push(spireMat, spireTip);
+    const towers = [
+      [0, 0, 3.5, 0.2], [-1.1, 0.5, 2.5, 0.15], [1.1, 0.5, 2.5, 0.15],
+      [-0.55, -0.85, 2.1, 0.13], [0.55, -0.85, 2.1, 0.13],
+    ];
+    for (const [x, z, height, radius] of towers) {
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.45, radius, height, 6), spireMat);
+      mast.position.set(x, 2.2 + height / 2, z + 0.7);
+      add(mast);
+      const tip = new THREE.Mesh(new THREE.OctahedronGeometry(radius * 1.5, 0), spireTip);
+      tip.position.set(x, 2.2 + height, z + 0.7);
+      add(tip);
+    }
+
+    // 外张式引擎：两侧各一具斜置喷口，做成「主翼下又伸出一台发动机」的观感。
+    const podMat = flat(skin.nozzle, { glow: 0.35, metalness: 0.8, opacity: 1 });
+    const podGlow = glowMat(skin.fire, 0.62);
+    mats.push(podMat, podGlow);
+    for (const side of [-1, 1]) {
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.62, 1.9, 8), podMat);
+      pod.rotation.x = Math.PI / 2;
+      pod.rotation.z = side * 0.28;
+      pod.position.set(side * 2.55, 0.15, 2.9);
+      add(pod);
+      const wash = new THREE.Mesh(new THREE.ConeGeometry(0.58, 2.6, 8), podGlow);
+      wash.rotation.x = Math.PI / 2;
+      wash.position.set(side * 2.68, 0.05, 0.6);
+      add(wash);
+    }
+    return;
+  }
+
+  // H3 游隼：削掉肩甲（原 makeShip 里的 plate 部件是按 H1 造的，这里盖一层骨架色让它读不出来），
+  // 两片前掠骨架翼 + 抬高外张的双尾翼，整体像一副被拆到只剩梁的截击机。
+  const frameMat = flat(skin.spine, { emissive: skin.spineLit, glow: 0.95, metalness: 0.7, roughness: 0.3, opacity: 1 });
+  const frameGlow = glowMat(skin.edge, 0.5);
+  mats.push(frameMat, frameGlow);
+  for (const side of [-1, 1]) {
+    const spar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 6.2), frameMat);
+    spar.position.set(side * 1.85, 0.95, -0.4);
+    spar.rotation.y = side * 0.12;
+    add(spar);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 5.8), frameGlow);
+    lip.position.set(side * 2.05, 1.14, -0.4);
+    lip.rotation.y = side * 0.12;
+    add(lip);
+    // 双尾翼拉高外张，从俯视看像两把张开的剪子。
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.1, 2.0), frameMat);
+    fin.position.set(side * 2.25, 1.65, 3.1);
+    fin.rotation.z = side * 0.62;
+    add(fin);
+    const finTip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 2.1), frameGlow);
+    finTip.position.set(side * 2.95, 3.0, 3.1);
+    finTip.rotation.z = side * 0.62;
+    add(finTip);
+  }
+}
+
+/** 尖塔顶灯比边条再亮一档，但别烧成纯白——H2 的五根塔要能数清。 */
+function sensorBright(skin) {
+  return skin.sensor;
+}
 
 /**
  * 战机。机翼是**单独一层**（group.userData.wing），因为「有没有翅膀」是这游戏最关键的一位信息：
  * 带翼的机身更宽，那多出来的一截正是多出来的受击面积。
+ *
+ * hull 只换外形与涂装，不换尺寸、速度、受击或火力——机身在判定层是纯外观身份（game/hulls.js）。
+ * H1 玄鸟是原来的乘波体；H2 蚀影按 ECLIPSE WRAITH 那张设定图做：楔形分层舰艏、
+ * 纵向光带、环形舰桥、尖塔群、外张式引擎；H3 游隼削掉肩甲露出冷青骨架。
+ * 三型共用 HULL_GEOMETRY 与同一套 userData 接口，渲染层换机身时不必改同步逻辑。
  */
-export function makeShip({ ghost = false } = {}) {
+export function makeShip({ ghost = false, hull = 'H1' } = {}) {
   const group = new THREE.Group();
   const mats = [];
+  const skin = hullSkin(hull);
 
   if (ghost) {
     // 残影与量子分身只留轮廓：一具半透明的玄鸟，比实体更省也更像「不在这儿」。
-    const shade = glowMat('#7fe3ff', 0.3);
+    const shade = glowMat(skin.edge, 0.3);
     const body = new THREE.Mesh(HULL_GEOMETRY, shade);
     body.material.side = THREE.DoubleSide;
     group.add(body);
-    const outline = glowMat('#bff4ff', 0.5);
+    const outline = glowMat(skin.canopy, 0.5);
     group.add(new THREE.Mesh(CHINE_GEOMETRY, outline));
     // 分身的机翼也按型号现造，只是套上同一层半透明皮。
     const wingSlot = new THREE.Group();
@@ -252,9 +369,18 @@ export function makeShip({ ghost = false } = {}) {
     const plume = new THREE.Group();
     group.add(plume);
     // 分身也要有护盾环：渲染层对本体和分身走同一套上色逻辑，这里给个 Group 会当场崩。
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(8.4, 0.3, 6, 32), glowMat('#7fe3ff', 0.4));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(8.4, 0.3, 6, 32), glowMat(skin.edge, 0.4));
     ring.rotation.x = -Math.PI / 2;
     group.add(ring);
+    // 分身也要认得出是哪一型：按机型造专属外形，再统一套上那层半透明皮。
+    dressHull(group, hull, mats);
+    const ghostMats = new Set([shade, outline]);
+    group.traverse((node) => {
+      if (node.isMesh && !ghostMats.has(node.material)) {
+        node.material = shade;
+        ghostMats.add(node.material);
+      }
+    });
     mats.push(shade, outline);
     group.userData = { wingSlot, wings: new Map(), flame: plume, ring, mats, ghost: true };
     for (const mat of mats) mat.userData.baseOpacity = mat.opacity;
@@ -263,18 +389,18 @@ export function makeShip({ ghost = false } = {}) {
 
   // 机身：深石墨蓝。「玄」是黑，但纯黑在同样暗的栅格地面上会直接消失，
   // 所以本体压暗、自发光给足，真正把轮廓亮出来的是下面那两条边条灯带。
-  const hullMat = flat('#38456b', { emissive: '#2a3a72', glow: 0.85, metalness: 0.55, roughness: 0.34, opacity: 1 });
+  const hullMat = flat(skin.hull, { emissive: skin.hullLit, glow: 0.85, metalness: 0.55, roughness: 0.34, opacity: 1 });
   hullMat.side = THREE.DoubleSide;
   mats.push(hullMat);
   group.add(new THREE.Mesh(HULL_GEOMETRY, hullMat));
 
   // 边条灯带：沿着乘波体那道锐边，从机头一直亮到尾喷口。
-  const edgeMat = glowMat('#7fe3ff', 0.95);
+  const edgeMat = glowMat(skin.edge, 0.95);
   mats.push(edgeMat);
   group.add(new THREE.Mesh(CHINE_GEOMETRY, edgeMat));
 
   // 座舱盖压得很低，和背脊连成一条线。
-  const canopyMat = flat('#8ff0ff', { glow: 1.4, metalness: 0.2, opacity: 1 });
+  const canopyMat = flat(skin.canopy, { glow: 1.4, metalness: 0.2, opacity: 1 });
   mats.push(canopyMat);
   const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.78, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2), canopyMat);
   canopy.scale.set(1, 0.8, 2.1);
@@ -282,7 +408,7 @@ export function makeShip({ ghost = false } = {}) {
   group.add(canopy);
 
   // 腹部进气道：乘波体的平底上开一道亮缝。
-  const intakeMat = glowMat('#4f7bff', 0.55);
+  const intakeMat = glowMat(skin.intake, 0.55);
   mats.push(intakeMat);
   const intake = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.22, 2.6), intakeMat);
   intake.position.set(0, -0.82, 0.6);
@@ -291,12 +417,12 @@ export function makeShip({ ghost = false } = {}) {
   // 背脊：从座舱盖一直拉到尾喷口的一道隆起。斜俯视下机身本来是一块扁板，
   // 有了这条脊线才有厚度；脊上再嵌一条冷光缝，读起来就是一根能量导管。
   // 这两件都压在 |x| ≤ 0.35 的中线上，动不到「裸机有多宽」。
-  const spineMat = flat('#4b5c93', { emissive: '#33509f', glow: 0.95, metalness: 0.62, roughness: 0.28, opacity: 1 });
+  const spineMat = flat(skin.spine, { emissive: skin.spineLit, glow: 0.95, metalness: 0.62, roughness: 0.28, opacity: 1 });
   mats.push(spineMat);
   const spine = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.46, 4.8), spineMat);
   spine.position.set(0, 1.46, 1.6);
   group.add(spine);
-  const seamMat = glowMat('#a9f0ff', 0.9);
+  const seamMat = glowMat(skin.seam, 0.9);
   mats.push(seamMat);
   const seam = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 4.4), seamMat);
   seam.position.set(0, 1.74, 1.6);
@@ -304,8 +430,8 @@ export function makeShip({ ghost = false } = {}) {
 
   // 肩部装甲板：沿脊背两侧铺两块薄板，比机身亮一档并各带一条描边。
   // 作用只有一个——让机身在二十来像素时仍有「拼装」的层次，不再是一整块纯色。
-  const plateMat = flat('#55679e', { emissive: '#37509f', glow: 0.75, metalness: 0.5, roughness: 0.36, opacity: 1 });
-  const plateEdgeMat = glowMat('#8fd6ff', 0.5);
+  const plateMat = flat(skin.plate, { emissive: skin.plateLit, glow: 0.75, metalness: 0.5, roughness: 0.36, opacity: 1 });
+  const plateEdgeMat = glowMat(skin.seam, 0.5);
   mats.push(plateMat, plateEdgeMat);
   for (const side of [-1, 1]) {
     const plate = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.16, 3.4), plateMat);
@@ -327,7 +453,7 @@ export function makeShip({ ghost = false } = {}) {
 
   // 机首传感器：一枚发亮的小棱体加一团光晕。玄鸟的机头本来就尖，
   // 加这一个亮点之后「哪头是前」在缩到十几像素时也不会有歧义。
-  const sensorMat = glowMat('#d8fbff', 0.95);
+  const sensorMat = glowMat(skin.sensor, 0.95);
   mats.push(sensorMat);
   const sensor = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), sensorMat);
   sensor.position.set(0, 0.28, -6.1);
@@ -335,7 +461,7 @@ export function makeShip({ ghost = false } = {}) {
   const sensorHalo = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: glowTexture(),
-      color: new THREE.Color('#8fe6ff'),
+      color: new THREE.Color(skin.sensorHalo),
       transparent: true,
       opacity: 0.55,
       blending: THREE.AdditiveBlending,
@@ -355,7 +481,7 @@ export function makeShip({ ghost = false } = {}) {
     fin.rotation.z = side * 0.42;
     fin.rotation.x = -0.12;
     group.add(fin);
-    const finEdge = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 2.5), edgeGlow());
+    const finEdge = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 2.5), edgeGlow(hull));
     finEdge.position.set(side * 2.05, 2.2, 3);
     finEdge.rotation.z = side * 0.42;
     finEdge.rotation.x = -0.12;
@@ -366,7 +492,7 @@ export function makeShip({ ghost = false } = {}) {
   // 组合循环发动机：三个喷口，中间那个抬在背脊上。
   // 每个喷口配三件东西：喇叭口、一圈会随推力脉动的辉光环、两层火焰（外柔内硬）。
   // 上一版只有一层锥火焰，缩到手机上是一条静止的蓝线——发动机「没在工作」。
-  const nozzleMat = flat('#2a3350', { glow: 0.3, metalness: 0.8, opacity: 1 });
+  const nozzleMat = flat(skin.nozzle, { glow: 0.3, metalness: 0.8, opacity: 1 });
   mats.push(nozzleMat);
   const plume = new THREE.Group();
   const nozzleRings = [];
@@ -384,7 +510,7 @@ export function makeShip({ ghost = false } = {}) {
 
     // 辉光环的轴正对 +Z（Torus 默认躺在 XY 平面，不用转），
     // 三枚环一起呼吸，比三团火更像「反应堆在推」。
-    const ringMat = glowMat('#9fe4ff', 0.7);
+    const ringMat = glowMat(skin.halo, 0.7);
     ringMat.userData.driven = true;
     mats.push(ringMat);
     const halo = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.1, 6, 22), ringMat);
@@ -392,15 +518,15 @@ export function makeShip({ ghost = false } = {}) {
     group.add(halo);
     nozzleRings.push({ mesh: halo, base: 1 });
 
-    const soft = new THREE.Mesh(new THREE.ConeGeometry(0.95, 4.6, 8), glowMat('#4f9bff', 0.3));
+    const soft = new THREE.Mesh(new THREE.ConeGeometry(0.95, 4.6, 8), glowMat(skin.soft, 0.3));
     soft.rotation.x = Math.PI / 2;
     soft.position.set(x, y, 0.6);
     plume.add(soft);
-    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 8), glowMat('#8fd4ff', 0.9));
+    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.2, 8), glowMat(skin.fire, 0.9));
     fire.rotation.x = Math.PI / 2;
     fire.position.set(x, y, 1.7);
     plume.add(fire);
-    const core = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.8, 6), glowMat('#ffffff', 0.85));
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.8, 6), glowMat(skin.core, 0.85));
     core.rotation.x = Math.PI / 2;
     core.position.set(x, y, 1);
     plume.add(core);
@@ -409,12 +535,16 @@ export function makeShip({ ghost = false } = {}) {
   plume.position.z = 4.6;
   group.add(plume);
 
+  // 机型专属造型：H1 就是上面这套乘波体；H2 蚀影是照 ECLIPSE WRAITH 做的战列舰，
+  // H3 游隼削掉肩甲露出骨架。三者只换外形，尺寸仍收在裸机那 7 格宽度里。
+  dressHull(group, hull, mats);
+
   // 机翼层：外形按型号现造（见 makeWing），这里只留一个挂点。
   const wingSlot = new THREE.Group();
   group.add(wingSlot);
 
   // 两种无敌看得出区别：挨打换来的是白环，弃翼换来的下潜是蓝环。
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(8.4, 0.35, 6, 40), glowMat('#f6f4ee', 0.8));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(8.4, 0.35, 6, 40), glowMat(skin.ring, 0.8));
   ring.rotation.x = -Math.PI / 2;
   group.add(ring);
 
